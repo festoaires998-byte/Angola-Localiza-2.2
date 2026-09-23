@@ -76,7 +76,7 @@ export const SIGLA_DESCONHECIDA = "XXX";
 export function normalizarProvincia(nome: string): string {
   let n = nome
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[-_.,]/g, " ")
     .replace(/\s+/g, " ")
