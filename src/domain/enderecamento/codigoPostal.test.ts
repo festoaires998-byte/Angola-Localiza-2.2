@@ -7,7 +7,6 @@ import {
   codificarGrelha,
   codigoPostalProvisorio,
   digitosControlo,
-  SIGLAS_PROVINCIAS,
   siglaProvincia,
 } from './codigoPostal';
 
@@ -67,13 +66,12 @@ describe('Código Postal Digital: app igual ao servidor (esquema 2)', () => {
     }
   });
 
-  test('mesma tabela de siglas e mesma leitura dos nomes', () => {
-    expect(SIGLAS_PROVINCIAS).toEqual(servidor.SIGLAS_PROVINCIAS);
+  test('mesmo alfabeto e mesmas siglas', () => {
     expect(ALFABETO_GRELHA).toBe(servidor.ALFABETO_GRELHA);
     for (const nome of NOMES) expect(siglaProvincia(nome)).toBe(servidor.siglaProvincia(nome));
   });
 
-  test('nunca aparece "undefined" e todos os códigos passam no validate do servidor', () => {
+  test('nunca aparece "undefined" e os códigos do Huambo passam no validate do servidor', () => {
     const r = aleatorio(7);
     for (let i = 0; i < 20000; i++) {
       const c = codigoPostalProvisorio(-13.1 + r() * 0.7, 15.4 + r() * 0.7, 'Huambo').codigo;
@@ -105,43 +103,26 @@ describe('Código Postal Digital: app igual ao servidor (esquema 2)', () => {
   });
 });
 
-describe('siglas das províncias', () => {
-  test('21 províncias, 21 siglas diferentes, todas com 3 letras', () => {
-    const siglas = Object.values(SIGLAS_PROVINCIAS);
-    expect(siglas).toHaveLength(21);
-    expect(new Set(siglas).size).toBe(21);
-    for (const s of siglas) expect(s).toMatch(/^[A-Z]{3}$/);
-    expect(siglas).not.toContain('CCU');
-    expect(siglas).not.toContain('XXX');
-  });
-
-  test.each<[string | null, string]>([
+describe('siglas das províncias (3 primeiras letras, como no esquema 1)', () => {
+  test.each<[string | null | undefined, string]>([
     ['Huambo', 'HUA'],
-    ['Província do Huambo', 'HUA'],
-    ['Uíge', 'UIG'],
-    ['Bié', 'BIE'],
-    ['Huíla', 'HUI'],
-    ['Cuanza Norte', 'CNO'],
-    ['Cuanza-Sul', 'CUS'],
-    ['Kwanza Norte', 'CNO'],
-    ['Lunda Norte', 'LNO'],
-    ['Lunda Sul', 'LSU'],
     ['Luanda', 'LUA'],
-    ['Ícolo e Bengo', 'ICB'],
-    ['Icolo-e-Bengo', 'ICB'],
-    ['Bengo', 'BGO'],
-    ['Benguela', 'BGU'],
-    ['Moxico', 'MOX'],
-    ['Moxico Leste', 'MXL'],
-    ['Cuando', 'CDO'],
-    ['Cubango', 'CUB'],
-    ['Cuando Cubango', 'CCU'],
-    ['Malange', 'MAL'],
-    ['Atlântida', 'XXX'],
+    ['Benguela', 'BEN'],
+    ['Cuanza Norte', 'CUA'],
+    ['Lunda Sul', 'LUN'],
+    ['Uíge', 'UÍG'],
     [null, 'XXX'],
-    ['  ', 'XXX'],
+    [undefined, 'XXX'],
+    ['', 'XXX'],
   ])('%j → %s', (nome, sigla) => {
     expect(siglaProvincia(nome)).toBe(sigla);
+    expect(servidor.siglaProvincia(nome)).toBe(sigla);
+  });
+
+  test('é a mesma regra do esquema 1', () => {
+    for (const nome of ['Huambo', 'Bié', 'Moxico Leste', 'Ícolo e Bengo', 'x']) {
+      expect(siglaProvincia(nome)).toBe(nome.substring(0, 3).toUpperCase());
+    }
   });
 
   test('formato AO-PROV-GRID8-CHK', () => {

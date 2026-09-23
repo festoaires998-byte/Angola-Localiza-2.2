@@ -3,7 +3,7 @@
 // servidor calcularem sempre o mesmo. Não importar nada aqui.
 //
 // Formato: AO-{PROV}-{GRID8}[-{N}]-{CHK}
-//   PROV : sigla FIXA da província (tabela SIGLAS_PROVINCIAS); "XXX" se não se sabe.
+//   PROV : 3 primeiras letras do nome da província, em maiúsculas; "XXX" se não veio.
 //   GRID8: 8 caracteres de uma grelha tipo geohash (~38 m x 19 m).
 //   N    : (2+) só quando já existe outra morada na mesma célula.
 //   CHK  : 2 dígitos de controlo sobre "PROV-GRID8" (não muda com N).
@@ -14,7 +14,7 @@
 //     que eram válidos continuam exatamente iguais;
 //   - o controlo continua a usar o alfabeto do esquema 1 (os controlos antigos
 //     continuam certos);
-//   - a sigla deixa de ser "3 primeiras letras do nome" e passa a ser fixa.
+//   - a sigla da província é a mesma do esquema 1 (3 primeiras letras do nome).
 
 export const SCHEME_VERSION = 2;
 export const GRID_LENGTH = 8;
@@ -24,73 +24,15 @@ export const ALFABETO_CONTROLO = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 /** Alfabeto da grelha: o do esquema 1 + "L" no fim (32 símbolos = 5 bits). */
 export const ALFABETO_GRELHA = ALFABETO_CONTROLO + "L";
 
-/**
- * Siglas das 21 províncias (divisão de 2024). Códigos ISO 3166-2:AO onde existem;
- * as 4 províncias novas ainda não têm código ISO (siglas propostas, marcadas).
- */
-export const SIGLAS_PROVINCIAS: Readonly<Record<string, string>> = {
-  "bengo": "BGO",
-  "benguela": "BGU",
-  "bie": "BIE",
-  "cabinda": "CAB",
-  "cuando": "CDO", // nova (2024): sem código ISO
-  "cubango": "CUB", // nova (2024): sem código ISO
-  "cuanza norte": "CNO",
-  "cuanza sul": "CUS",
-  "cunene": "CNN",
-  "huambo": "HUA",
-  "huila": "HUI",
-  "icolo e bengo": "ICB", // nova (2024): sem código ISO
-  "luanda": "LUA",
-  "lunda norte": "LNO",
-  "lunda sul": "LSU",
-  "malanje": "MAL",
-  "moxico": "MOX",
-  "moxico leste": "MXL", // nova (2024): sem código ISO
-  "namibe": "NAM",
-  "uige": "UIG",
-  "zaire": "ZAI",
-};
-
-/** Outras grafias que chegam do mapa (OpenStreetMap / LocationIQ). */
-const SINONIMOS: Readonly<Record<string, string>> = {
-  "kwanza norte": "cuanza norte",
-  "kwanza sul": "cuanza sul",
-  "cuando cubango": "cuando cubango", // antiga (antes de 2024): ver SIGLA_CUANDO_CUBANGO
-  "kuando kubango": "cuando cubango",
-  "kuando": "cuando",
-  "kubango": "cubango",
-  "malange": "malanje",
-  "moxico este": "moxico leste",
-};
-
-/**
- * "Cuando Cubango" deixou de existir em 2024 (dividida em Cuando e Cubango),
- * mas o mapa ainda pode devolver o nome antigo. Sem saber de qual das duas se
- * trata, usa-se o código ISO antigo.
- */
-export const SIGLA_CUANDO_CUBANGO = "CCU";
 export const SIGLA_DESCONHECIDA = "XXX";
 
-/** "Província do Uíge" → "uige"; "Cuanza-Norte" → "cuanza norte". */
-export function normalizarProvincia(nome: string): string {
-  let n = nome
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[-_.,]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  n = n.replace(/^provincia (de |do |da )?/, "");
-  return SINONIMOS[n] ?? n;
-}
-
-/** Sigla fixa da província; "XXX" se o nome não é conhecido (ou não veio). */
+/**
+ * Sigla da província: as 3 primeiras letras do nome, em maiúsculas (como no
+ * esquema 1); "XXX" se o nome não veio. Nota: nomes com acento na 2.ª ou 3.ª
+ * letra (ex.: "Uíge" → "UÍG") dão uma sigla que o validate não aceita.
+ */
 export function siglaProvincia(nome: string | null | undefined): string {
-  if (!nome || !nome.trim()) return SIGLA_DESCONHECIDA;
-  const n = normalizarProvincia(nome);
-  if (n === "cuando cubango") return SIGLA_CUANDO_CUBANGO;
-  return SIGLAS_PROVINCIAS[n] ?? SIGLA_DESCONHECIDA;
+  return nome ? nome.substring(0, 3).toUpperCase() : SIGLA_DESCONHECIDA;
 }
 
 /** Grelha: alterna bits de longitude e latitude, 5 bits por símbolo. */

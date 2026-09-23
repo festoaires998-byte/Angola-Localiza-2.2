@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { codigoBase, SCHEME_VERSION, validatePostalCode } from "./codigoPostal.ts";
 
-// Angola Localiza - PostalCodeService (esquema 2: grelha de 32 símbolos e siglas fixas)
+// Angola Localiza - PostalCodeService (esquema 2: grelha de 32 símbolos, sem "undefined")
 // Formato: AO-{PROV}-{GRID8}[-{N}]-{CHK}. As contas estão em codigoPostal.ts
 // (partilhado com a app, que calcula o mesmo sem rede).
 // Pedido e resposta iguais aos da versão anterior (o site continua a funcionar).

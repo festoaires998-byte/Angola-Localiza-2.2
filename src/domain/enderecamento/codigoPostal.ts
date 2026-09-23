@@ -4,7 +4,7 @@
  * Mesmas contas da Edge Function `generate-postal-code`, esquema 2
  * (supabase/functions/generate-postal-code/codigoPostal.ts). Formato:
  * AO-{PROV}-{GRID8}[-{N}]-{CHK}
- * - PROV: sigla FIXA da província (ISO 3166-2:AO onde existe; "XXX" se não se sabe);
+ * - PROV: 3 primeiras letras do nome da província, em maiúsculas ("XXX" se não se sabe);
  * - GRID8: 8 símbolos de uma grelha tipo geohash (~38 m × 19 m);
  * - N: só o servidor sabe (aparece quando já há outra morada na mesma célula);
  * - CHK: 2 dígitos de controlo sobre "PROV-GRID8".
@@ -22,63 +22,14 @@ export const ALFABETO_CONTROLO = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 /** Alfabeto da grelha: o do esquema 1 + "L" no fim (32 símbolos = 5 bits, nunca "undefined"). */
 export const ALFABETO_GRELHA = `${ALFABETO_CONTROLO}L`;
 
-/** Siglas das 21 províncias (divisão de 2024). As 4 novas não têm código ISO. */
-export const SIGLAS_PROVINCIAS: Readonly<Record<string, string>> = {
-  bengo: 'BGO',
-  benguela: 'BGU',
-  bie: 'BIE',
-  cabinda: 'CAB',
-  cuando: 'CDO',
-  cubango: 'CUB',
-  'cuanza norte': 'CNO',
-  'cuanza sul': 'CUS',
-  cunene: 'CNN',
-  huambo: 'HUA',
-  huila: 'HUI',
-  'icolo e bengo': 'ICB',
-  luanda: 'LUA',
-  'lunda norte': 'LNO',
-  'lunda sul': 'LSU',
-  malanje: 'MAL',
-  moxico: 'MOX',
-  'moxico leste': 'MXL',
-  namibe: 'NAM',
-  uige: 'UIG',
-  zaire: 'ZAI',
-};
-
-const SINONIMOS: Readonly<Record<string, string>> = {
-  'kwanza norte': 'cuanza norte',
-  'kwanza sul': 'cuanza sul',
-  'kuando kubango': 'cuando cubango',
-  kuando: 'cuando',
-  kubango: 'cubango',
-  malange: 'malanje',
-  'moxico este': 'moxico leste',
-};
-
-/** Província antiga (antes de 2024) que o mapa ainda pode devolver: código ISO antigo. */
-export const SIGLA_CUANDO_CUBANGO = 'CCU';
 export const SIGLA_DESCONHECIDA = 'XXX';
 
-/** "Província do Uíge" → "uige"; "Cuanza-Norte" → "cuanza norte". */
-export function normalizarProvincia(nome: string): string {
-  let n = nome
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[-_.,]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  n = n.replace(/^provincia (de |do |da )?/, '');
-  return SINONIMOS[n] ?? n;
-}
-
+/**
+ * Sigla da província: as 3 primeiras letras do nome, em maiúsculas; "XXX" se
+ * o nome não veio. Igual ao servidor.
+ */
 export function siglaProvincia(nomeProvincia: string | null | undefined): string {
-  if (!nomeProvincia || !nomeProvincia.trim()) return SIGLA_DESCONHECIDA;
-  const n = normalizarProvincia(nomeProvincia);
-  if (n === 'cuando cubango') return SIGLA_CUANDO_CUBANGO;
-  return SIGLAS_PROVINCIAS[n] ?? SIGLA_DESCONHECIDA;
+  return nomeProvincia ? nomeProvincia.substring(0, 3).toUpperCase() : SIGLA_DESCONHECIDA;
 }
 
 /** Grelha: alterna bits de longitude e latitude, 5 bits por símbolo. */

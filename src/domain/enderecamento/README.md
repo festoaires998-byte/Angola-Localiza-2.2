@@ -59,31 +59,10 @@ Formato `AO-{PROV}-{GRID8}[-{N}]-{CHK}`, esquema 2, igual à Edge Function
 com as contas do servidor em 5000 pontos e confirma que os códigos antigos
 (esquema 1) que eram válidos não mudam.
 
-### Siglas das províncias
+### Sigla da província
 
-| Província | Sigla | Origem |
-| --- | --- | --- |
-| Bengo | BGO | ISO 3166-2:AO |
-| Benguela | BGU | ISO 3166-2:AO |
-| Bié | BIE | ISO 3166-2:AO |
-| Cabinda | CAB | ISO 3166-2:AO |
-| Cuando | CDO | nova (2024), sem ISO |
-| Cubango | CUB | nova (2024), sem ISO |
-| Cuanza Norte | CNO | ISO 3166-2:AO |
-| Cuanza Sul | CUS | ISO 3166-2:AO |
-| Cunene | CNN | ISO 3166-2:AO |
-| Huambo | HUA | ISO 3166-2:AO |
-| Huíla | HUI | ISO 3166-2:AO |
-| Ícolo e Bengo | ICB | nova (2024), sem ISO |
-| Luanda | LUA | ISO 3166-2:AO |
-| Lunda Norte | LNO | ISO 3166-2:AO |
-| Lunda Sul | LSU | ISO 3166-2:AO |
-| Malanje | MAL | ISO 3166-2:AO |
-| Moxico | MOX | ISO 3166-2:AO |
-| Moxico Leste | MXL | nova (2024), sem ISO |
-| Namibe | NAM | ISO 3166-2:AO |
-| Uíge | UIG | ISO 3166-2:AO |
-| Zaire | ZAI | ISO 3166-2:AO |
-
-Casos especiais: "Cuando Cubango" (nome antigo, se o mapa ainda o devolver) → `CCU`
-(código ISO antigo); nome desconhecido ou em falta → `XXX`.
+As 3 primeiras letras do nome que o geocode devolve, em maiúsculas (como no
+esquema 1); `XXX` se não veio nome. Há siglas repetidas entre províncias
+(Cuanza Norte e Cuanza Sul dão `CUA`; Lunda Norte e Lunda Sul dão `LUN`) e um nome
+com acento nas primeiras letras (ex.: "Uíge" → `UÍG`) dá um código que o
+`validate` não aceita; o ecrã mostra então "Indisponível neste ponto".

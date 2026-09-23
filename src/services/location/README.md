@@ -27,9 +27,7 @@ A partir do esquema 2 (`generate-postal-code` com `scheme_version: 2`):
 
 - a grelha tem 32 símbolos (`L` no fim): acabou o `undefined` dentro do código.
   Os códigos do esquema 1 que eram válidos continuam exatamente iguais;
-- a sigla da província é **fixa** (tabela de 21 províncias em
-  `src/domain/enderecamento/codigoPostal.ts`, igual à do servidor): ISO 3166-2:AO
-  onde existe, e siglas próprias para as 4 províncias criadas em 2024.
+- a sigla da província continua a ser as 3 primeiras letras do nome (como no esquema 1).
 
 As contas do servidor estão em `supabase/functions/generate-postal-code/codigoPostal.ts`;
 o teste `codigoPostal.test.ts` prova que a app calcula o mesmo.
