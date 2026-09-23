@@ -52,8 +52,17 @@ npm test
 
 ## Código Postal Digital (`codigoPostal.ts`)
 
-Formato `AO-{PROV}-{GRID8}[-{N}]-{CHK}`, igual à Edge Function `generate-postal-code`.
+Formato `AO-{PROV}-{GRID8}[-{N}]-{CHK}`, esquema 2, igual à Edge Function
+`generate-postal-code` (`supabase/functions/generate-postal-code/codigoPostal.ts`).
 `codigoPostalProvisorio(lat, lng, provincia)` faz no telemóvel as mesmas contas
-(sem o `-N`, que só o servidor sabe). O teste `codigoPostal.test.ts` compara-o,
-em 5000 pontos, com uma cópia do código do servidor. Os erros conhecidos do
-servidor estão descritos em `src/services/location/README.md`.
+(sem o `-N`, que só o servidor sabe). O teste `codigoPostal.test.ts` compara-o
+com as contas do servidor em 5000 pontos e confirma que os códigos antigos
+(esquema 1) que eram válidos não mudam.
+
+### Sigla da província
+
+As 3 primeiras letras do nome que o geocode devolve, em maiúsculas (como no
+esquema 1); `XXX` se não veio nome. Há siglas repetidas entre províncias
+(Cuanza Norte e Cuanza Sul dão `CUA`; Lunda Norte e Lunda Sul dão `LUN`) e um nome
+com acento nas primeiras letras (ex.: "Uíge" → `UÍG`) dá um código que o
+`validate` não aceita; o ecrã mostra então "Indisponível neste ponto".

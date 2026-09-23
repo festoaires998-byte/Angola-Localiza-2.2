@@ -84,10 +84,10 @@ describe('separador Mapa', () => {
     expect(screen.queryByText('Sem rede: a mostrar o que está neste telemóvel')).toBeNull();
   });
 
-  test('código indisponível (erro conhecido do servidor)', () => {
+  test('código indisponível', () => {
     mockInfo = { plusCode: '', codigoPostal: { codigo: null, estado: 'indisponivel' }, local: { provincia: null, municipio: null, origem: null, atualizadoEm: null } };
     desenhar();
-    expect(screen.getByText('Indisponível neste ponto (erro conhecido, a corrigir).')).toBeTruthy();
+    expect(screen.getByText('Indisponível neste ponto.')).toBeTruthy();
     expect(screen.getByText('Sem rede e sem dados guardados desta zona.')).toBeTruthy();
   });
 

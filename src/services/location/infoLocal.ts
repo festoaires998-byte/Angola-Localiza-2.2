@@ -17,7 +17,7 @@ export interface InfoLocal {
     /**
      * - provisorio: calculado no telemóvel (sem o "-N" que só o servidor sabe);
      * - confirmado: devolvido pelo servidor;
-     * - indisponivel: o cálculo dá um código inválido (erro conhecido do servidor).
+     * - indisponivel: o cálculo dá um código que o servidor não aceita (não devia acontecer).
      */
     estado: 'provisorio' | 'confirmado' | 'indisponivel';
   };
