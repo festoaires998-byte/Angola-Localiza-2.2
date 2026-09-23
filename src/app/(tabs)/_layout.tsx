@@ -11,7 +11,7 @@ import { useSessao } from '@/hooks/useSessao';
 import { destinoDaSessao } from '@/state/destino';
 
 export const AVISO_KYC =
-  'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Mapa e às Definições.';
+  'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Mapa e à Conta.';
 
 /**
  * Separadores. Só existem os que useCargos/decidirAcesso permitem: os outros

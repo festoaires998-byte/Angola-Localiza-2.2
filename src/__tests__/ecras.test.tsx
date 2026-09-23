@@ -95,7 +95,7 @@ const AAL1_SEM_FATOR: NivelSessao = { atual: 'aal1', proximo: 'aal1' };
 const AAL1_COM_FATOR: NivelSessao = { atual: 'aal1', proximo: 'aal2' };
 const AAL2: NivelSessao = { atual: 'aal2', proximo: 'aal2' };
 
-const TODOS = ['Mapa', 'Guardados', 'Entrega', 'Minhas entregas', 'Campo', 'Validar', 'Gestão', 'Definições'];
+const TODOS = ['Mapa', 'Moradas', 'Enviar', 'Entregas', 'Campo', 'Validar', 'Gestão', 'Conta'];
 
 function separadoresVisiveis(): string[] {
   return TODOS.filter((nome) => screen.queryAllByRole('button', { name: nome }).length > 0);
@@ -128,11 +128,11 @@ describe('arranque', () => {
 });
 
 describe('separadores', () => {
-  test('cidadão vê mapa, guardados, entrega, minhas-entregas e definições', async () => {
+  test('cidadão vê Mapa, Moradas, Enviar, Entregas e Conta', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/' });
     await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
-    expect(separadoresVisiveis()).toEqual(['Mapa', 'Guardados', 'Entrega', 'Minhas entregas', 'Definições']);
+    expect(separadoresVisiveis()).toEqual(['Mapa', 'Moradas', 'Enviar', 'Entregas', 'Conta']);
     expect(screen.getByText('Em construção.')).toBeTruthy();
   });
 
@@ -155,19 +155,19 @@ describe('separadores', () => {
     comSessao(['tecnico_campo'], 'ID_VERIFIED', AAL2);
     const r = renderRouter('./src/app', { initialUrl: '/' });
     await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
-    expect(separadoresVisiveis()).toEqual(['Mapa', 'Guardados', 'Campo', 'Definições']);
+    expect(separadoresVisiveis()).toEqual(['Mapa', 'Moradas', 'Campo', 'Conta']);
   });
 
-  test('staff com KYC pendente vê o aviso fixo e só Mapa e Definições', async () => {
+  test('staff com KYC pendente vê o aviso fixo e só Mapa e Conta', async () => {
     comSessao(['supervisor'], 'PENDING', AAL2);
     const r = renderRouter('./src/app', { initialUrl: '/' });
     await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
     expect(
       screen.getByText(
-        'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Mapa e às Definições.',
+        'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Mapa e à Conta.',
       ),
     ).toBeTruthy();
-    expect(separadoresVisiveis()).toEqual(['Mapa', 'Definições']);
+    expect(separadoresVisiveis()).toEqual(['Mapa', 'Conta']);
   });
 
   test('cidadão não vê o aviso de KYC', async () => {

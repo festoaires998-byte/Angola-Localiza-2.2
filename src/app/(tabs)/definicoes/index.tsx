@@ -57,7 +57,7 @@ export default function Definicoes() {
 
   return (
     <Ecra>
-      <Titulo>Definições</Titulo>
+      <Titulo>Conta</Titulo>
 
       <Cartao>
         <Subtitulo>A tua conta</Subtitulo>
