@@ -23,6 +23,10 @@ Mapa base para usar **sem rede** (MapLibre + PMTiles).
    ```
 
    Corre sozinho no dia 1 de cada mês, e em "Run workflow". Guarda as 2 últimas versões.
+
+   O envio usa as **chaves S3 do Supabase Storage** (segredos `SUPABASE_S3_ACCESS_KEY_ID`
+   e `SUPABASE_S3_SECRET_ACCESS_KEY`): dão acesso aos ficheiros do Storage, mas **não**
+   à base de dados. O bucket público `mapas` é criado no painel; o workflow não o cria.
 2. A app lê o manifesto (com rede), mostra o tamanho e descarrega tudo para
    `Documentos/mapas/`. O ficheiro só substitui o anterior depois de chegar completo.
 3. Sem mapa guardado mas com rede, o mapa é lido diretamente do Storage
