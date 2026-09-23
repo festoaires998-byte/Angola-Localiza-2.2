@@ -110,6 +110,11 @@ export async function estadoChaves(userId: string): Promise<EstadoChaves> {
   return (await obterChaveApp()).estado(userId);
 }
 
+/** Chave pública deste aparelho (gera o par de chaves se ainda não existir). Sem rede. */
+export async function chavePublicaDoAparelho() {
+  return (await obterChaveApp()).chavePublica();
+}
+
 /**
  * Assina uma prova de entrega. Não precisa de rede.
  * Juntar ao `proof` da operação delivery_proof com paraCamposProva().

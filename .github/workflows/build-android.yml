@@ -1,0 +1,123 @@
+name: Build Android (APK de teste)
+
+# Só arranca quando alguém carrega em "Run workflow" no separador Actions.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: build-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Android (perfil preview)
+    runs-on: ubuntu-latest
+    # O build corre nos servidores da Expo; aqui só se espera por ele.
+    # Se a fila da Expo demorar mais do que isto, o build continua lá na mesma.
+    timeout-minutes: 120
+    env:
+      EXPO_OWNER: aires_festo
+      EXPO_SLUG: angola-localiza
+      # Lido pelo eas-cli. O GitHub esconde (***) o valor dos segredos nos registos.
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # Instala o eas-cli e autentica-se com o segredo. O GitHub esconde (***)
+      # o valor dos segredos nos registos, e este workflow nunca o imprime.
+      - name: Instalar EAS e autenticar
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Confirmar a conta Expo
+        run: eas whoami
+
+      # Procura o projeto que JÁ existe (@aires_festo/angola-localiza) e usa o
+      # seu ID. Não cria nenhum projeto: se não o encontrar, pára com erro.
+      - name: Ligar ao projeto Expo existente
+        id: projeto
+        run: |
+          set -euo pipefail
+          corpo=$(jq -n --arg nome "@${EXPO_OWNER}/${EXPO_SLUG}" \
+            '{query: "query($n: String!) { app { byFullName(fullName: $n) { id } } }", variables: {n: $nome}}')
+          resposta=$(curl -sS --fail-with-body https://api.expo.dev/graphql \
+            -H "Authorization: Bearer ${EXPO_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d "$corpo")
+          id=$(echo "$resposta" | jq -r '.data.app.byFullName.id // empty')
+          if [ -z "$id" ]; then
+            echo "::error::Projeto @${EXPO_OWNER}/${EXPO_SLUG} não encontrado na Expo (ou o token não tem acesso a ele)."
+            echo "$resposta" | jq -c '.errors // empty'
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+          # Só nesta cópia temporária: o eas build precisa do ID no app.json.
+          jq --arg id "$id" '.expo.extra.eas.projectId = $id' app.json > app.json.novo
+          mv app.json.novo app.json
+          # O eas build envia o que está no git: fica num commit local (não é enviado ao GitHub).
+          git -c user.name=ci -c user.email=ci@localhost commit -q -am "Project ID (só no CI)"
+
+          {
+            echo "## Projeto Expo"
+            echo ""
+            echo "- Projeto: \`@${EXPO_OWNER}/${EXPO_SLUG}\`"
+            echo "- Project ID: \`$id\`"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pedir o build Android
+        id: build
+        run: |
+          set -euo pipefail
+          eas build --platform android --profile preview --non-interactive --no-wait --json > "$RUNNER_TEMP/build.json"
+          id=$(jq -r '.[0].id' "$RUNNER_TEMP/build.json")
+          link="https://expo.dev/accounts/${EXPO_OWNER}/projects/${EXPO_SLUG}/builds/${id}"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "link=$link" >> "$GITHUB_OUTPUT"
+          echo "Página do build: $link"
+          {
+            echo "## Build Android"
+            echo ""
+            echo "- Página do build na Expo: $link"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Esperar que o build termine
+        env:
+          BUILD_ID: ${{ steps.build.outputs.id }}
+          LINK: ${{ steps.build.outputs.link }}
+        run: |
+          set -uo pipefail
+          while true; do
+            info=$(eas build:view "$BUILD_ID" --json 2>/dev/null || echo '{}')
+            estado=$(echo "$info" | jq -r '.status // "DESCONHECIDO"')
+            echo "$(date -u +%H:%M:%S) estado: $estado"
+            case "$estado" in
+              FINISHED)
+                apk=$(echo "$info" | jq -r '.artifacts.applicationArchiveUrl // .artifacts.buildUrl // empty')
+                {
+                  echo "✅ Build terminado."
+                  echo ""
+                  [ -n "$apk" ] && echo "- Descarregar o APK: $apk" && echo ""
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+                ;;
+              ERRORED|CANCELED)
+                echo "::error::O build terminou com estado $estado. Ver os registos em $LINK"
+                echo "❌ Build terminou com estado **$estado**. Ver os registos em $LINK" >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+                ;;
+            esac
+            sleep 30
+          done
