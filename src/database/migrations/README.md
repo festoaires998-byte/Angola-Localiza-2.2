@@ -19,6 +19,7 @@ Criação e alteração das tabelas da base de dados local.
 | 3 | `003_chaves_e_evidencias.ts` | Cria `chaves_no_servidor` (chave pública que a app sabe estar registada no servidor, por `user_id` + `device_id`) e `provas_evidencia` (cópia local das provas enviadas cuja assinatura não confere com a chave registada). |
 | 4 | `004_avisos_vistos.ts` | Junta `visto_em` à `provas_evidencia`: data em que o utilizador carregou em "Já vi" no aviso. A prova **nunca** é apagada; só deixa de aparecer na lista das Definições. |
 | 5 | `005_zonas_geocodificadas.ts` | Cria `zonas_geocodificadas`: a última província e município que o servidor devolveu para cada zona (Plus Code de 8 dígitos, ~275 m), para os mostrar sem rede. |
+| 6 | `006_codigos_confirmados.ts` | Cria `codigos_confirmados`: o último Código Postal Digital confirmado pelo servidor para cada célula (sigla + grelha), para o mostrar sem rede em vez do provisório. |
 
 ## Como juntar uma migração nova
 

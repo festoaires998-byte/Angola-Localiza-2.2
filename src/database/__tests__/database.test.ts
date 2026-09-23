@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test } from '@jest/globals';
 import { aplicarMigracoes, lerVersao, MIGRACOES, type Migracao } from '../migrations';
 import {
   criarRepositorioChavesDispositivo,
+  criarRepositorioCodigosConfirmados,
   criarRepositorioFicheirosPendentes,
   criarRepositorioFilaSaida,
   criarRepositorioMoradas,
@@ -81,6 +82,7 @@ describe('migrações', () => {
     expect(await nomesTabelas(db)).toEqual([
       'chaves_dispositivo',
       'chaves_no_servidor',
+      'codigos_confirmados',
       'entregas',
       'favoritos',
       'ficheiros_pendentes',
@@ -704,8 +706,34 @@ describe('zonas_geocodificadas (migração 005)', () => {
   test('migra uma base na versão 4', async () => {
     const { db: antiga } = await criarBaseDadosSqlJs();
     await aplicarMigracoes(antiga, MIGRACOES.slice(0, 4));
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(5);
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(MIGRACOES.length);
     expect(await criarRepositorioZonasGeocodificadas(antiga).obter('x')).toBeNull();
+  });
+});
+
+describe('codigos_confirmados (migração 006)', () => {
+  test('guarda o último código confirmado de cada célula', async () => {
+    const db = await baseMigrada();
+    let agora = new Date('2026-09-23T20:00:00.000Z');
+    const codigos = criarRepositorioCodigosConfirmados(db, () => agora);
+    await codigos.guardar({ chave: 'HUA-MNFQPN2S', codigo: 'AO-HUA-MNFQPN2S-95', latitude: -12.77, longitude: 15.73 });
+    agora = new Date('2026-09-23T21:00:00.000Z');
+    await codigos.guardar({ chave: 'HUA-MNFQPN2S', codigo: 'AO-HUA-MNFQPN2S-3-95', latitude: -12.77, longitude: 15.73 });
+    expect(await codigos.obter('HUA-MNFQPN2S')).toEqual({
+      chave: 'HUA-MNFQPN2S',
+      codigo: 'AO-HUA-MNFQPN2S-3-95',
+      latitude: -12.77,
+      longitude: 15.73,
+      confirmado_em: '2026-09-23T21:00:00.000Z',
+    });
+    expect(await codigos.obter('outra')).toBeNull();
+  });
+
+  test('migra uma base na versão 5', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 5));
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(6);
+    expect(await criarRepositorioCodigosConfirmados(antiga).obter('x')).toBeNull();
   });
 });
 
