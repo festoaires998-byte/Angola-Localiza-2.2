@@ -27,5 +27,6 @@ Ponte entre ecrãs e o resto (useGps, useFilaSync, useSessao, useCargos).
   com mais peso nas mais precisas; "fraca" ao fim de ~20 s sem isso; ver `src/domain/enderecamento/capturaGps.ts`). O Mapa usa-a para o
   código; guardar uma morada vai usar a mesma. `medirDeNovo()` para o botão "Medir de novo".
 - `useOnline()` — há rede agora?
-- `useInfoLocal(posicao, online)` — Plus Code, Código Postal Digital e província/município (`src/services/location`).
+- `useInfoLocal(posicao, online, preciso)` — Plus Code, Código Postal Digital e província/município
+  (`src/services/location`). Com `preciso` false (mais de ±10 m) o código fica provisório e não é confirmado.
 - `useMapaOffline(online)` — estado do mapa do Huambo no telemóvel (`src/services/mapas`).

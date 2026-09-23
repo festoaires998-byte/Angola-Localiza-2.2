@@ -146,9 +146,11 @@ function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGp
             ) : null}
             {cp.estado === 'provisorio' ? (
               <Text style={estilos.nota}>
-                {online
-                  ? 'A confirmar com o servidor…'
-                  : 'Calculado neste telemóvel. É confirmado quando houver rede.'}
+                {captura.fraca
+                  ? `Por confirmar: a precisão tem de ser melhor que ±${medida.limite} m.`
+                  : online
+                    ? 'A confirmar com o servidor…'
+                    : 'Calculado neste telemóvel. É confirmado quando houver rede.'}
               </Text>
             ) : null}
           </>
@@ -187,7 +189,8 @@ export default function Mapa() {
   // O ponto azul segue o GPS ao vivo; o código usa a posição medida (média de várias leituras).
   const medida = useCapturaGps(aoVivo);
   const posicao = medida.captura ?? aoVivo ?? (gps.estado === 'a_procurar' ? gps.ultima : null);
-  const info = useInfoLocal(medida.captura, online);
+  // Com mais de ±10 m o código fica provisório (não se pede a confirmação ao servidor).
+  const info = useInfoLocal(medida.captura, online, !medida.captura?.fraca);
   const origem = origemDoMapa(estadoMapa, online);
   const chaveOrigem = origem ? `${origem.tiles}|${origem.fontes}` : null;
   // O estilo só muda quando a origem muda (evita recarregar o mapa a cada posição).

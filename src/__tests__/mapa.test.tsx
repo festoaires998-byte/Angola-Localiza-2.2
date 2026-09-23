@@ -210,4 +210,18 @@ describe('separador Mapa', () => {
     expect(screen.getByText('A tentar ter 3 leituras com menos de ±10 m… (1 de 3)')).toBeTruthy();
     expect(screen.getByText(/Precisão acima de 10 m: o código pode não ser o deste ponto/)).toBeTruthy();
   });
+
+  test('acima de 10 m: o código fica "Provisório" e explica porque não está confirmado', () => {
+    mockOnline = true;
+    mockMedida = medida(POS, { captura: { ...POS, precisao: 18, leituras: 3, fraca: true }, aMedir: true });
+    mockInfo = {
+      plusCode: '',
+      codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
+      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
+    };
+    desenhar();
+    expect(screen.getByText('Provisório')).toBeTruthy();
+    expect(screen.getByText('Por confirmar: a precisão tem de ser melhor que ±10 m.')).toBeTruthy();
+    expect(screen.queryByText('A confirmar com o servidor…')).toBeNull();
+  });
 });

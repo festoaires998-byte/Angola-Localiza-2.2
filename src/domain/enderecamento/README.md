@@ -84,6 +84,9 @@ pessoa se afastou mais de 20 m, mede-se de novo (também há o botão "Medir de 
 Se ao fim de 20 leituras (~20 s) não houver 3 abaixo de 10 m (é comum dentro de
 casa), usa as 3 melhores e marca a captura como **fraca**: o Mapa mostra o
 código com a etiqueta "Pouco preciso (± N m)" e um aviso, e continua a medir.
+Com uma captura fraca, o código fica **Provisório**: não se pede a confirmação
+ao servidor nem se mostra um código confirmado guardado (podia ser o da célula
+vizinha). A província e o município continuam a aparecer (as zonas têm ~275 m).
 No Mapa, o ponto azul continua ao vivo; o Plus Code e o código postal usam a
 posição medida. Guardar uma morada vai usar a mesma captura e **não aceita uma
 captura fraca**.

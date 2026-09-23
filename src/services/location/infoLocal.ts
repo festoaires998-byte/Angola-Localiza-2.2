@@ -71,6 +71,16 @@ export const VALIDADE_ZONA_MS = 7 * 24 * 60 * 60 * 1000;
 /** De quanto em quanto tempo se volta a confirmar o código da mesma célula. */
 export const VALIDADE_CODIGO_MS = 10 * 60 * 1000;
 
+export interface OpcoesInfoLocal {
+  /**
+   * false quando a posição tem mais de ±10 m de erro (captura "fraca"): o código
+   * fica provisório, não se pede a confirmação ao servidor nem se mostra um
+   * código confirmado guardado (podia ser o de uma célula vizinha).
+   * A província/município continuam a funcionar (as zonas têm ~275 m).
+   */
+  preciso?: boolean;
+}
+
 export function criarInfoLocal(deps: DependenciasInfoLocal) {
   const agora = deps.agora ?? Date.now;
   /** Quando se pediu cada célula ao servidor nesta sessão (para não repetir). */
@@ -80,10 +90,11 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
     latitude: number,
     longitude: number,
     local: InfoLocal['local'],
+    preciso: boolean,
   ): Promise<InfoLocal> {
     const provisorio = codigoPostalProvisorio(latitude, longitude, local.provincia);
     const chave = `${provisorio.sigla}-${provisorio.grelha}`;
-    const confirmado = await deps.codigos.obter(chave).catch(() => null);
+    const confirmado = preciso ? await deps.codigos.obter(chave).catch(() => null) : null;
     let codigoPostal: InfoLocal['codigoPostal'];
     if (confirmado && codigoPostalValido(confirmado.codigo)) {
       codigoPostal = { codigo: confirmado.codigo, estado: 'confirmado', confirmadoEm: confirmado.confirmado_em };
@@ -113,16 +124,17 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
 
   return {
     /** Só com o que está no telemóvel (funciona sem rede). */
-    async semRede(latitude: number, longitude: number): Promise<InfoLocal> {
-      return montar(latitude, longitude, await localGuardado(latitude, longitude));
+    async semRede(latitude: number, longitude: number, opcoes: OpcoesInfoLocal = {}): Promise<InfoLocal> {
+      return montar(latitude, longitude, await localGuardado(latitude, longitude), opcoes.preciso ?? true);
     },
 
     /**
      * Com rede: pede a província/município se a zona não está guardada (ou
-     * está velha), guarda a resposta, e confirma o código postal. Se algum
-     * pedido falhar, fica com o que já se sabia.
+     * está velha), guarda a resposta, e confirma o código postal (só se a
+     * posição for precisa). Se algum pedido falhar, fica com o que já se sabia.
      */
-    async comRede(latitude: number, longitude: number): Promise<InfoLocal> {
+    async comRede(latitude: number, longitude: number, opcoes: OpcoesInfoLocal = {}): Promise<InfoLocal> {
+      const preciso = opcoes.preciso ?? true;
       const zona = zonaDe(latitude, longitude);
       let local = await localGuardado(latitude, longitude);
       const velha =
@@ -149,7 +161,7 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
       const provisorio = codigoPostalProvisorio(latitude, longitude, local.provincia);
       const chave = `${provisorio.sigla}-${provisorio.grelha}`;
       const anterior = pedidos.get(chave);
-      if (anterior === undefined || agora() - anterior > VALIDADE_CODIGO_MS) {
+      if (preciso && (anterior === undefined || agora() - anterior > VALIDADE_CODIGO_MS)) {
         try {
           const r = await deps.confirmarCodigo(latitude, longitude, local.provincia);
           pedidos.set(chave, agora());
@@ -160,7 +172,7 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
           // Fica o último confirmado guardado (ou o provisório).
         }
       }
-      return montar(latitude, longitude, local);
+      return montar(latitude, longitude, local, preciso);
     },
   };
 }
