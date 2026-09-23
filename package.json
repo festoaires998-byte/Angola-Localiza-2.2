@@ -14,7 +14,6 @@
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "@react-native-community/netinfo": "12.0.1",
-    "@react-native-ml-kit/text-recognition": "^2.0.0",
     "@shopify/react-native-skia": "2.6.2",
     "@supabase/supabase-js": "^2.117.0",
     "expo": "~57.0.24",
@@ -57,14 +56,5 @@
   "devDependencies": {
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
-  },
-  "expo": {
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "@react-native-ml-kit/text-recognition"
-        ]
-      }
-    }
   }
 }
