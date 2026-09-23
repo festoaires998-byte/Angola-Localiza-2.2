@@ -116,12 +116,30 @@ describe('decidirAcesso (MFA e falhar fechado)', () => {
 
   test.each<[string, string[]]>([
     ['só um cargo desconhecido', ['rei']],
-    ['cargo conhecido + desconhecido', ['super_admin', 'rei']],
-  ])('%s → só mapa e definicoes (não passa a cidadão)', (_nome, cargos) => {
-    const perfil = { cargos, estadoKyc: OK };
-    const r = decidirAcesso({ perfil, nivel: 'aal2' });
-    expect(r.separadores).toEqual(MINIMOS);
-    expect(r.restricao).toBe('cargo_desconhecido');
+    ['vários cargos desconhecidos', ['rei', 'rainha']],
+  ])('%s → só mapa e definicoes (nunca passa a cidadão)', (_nome, cargos) => {
+    for (const kyc of [OK, null]) {
+      for (const nivel of ['aal1', 'aal2', null] as const) {
+        const r = decidirAcesso({ perfil: { cargos, estadoKyc: kyc }, nivel });
+        expect(r.separadores).toEqual(MINIMOS);
+        expect(r.restricao).toBe('cargo_desconhecido');
+        expect(r.separadores).not.toContain('entrega');
+      }
+    }
+  });
+
+  test.each<[string, string[], string | null, 'aal1' | 'aal2', Separador[], boolean, string | null]>([
+    ['estafeta + desconhecido, AAL2', ['estafeta', 'rei'], OK, 'aal2', ['mapa', 'minhas-entregas', 'definicoes'], false, null],
+    ['super_admin + desconhecido, AAL2', ['super_admin', 'rei'], null, 'aal2', [...SEPARADORES], false, null],
+    ['supervisor + auditor + desconhecido, AAL2', ['rei', 'supervisor', 'auditor'], OK, 'aal2', ['mapa', 'guardados', 'validar', 'admin', 'definicoes'], false, null],
+    // Os conhecidos continuam a exigir MFA e KYC.
+    ['estafeta + desconhecido, AAL1', ['estafeta', 'rei'], OK, 'aal1', MINIMOS, true, 'falta_mfa'],
+    ['estafeta + desconhecido, sem KYC', ['estafeta', 'rei'], 'PENDING_ID', 'aal2', MINIMOS, false, 'kyc'],
+  ])('%s → desconhecidos ignorados, conhecidos aplicam-se', (_nome, cargos, kyc, nivel, separadores, faltaMfa, restricao) => {
+    const r = decidirAcesso({ perfil: { cargos, estadoKyc: kyc }, nivel });
+    expect(r.separadores).toEqual(separadores);
+    expect(r.faltaMfa).toBe(faltaMfa);
+    expect(r.restricao).toBe(restricao);
   });
 
   test('nunca abre mais do que separadoresPermitidos do último perfil confirmado', () => {

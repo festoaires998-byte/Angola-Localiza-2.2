@@ -128,8 +128,9 @@ export interface DecisaoAcesso {
 /**
  * Decide os separadores com a regra "falhar fechado":
  * - sem perfil confirmado (nunca houve) → só mapa e definicoes;
- * - o perfil tem um cargo que esta versão da app não conhece → só mapa e
- *   definicoes (não o tratamos como cidadão, que abriria mais);
+ * - cargos que esta versão da app não conhece são ignorados; os conhecidos
+ *   aplicam-se normalmente. Se só tiver cargos desconhecidos → só mapa e
+ *   definicoes (nunca é tratado como cidadão, que abriria mais);
  * - exige MFA e a sessão não é AAL2 (ou não se sabe) → só mapa e definicoes;
  * - caso contrário, separadoresPermitidos() do último perfil confirmado.
  * Nunca abre mais do que o último estado confirmado.
@@ -140,7 +141,7 @@ export function decidirAcesso(entrada: EntradaAcesso): DecisaoAcesso {
     return { separadores: [...SEPARADORES_MINIMOS], faltaMfa: false, passoMfa: null, restricao: 'sem_perfil' };
   }
   const cargos = normalizarCargos(perfil.cargos);
-  if (cargos.length !== new Set(perfil.cargos).size) {
+  if (cargos.length === 0 && perfil.cargos.length > 0) {
     return {
       separadores: [...SEPARADORES_MINIMOS],
       faltaMfa: false,

@@ -29,7 +29,9 @@ Verdadeiro para qualquer utilizador com cargos.
 
 - `perfil` é o **último perfil confirmado** pelo servidor. Se agora não foi possível
   confirmar (sem rede ou erro), usa-se o guardado; se nunca houve → só mapa e definicoes.
-- Se o perfil tiver um cargo que esta versão da app não conhece → só mapa e definicoes.
+- Cargos que esta versão da app não conhece são ignorados; os conhecidos aplicam-se
+  normalmente. Se **só** tiver cargos desconhecidos → só mapa e definicoes
+  (nunca é tratado como cidadão).
 - Se exigir MFA e a sessão não for AAL2 (ou não se souber) → só mapa e definicoes,
   com `faltaMfa: true` e `passoMfa` = `verificar` (tem fator) ou `inscrever` (não tem).
 - Nunca abre mais do que `separadoresPermitidos` do último perfil confirmado.
