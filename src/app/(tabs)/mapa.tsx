@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
 import { dataHora, megas, textoPrecisao } from '@/components/nomes';
+import { distanciaAoLimiteCelula } from '@/domain/enderecamento/codigoPostal';
 import { encode } from '@/domain/enderecamento/plusCode';
 import { useCapturaGps, type CapturaGps } from '@/hooks/useCapturaGps';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
@@ -83,6 +84,9 @@ function CartaoMapaOffline({ estado, online }: { estado: EstadoMapaOffline; onli
   );
 }
 
+/** Abaixo desta distância ao limite da célula (ou da precisão do GPS, se for maior) mostra-se o aviso. */
+const LIMITE_AVISO_M = 5;
+
 function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGps; comSinal: boolean; info: InfoLocal | null; online: boolean | null }) {
   const captura = medida.captura;
   if (!captura) {
@@ -101,6 +105,9 @@ function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGp
     );
   }
   const precisao = textoPrecisao(captura.precisao);
+  // Junto ao limite de duas células, o erro do GPS pode fazer o código trocar com o da vizinha.
+  const aoLimite = distanciaAoLimiteCelula(captura.latitude, captura.longitude);
+  const junto = !captura.fraca && aoLimite < Math.max(LIMITE_AVISO_M, captura.precisao);
   const cp = info?.codigoPostal;
   const local = info?.local;
   return (
@@ -141,6 +148,11 @@ function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGp
             <Text style={[estilos.etiqueta, cp.estado === 'confirmado' ? estilos.confirmado : estilos.provisorio]}>
               {cp.estado === 'confirmado' ? 'Confirmado' : 'Provisório'}
             </Text>
+            {junto ? (
+              <Text style={estilos.nota}>
+                {`Estás junto ao limite entre duas células do código postal (a ${Math.max(1, Math.round(aoLimite))} m). Aqui o código pode trocar com o da célula vizinha.`}
+              </Text>
+            ) : null}
             {cp.estado === 'confirmado' && !online && cp.confirmadoEm ? (
               <Text style={estilos.nota}>{`Sem rede: confirmado pelo servidor a ${dataHora(cp.confirmadoEm)}.`}</Text>
             ) : null}

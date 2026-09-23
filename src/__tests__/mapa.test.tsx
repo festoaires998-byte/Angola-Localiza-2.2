@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { limitesCelula } from '@/domain/enderecamento/codigoPostal';
 import { encode } from '@/domain/enderecamento/plusCode';
 import type { InfoLocal } from '@/services/location/infoLocal';
 import type { EstadoMapaOffline } from '@/services/mapas/mapaOffline';
@@ -223,5 +224,32 @@ describe('separador Mapa', () => {
     expect(screen.getByText('Provisório')).toBeTruthy();
     expect(screen.getByText('Por confirmar: a precisão tem de ser melhor que ±10 m.')).toBeTruthy();
     expect(screen.queryByText('A confirmar com o servidor…')).toBeNull();
+  });
+
+  test('junto ao limite de duas células: avisa que o código pode trocar com o da vizinha', () => {
+    mockOnline = true;
+    const c = limitesCelula(POS.latitude, POS.longitude);
+    const perto = { ...POS, latitude: c.latMax - 2 / 110_574, longitude: (c.lngMin + c.lngMax) / 2, precisao: 3 };
+    mockMedida = medida(perto);
+    mockInfo = {
+      plusCode: '',
+      codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: null },
+      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
+    };
+    desenhar();
+    expect(screen.getByText(/Estás junto ao limite entre duas células do código postal \(a 2 m\)/)).toBeTruthy();
+  });
+
+  test('no meio da célula: sem aviso de limite', () => {
+    const c = limitesCelula(POS.latitude, POS.longitude);
+    const meio = { ...POS, latitude: (c.latMin + c.latMax) / 2, longitude: (c.lngMin + c.lngMax) / 2, precisao: 3 };
+    mockMedida = medida(meio);
+    mockInfo = {
+      plusCode: '',
+      codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: null },
+      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
+    };
+    desenhar();
+    expect(screen.queryByText(/junto ao limite/)).toBeNull();
   });
 });

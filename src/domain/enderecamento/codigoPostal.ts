@@ -69,6 +69,49 @@ export function codificarGrelha(latitude: number, longitude: number, comprimento
   return codigo;
 }
 
+/** Retângulo (em graus) da célula da grelha onde o ponto cai: as mesmas divisões de `codificarGrelha`. */
+export function limitesCelula(
+  latitude: number,
+  longitude: number,
+  comprimento = COMPRIMENTO_GRELHA,
+): { latMin: number; latMax: number; lngMin: number; lngMax: number } {
+  let latMin = -90;
+  let latMax = 90;
+  let lngMin = -180;
+  let lngMax = 180;
+  let eLng = true;
+  for (let i = 0; i < comprimento * 5; i++) {
+    if (eLng) {
+      const meio = (lngMin + lngMax) / 2;
+      if (longitude >= meio) lngMin = meio;
+      else lngMax = meio;
+    } else {
+      const meio = (latMin + latMax) / 2;
+      if (latitude >= meio) latMin = meio;
+      else latMax = meio;
+    }
+    eLng = !eLng;
+  }
+  return { latMin, latMax, lngMin, lngMax };
+}
+
+/**
+ * Distância (m) do ponto ao lado mais próximo da sua célula (~38 m × 19 m).
+ * Perto de 0: o ponto está na fronteira entre duas células e, com o erro do
+ * GPS, o código pode alternar entre o desta célula e o da vizinha.
+ */
+export function distanciaAoLimiteCelula(latitude: number, longitude: number): number {
+  const c = limitesCelula(latitude, longitude);
+  const mPorGrauLat = 110_574;
+  const mPorGrauLng = 111_320 * Math.cos((latitude * Math.PI) / 180);
+  return Math.min(
+    (latitude - c.latMin) * mPorGrauLat,
+    (c.latMax - latitude) * mPorGrauLat,
+    (longitude - c.lngMin) * mPorGrauLng,
+    (c.lngMax - longitude) * mPorGrauLng,
+  );
+}
+
 export function digitosControlo(texto: string): string {
   let soma = 0;
   for (let i = 0; i < texto.length; i++) {
