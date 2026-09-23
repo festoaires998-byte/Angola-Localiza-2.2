@@ -29,6 +29,11 @@ export interface FilaSync {
   precisaEntrarDeNovo: boolean;
   /** Botão "Sincronizar agora": não espera a pausa entre tentativas. */
   sincronizarAgora(): Promise<ResumoSync>;
+  /**
+   * Botão "Já vi" de um aviso (gravidade "aviso"): deixa de aparecer na lista.
+   * A prova continua guardada no telemóvel (nunca é apagada).
+   */
+  marcarAvisoVisto(operationId: string): Promise<void>;
 }
 
 /** Estado da fila de saída e do motor de sincronização, para os ecrãs. */
@@ -40,6 +45,7 @@ export function useFilaSync(): FilaSync {
     fotosPendentes: number;
     operacoesComProblema: OperacaoComProblema[];
   }>({ pendentes: 0, fotosPendentes: 0, operacoesComProblema: [] });
+  const [leituras, setLeituras] = useState(0);
 
   useEffect(() => {
     let ativo = true;
@@ -54,7 +60,7 @@ export function useFilaSync(): FilaSync {
           fila.contarPendentesDoUtilizador(userId),
           ficheiros.contarPendentesDoUtilizador(userId),
           fila.listarFalhadasDoUtilizador(userId),
-          evidencias.listarDoUtilizador(userId),
+          evidencias.listarDoUtilizador(userId, { soNaoVistas: true }),
         ]);
         const operacoesComProblema = juntarProblemas(falhadas, provasEvidencia);
         if (ativo) setContagens({ pendentes, fotosPendentes, operacoesComProblema });
@@ -70,9 +76,26 @@ export function useFilaSync(): FilaSync {
       pararA();
       pararB();
     };
-  }, [userId]);
+  }, [userId, leituras]);
 
   const sincronizarAgora = useCallback(() => sincronizar({ forcar: true }), []);
 
-  return { ...contagens, ...estado, sincronizarAgora };
+  const marcarAvisoVisto = useCallback(
+    async (operationId: string) => {
+      if (!userId) return;
+      // Esconde logo; a base de dados guarda o "Já vi".
+      setContagens((a) => ({
+        ...a,
+        operacoesComProblema: a.operacoesComProblema.filter(
+          (o) => !(o.operation_id === operationId && o.gravidade === 'aviso'),
+        ),
+      }));
+      const { evidencias } = await obterRepositoriosSync();
+      await evidencias.marcarVista(userId, operationId);
+      setLeituras((n) => n + 1);
+    },
+    [userId],
+  );
+
+  return { ...contagens, ...estado, sincronizarAgora, marcarAvisoVisto };
 }

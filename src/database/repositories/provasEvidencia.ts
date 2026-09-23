@@ -15,6 +15,8 @@ export interface ProvaEvidencia {
   /** Porque é que a assinatura não confere. */
   motivo: string;
   criada_em: string;
+  /** Quando o utilizador carregou em "Já vi" (null se ainda não). */
+  visto_em: string | null;
 }
 
 interface LinhaEvidencia extends Omit<ProvaEvidencia, 'payload'> {
@@ -29,9 +31,9 @@ export function criarRepositorioProvasEvidencia(db: BaseDados, relogio: Relogio 
   return {
     /**
      * Guarda (ou atualiza, se a operação for reenviada) a cópia da prova.
-     * A data da primeira gravação mantém-se.
+     * A data da primeira gravação e o "Já vi" mantêm-se.
      */
-    async guardar(prova: Omit<ProvaEvidencia, 'criada_em'>): Promise<void> {
+    async guardar(prova: Omit<ProvaEvidencia, 'criada_em' | 'visto_em'>): Promise<void> {
       await db.run(
         `INSERT INTO provas_evidencia (operation_id, user_id, device_id, payload_json, motivo, criada_em)
          VALUES (?, ?, ?, ?, ?, ?)
@@ -57,14 +59,34 @@ export function criarRepositorioProvasEvidencia(db: BaseDados, relogio: Relogio 
       return linha ? deLinha(linha) : null;
     },
 
-    /** Provas do utilizador guardadas como evidência, das mais recentes para as mais antigas. */
-    async listarDoUtilizador(userId: string): Promise<ProvaEvidencia[]> {
+    /**
+     * Provas do utilizador guardadas como evidência, das mais recentes para as
+     * mais antigas. Com `soNaoVistas`, deixa de fora as marcadas com "Já vi".
+     */
+    async listarDoUtilizador(
+      userId: string,
+      opcoes: { soNaoVistas?: boolean } = {},
+    ): Promise<ProvaEvidencia[]> {
       const linhas = await db.getAll<LinhaEvidencia>(
         `SELECT * FROM provas_evidencia WHERE user_id = ?
+          ${opcoes.soNaoVistas ? 'AND visto_em IS NULL' : ''}
           ORDER BY criada_em DESC, operation_id`,
         [userId],
       );
       return linhas.map(deLinha);
+    },
+
+    /**
+     * "Já vi": esconde o aviso da lista, mas a prova continua guardada.
+     * Só marca provas do próprio utilizador. Devolve se marcou alguma.
+     */
+    async marcarVista(userId: string, operationId: string): Promise<boolean> {
+      const r = await db.run(
+        `UPDATE provas_evidencia SET visto_em = ?
+          WHERE operation_id = ? AND user_id = ? AND visto_em IS NULL`,
+        [paraIso(relogio()), operationId, userId],
+      );
+      return r.alteracoes > 0;
     },
   };
 }

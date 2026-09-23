@@ -1,6 +1,8 @@
 import { nivelGarantia } from '@/api/auth';
 import { carregarPerfil } from '@/api/perfil';
 import { supabase } from '@/api/supabase';
+import { abrirBaseDados } from '@/database/client';
+import { criarRepositorioPerfilLocal } from '@/database/repositories/perfilLocal';
 
 import { criarSessao } from './criarSessao';
 
@@ -23,4 +25,7 @@ export const sessao = criarSessao({
   },
   nivelGarantia,
   carregarPerfil,
+  async perfilGuardado(userId) {
+    return criarRepositorioPerfilLocal(await abrirBaseDados()).obter(userId);
+  },
 });

@@ -17,6 +17,8 @@ const esperar = () => new Promise((r) => setTimeout(r, 0));
 function montar(opcoes: {
   nivel?: NivelSessao;
   perfil?: (u: UtilizadorSessao | null) => Promise<{ utilizador: UtilizadorSessao; perfil: PerfilLocal | null; confirmadoAgora: boolean } | null>;
+  perfilGuardado?: DependenciasSessao['perfilGuardado'];
+  esperaPerfilMs?: number;
 }) {
   let emitir: (u: UtilizadorSessao | null) => void = () => undefined;
   let atual: UtilizadorSessao | null = null;
@@ -30,6 +32,8 @@ function montar(opcoes: {
     },
     nivelGarantia: async () => opcoes.nivel ?? { atual: 'aal1', proximo: 'aal1' },
     carregarPerfil: () => (opcoes.perfil ? opcoes.perfil(atual) : Promise.resolve(null)),
+    perfilGuardado: opcoes.perfilGuardado,
+    esperaPerfilMs: opcoes.esperaPerfilMs,
   };
   const s = criarSessao(deps);
   s.iniciar();
@@ -131,5 +135,46 @@ describe('estado da sessão', () => {
     await esperar();
     expect(s.loja.obter()).toMatchObject({ utilizador: null, perfil: null });
     expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
+  });
+
+  test('sem rede: abre logo com o último perfil guardado neste telemóvel', async () => {
+    const { s, emitir } = montar({
+      nivel: { atual: 'aal2', proximo: 'aal2' },
+      // O servidor nunca responde (sem rede).
+      perfil: () => new Promise(() => undefined),
+      perfilGuardado: async (id) => perfil(id, ['tecnico_campo'], 'ID_VERIFIED'),
+    });
+    emitir(ANA);
+    await esperar();
+    expect(s.loja.obter()).toMatchObject({ carregado: true, perfilLido: true, perfilConfirmadoAgora: false });
+    expect(s.loja.obter().acesso.separadores).toContain('campo');
+  });
+
+  test('sem perfil guardado: espera pelo servidor, mas não para sempre', async () => {
+    const { s, emitir } = montar({
+      perfil: () => new Promise(() => undefined),
+      perfilGuardado: async () => null,
+      esperaPerfilMs: 20,
+    });
+    emitir(ANA);
+    await esperar();
+    expect(s.loja.obter()).toMatchObject({ carregado: true, perfilLido: false });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(s.loja.obter().perfilLido).toBe(true);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
+  });
+
+  test('o perfil guardado de outro utilizador nunca é usado', async () => {
+    const { s, emitir } = montar({
+      nivel: { atual: 'aal2', proximo: 'aal2' },
+      perfil: () => new Promise(() => undefined),
+      perfilGuardado: async () => perfil(RUI.id, ['super_admin'], null),
+      esperaPerfilMs: 10_000,
+    });
+    emitir(ANA);
+    await esperar();
+    expect(s.loja.obter().perfil).toBeNull();
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
+    s.parar();
   });
 });
