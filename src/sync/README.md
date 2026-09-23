@@ -41,7 +41,22 @@ Fora de `results`: **401** (sessão inválida), 400 (`operations` vazio) e 500.
 2. Só continua com sessão iniciada e rede. Se o token expira nos próximos 2 minutos, renova-o.
 3. `listarProntas(userId)` em lotes de 20. Com `forcar: true` ignora a espera entre tentativas
    (é o botão "Sincronizar agora").
-4. Fotos de cada operação (`photo_facade_url`, `photo_qr_url`, `proof.photo_url`, `proof.signature_url`):
+4. **Provas de entrega (`delivery_proof`) — antes de tudo o resto dessa operação:**
+   - na primeira prova da volta, o motor chama `garantirChaveRegistada()`
+     (`src/services/crypto`), que regista a chave pública do aparelho se o servidor ainda
+     não a conhece para este utilizador;
+   - **se o registo falhar** (sem rede, erro do servidor, cofre fechado): as provas **esperam**,
+     ficam `pendente` **sem somar tentativas** nem pausa (`aguardamChave` no resumo, mensagem
+     `MENSAGENS.chave`); as outras operações seguem. Na volta seguinte tenta-se de novo;
+   - registo recusado com **401**: pára como no ponto 6 (`precisaEntrarDeNovo`);
+   - com a chave registada, cada prova assinada (`proof.crypto_signature`) é verificada no
+     telemóvel com a chave registada, como o servidor faria. Se não bater certo (assinada
+     com uma chave que o aparelho já não tem, por outro aparelho, ou texto alterado), **nunca
+     é enviada** — o servidor gravá-la-ia como "não verificada" para sempre: passa a
+     `falhou_definitivo` com `ERRO_CHAVE_ANTIGA` e fica como evidência (como a foto alterada).
+
+   Assim **nunca** se envia uma prova assinada com uma chave que o servidor não conhece.
+5. Fotos de cada operação (`photo_facade_url`, `photo_qr_url`, `proof.photo_url`, `proof.signature_url`):
    - lê o ficheiro (`caminho_local`: nome relativo a `documentDirectory`, caminho absoluto ou `file://`);
    - se o registo tem `sha256` e o ficheiro não bate certo (foi alterado ou danificado),
      **não envia**: tentar de novo não resolve, por isso a operação passa logo a
@@ -53,14 +68,14 @@ Fora de `results`: **401** (sessão inválida), 400 (`operations` vazio) e 500.
    - marca o ficheiro como enviado e **grava logo o payload com o URL real** na fila, antes do POST;
    - o URL fica `SUPABASE_URL/storage/v1/object/public/<bucket>/<nome>`.
    Se uma foto falhar, só essa operação espera (`registarFalhaOperacao`); as outras seguem.
-5. `marcarAEnviar` → POST → `aplicarResultadosSync(results)`.
+6. `marcarAEnviar` → POST → `aplicarResultadosSync(results)`.
    - sem rede / erro 5xx: `registarFalhaEnvio` (nada se perde, conta como tentativa);
    - **401**: pára, as operações voltam a `pendente` **sem** somar tentativas e
      `precisaEntrarDeNovo` fica `true`. Não se volta a tentar com o mesmo token;
      com um token novo (entrou de novo) tenta outra vez.
-6. Apaga os ficheiros locais **só** das operações que ficaram `concluida` (até lá são a prova).
+7. Apaga os ficheiros locais **só** das operações que ficaram `concluida` (até lá são a prova).
    Os ficheiros de operações `falhou_definitivo` nunca são apagados pelo motor.
-7. `limparConcluidasAntigas()` e o evento `sincronizado`.
+8. `limparConcluidasAntigas()` e o evento `sincronizado`.
 
 ### Uma volta de cada vez
 
@@ -97,3 +112,4 @@ desbloqueio depois de ligar o telemóvel, não sincroniza (e não apaga a sessã
 ## Testes
 
 `__tests__/motorSync.test.ts` usa sql.js e um `fetch` falso (Storage e sync simulados).
+O registo da chave é simulado (`ctx.chave`); as provas são assinadas a sério com `@noble`.

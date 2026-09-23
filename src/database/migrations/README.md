@@ -16,6 +16,7 @@ Criação e alteração das tabelas da base de dados local.
 | --- | --- | --- |
 | 1 | `001_inicial.ts` | Cria as 9 tabelas: `fila_saida`, `ficheiros_pendentes`, `moradas`, `zona_offline`, `favoritos`, `levantamentos`, `entregas`, `referencias`, `chaves_dispositivo`. |
 | 2 | `002_perfil_e_utilizador.ts` | Cria `perfil_local` (último perfil confirmado por utilizador: `user_id`, `email`, `cargos_json`, `estado_kyc`, `confirmado_em`) e junta a coluna `user_id` à `fila_saida`. As operações que já existiam ficam com `user_id` nulo e **não** são enviadas automaticamente. |
+| 3 | `003_chave_registada_utilizador.ts` | Junta `registada_user_id` à `chaves_dispositivo`: para que utilizador a chave pública foi registada no servidor (o servidor guarda-a por utilizador + aparelho). |
 
 ## Como juntar uma migração nova
 

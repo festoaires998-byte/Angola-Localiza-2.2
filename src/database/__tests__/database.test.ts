@@ -523,7 +523,15 @@ describe('chaves do dispositivo', () => {
     expect(await chaves.obter('d1')).toMatchObject({
       chave_publica_jwk: publica,
       registada: true,
+      registada_user_id: null,
     });
+
+    await chaves.marcarRegistada('d1', 'u-ana');
+    expect((await chaves.obter('d1'))!.registada_user_id).toBe('u-ana');
+
+    // Uma chave nova para o mesmo aparelho volta a "não registada".
+    await chaves.guardar({ device_id: 'd1', chave_publica_jwk: { ...publica, x: 'zz' } });
+    expect(await chaves.obter('d1')).toMatchObject({ registada: false, registada_user_id: null });
 
     await expect(
       chaves.guardar({ device_id: 'd2', chave_publica_jwk: { ...publica, d: 'segredo' } }),
@@ -606,7 +614,7 @@ describe('fila por utilizador (migração 002)', () => {
        VALUES ('fav-1', 'm1', 'Casa', '2026-09-01T10:00:00.000Z')`,
     );
 
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(2);
+    await expect(aplicarMigracoes(antiga, MIGRACOES.slice(0, 2))).resolves.toBe(2);
 
     const filaAntiga = criarRepositorioFilaSaida(antiga, { deviceId: 'telemovel-1' });
     // Os dados que já existiam continuam lá.
@@ -623,6 +631,24 @@ describe('fila por utilizador (migração 002)', () => {
     expect(await filaAntiga.obter('antiga-1')).toMatchObject({ estado: 'pendente' });
     // A tabela nova existe e funciona.
     expect(await nomesTabelas(antiga)).toContain('perfil_local');
+  });
+});
+
+describe('chave registada por utilizador (migração 003)', () => {
+  test('uma chave já registada passa a não ter utilizador (volta a ser registada)', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 2));
+    await antiga.run(
+      `INSERT INTO chaves_dispositivo (device_id, chave_publica_jwk, registada, criada_em)
+       VALUES ('d1', '{"kty":"EC","crv":"P-256","x":"xx","y":"yy"}', 1, '2026-09-01T10:00:00.000Z')`,
+    );
+
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(3);
+
+    expect(await criarRepositorioChavesDispositivo(antiga).obter('d1')).toMatchObject({
+      registada: true,
+      registada_user_id: null,
+    });
   });
 });
 

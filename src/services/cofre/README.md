@@ -9,6 +9,10 @@ Guarda segredos no telemóvel. Nada daqui vai para a base de dados SQLite em tex
 | `cofreApp.ts` | Acesso ao `expo-secure-store` com `AFTER_FIRST_UNLOCK` e a migração dos itens antigos. |
 | `nomes.ts` | Nomes dos itens guardados no cofre. |
 
+A chave **privada** de assinatura das provas também está no `expo-secure-store`, mas é gerida
+por `src/services/crypto` com outra opção de acesso (`AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`:
+não vai para backups nem para outro telemóvel). Por isso não passa por `cofreApp` nem pela migração.
+
 ## Sessão
 
 A sessão pode ter mais de 2 KB, o limite prático do `expo-secure-store`. Por isso:

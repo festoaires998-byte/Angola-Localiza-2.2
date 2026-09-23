@@ -12,6 +12,8 @@ import {
   type ResultadoSync,
 } from '@/database/repositories/filaSaida';
 import { relogioDoSistema, type Relogio } from '@/database/util';
+import { verificarAssinatura } from '@/services/crypto/assinarProva';
+import type { ResultadoRegisto } from '@/services/crypto/chaveDispositivo';
 import { criarLoja, type Loja } from '@/state/loja';
 
 import { criarEmissor, type Emissor } from './eventos';
@@ -57,6 +59,11 @@ export interface DependenciasMotor {
   /** Renova o token. Lança ErroSessaoInvalida se o servidor recusar a sessão. */
   renovarSessao(): Promise<SessaoSync | null>;
   estaOnline(): Promise<boolean>;
+  /**
+   * Regista a chave pública do aparelho no servidor, se ainda não estiver.
+   * Chamado antes de enviar operações delivery_proof.
+   */
+  garantirChaveRegistada(sessao: SessaoSync): Promise<ResultadoRegisto>;
   /** Bytes do ficheiro local, ou null se não existir. */
   lerFicheiro(caminho: string): Promise<Uint8Array | null>;
   apagarFicheiro(caminho: string): Promise<void>;
@@ -105,6 +112,8 @@ export interface ResumoSync {
   adiadas: number;
   /** Operações que falharam de vez (ex.: foto alterada ou danificada). */
   definitivas: number;
+  /** Provas de entrega que esperam o registo da chave do aparelho (também contam em adiadas). */
+  aguardamChave: number;
 }
 
 export interface MotorSync {
@@ -121,6 +130,8 @@ export const MENSAGENS = {
   fotoAlterada: 'Uma foto foi alterada ou danificada depois de ser tirada e não pode ser enviada.',
   fotoEmFalta: 'Uma foto guardada no telemóvel já não existe e não pôde ser enviada.',
   recusadas: 'Alguns registos não foram aceites pelo servidor. Vamos tentar de novo.',
+  chave: 'As provas de entrega esperam até este aparelho ficar registado no servidor. Vamos tentar de novo.',
+  chaveAntiga: 'Uma prova de entrega foi assinada com uma chave que este aparelho já não tem e não pode ser enviada.',
 } as const;
 
 type RespostaHttp =
@@ -130,6 +141,25 @@ type RespostaHttp =
 
 /** Erro gravado na operação quando o sha256 da foto não bate certo. */
 export const ERRO_FOTO_ALTERADA = 'A foto foi alterada ou danificada depois de ser tirada';
+
+/** Erro gravado quando a prova foi assinada com uma chave que não é a registada. */
+export const ERRO_CHAVE_ANTIGA =
+  'A prova foi assinada com uma chave que não é a chave registada deste aparelho';
+
+/**
+ * A prova assinada bate certo com a chave registada? Só as provas com
+ * proof.crypto_signature são verificadas; as outras seguem como estão.
+ */
+function provaComChaveCerta(payload: unknown, chave: { deviceId: string; jwk: unknown }): boolean {
+  const prova = (payload as { proof?: Record<string, unknown> } | null)?.proof;
+  if (!prova || prova.crypto_signature == null) return true;
+  return (
+    prova.crypto_device_id === chave.deviceId &&
+    typeof prova.crypto_payload === 'string' &&
+    typeof prova.crypto_signature === 'string' &&
+    verificarAssinatura(prova.crypto_payload, prova.crypto_signature, chave.jwk)
+  );
+}
 
 type ResultadoFotos =
   | { tipo: 'ok'; payload: unknown }
@@ -301,7 +331,14 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
   }
 
   async function volta(forcar: boolean): Promise<ResumoSync> {
-    const resumo: ResumoSync = { motivo: 'ok', enviadas: 0, concluidas: 0, adiadas: 0, definitivas: 0 };
+    const resumo: ResumoSync = {
+      motivo: 'ok',
+      enviadas: 0,
+      concluidas: 0,
+      adiadas: 0,
+      definitivas: 0,
+      aguardamChave: 0,
+    };
     if (!arrancou) {
       // Operações presas em "a_enviar" (a app fechou a meio de um envio).
       await deps.fila.libertarPresasAEnviar();
@@ -321,6 +358,8 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
     const userId = sessao.userId;
     const vistas = new Set<string>();
     let mensagemAviso: string | null = null;
+    /** Registo da chave: pedido uma vez por volta, só se houver provas de entrega. */
+    let chave: ResultadoRegisto | null = null;
 
     lotes: while (true) {
       const atual = await deps.obterSessao();
@@ -356,6 +395,30 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
 
       const prontas: OperacaoFila[] = [];
       for (const op of lote) {
+        if (op.operation_type === 'delivery_proof') {
+          // Nunca enviar uma prova assinada com uma chave que o servidor não conhece:
+          // o servidor gravaria a prova como "não verificada" para sempre.
+          if (!chave || chave.tipo !== 'ok') chave = await deps.garantirChaveRegistada(sessao);
+          if (chave.tipo === 'sessao') {
+            sessaoRecusada(sessao);
+            return { ...resumo, motivo: 'precisa_entrar' };
+          }
+          if (chave.tipo === 'falhou') {
+            // Não é culpa da prova: fica pendente sem somar tentativas.
+            resumo.adiadas++;
+            resumo.aguardamChave++;
+            mensagemAviso = mensagemAviso ?? MENSAGENS.chave;
+            continue;
+          }
+          if (!provaComChaveCerta(op.payload, chave)) {
+            // Assinada com uma chave que já não existe: nunca vai ser verificada.
+            // Fica como evidência, tal como a foto alterada.
+            await deps.fila.marcarFalhouDefinitivo(userId, op.operation_id, ERRO_CHAVE_ANTIGA);
+            resumo.definitivas++;
+            mensagemAviso = MENSAGENS.chaveAntiga;
+            continue;
+          }
+        }
         const r = await prepararFotos(op, sessao);
         if (r.tipo === 'sessao') {
           sessaoRecusada(sessao);
@@ -450,7 +513,14 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
         } catch (erro) {
           // Erro inesperado (ex.: base de dados): não perde nada, só avisa.
           mudar({ ultimoErro: MENSAGENS.servidor });
-          resumo = { motivo: 'erro_servidor', enviadas: 0, concluidas: 0, adiadas: 0, definitivas: 0 };
+          resumo = {
+            motivo: 'erro_servidor',
+            enviadas: 0,
+            concluidas: 0,
+            adiadas: 0,
+            definitivas: 0,
+            aguardamChave: 0,
+          };
           if (!maisUmaVolta) throw erro;
         }
         f = forcarNaProxima;

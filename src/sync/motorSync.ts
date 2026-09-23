@@ -3,6 +3,7 @@ import { File, Paths } from 'expo-file-system';
 
 import { supabase } from '@/api/supabase';
 import { obterConfigSupabase } from '@/config/env';
+import { garantirChaveRegistada } from '@/services/crypto';
 import { estaOnline } from '@/services/rede/conectividade';
 import { criarLoja } from '@/state/loja';
 
@@ -18,7 +19,7 @@ import {
   type SessaoSync,
 } from './nucleoMotor';
 
-export { ERRO_FOTO_ALTERADA, ErroSessaoInvalida, MENSAGENS } from './nucleoMotor';
+export { ERRO_CHAVE_ANTIGA, ERRO_FOTO_ALTERADA, ErroSessaoInvalida, MENSAGENS } from './nucleoMotor';
 export type { EstadoSync, MotivoFim, ResumoSync } from './nucleoMotor';
 
 /** Estado do motor, sempre disponível (mesmo antes de a base de dados abrir). */
@@ -66,6 +67,7 @@ function obterMotor(): Promise<MotorSync> {
             return paraSessaoSync(data.session);
           },
           estaOnline,
+          garantirChaveRegistada: (sessao) => garantirChaveRegistada(sessao),
           async lerFicheiro(caminho) {
             const f = ficheiroLocal(caminho);
             return f.exists ? await f.bytes() : null;

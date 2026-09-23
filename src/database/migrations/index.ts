@@ -1,12 +1,13 @@
 import type { BaseDados } from '../tipos';
 import { migracao001 } from './001_inicial';
 import { migracao002 } from './002_perfil_e_utilizador';
+import { migracao003 } from './003_chave_registada_utilizador';
 import type { Migracao } from './tipos';
 
 export type { Migracao } from './tipos';
 
 /** Todas as migrações, por ordem. Uma nova migração entra no fim desta lista. */
-export const MIGRACOES: readonly Migracao[] = [migracao001, migracao002];
+export const MIGRACOES: readonly Migracao[] = [migracao001, migracao002, migracao003];
 
 /** Versão em que a base de dados está agora (PRAGMA user_version). */
 export async function lerVersao(db: BaseDados): Promise<number> {

@@ -2,15 +2,20 @@
  * @jest-environment node
  */
 import { describe, expect, test } from '@jest/globals';
+import { p256 } from '@noble/curves/nist.js';
 import { createHash } from 'crypto';
 
 import { aplicarMigracoes } from '@/database/migrations';
 import { criarRepositorioFicheirosPendentes } from '@/database/repositories/ficheirosPendentes';
 import { criarRepositorioFilaSaida, type TipoOperacao } from '@/database/repositories/filaSaida';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
+import { criarAssinarProva, paraCamposProva } from '@/services/crypto/assinarProva';
+import type { ResultadoRegisto } from '@/services/crypto/chaveDispositivo';
+import { chavePublicaParaJwk } from '@/services/crypto/jwk';
 
 import {
   criarMotorSync,
+  ERRO_CHAVE_ANTIGA,
   ERRO_FOTO_ALTERADA,
   ErroSessaoInvalida,
   MENSAGENS,
@@ -50,6 +55,27 @@ function adiado<T>() {
   return { promessa, resolver };
 }
 
+/** Chave do aparelho de teste (a registada no servidor falso). */
+const CHAVE_TESTE = p256.keygen();
+const JWK_TESTE = chavePublicaParaJwk(CHAVE_TESTE.publicKey);
+const CHAVE_OK: ResultadoRegisto = { tipo: 'ok', deviceId: 'app-teste', jwk: JWK_TESTE };
+
+async function provaAssinada(chavePrivada: Uint8Array = CHAVE_TESTE.secretKey, deviceId = 'app-teste') {
+  const assinar = criarAssinarProva(
+    { assinar: async (m) => ({ deviceId, assinatura: p256.sign(m, chavePrivada) }) },
+    () => new Date('2026-09-23T09:59:00.000Z'),
+  );
+  const prova = await assinar({
+    delivery_id: 'd1',
+    lat: -8.8383,
+    lng: 13.2344,
+    plus_code: '6CVJ5QP7+M9',
+    foto_sha256: null,
+    assinatura_manuscrita_sha256: null,
+  });
+  return { delivery_id: 'd1', new_status: 'DELIVERED', pin: '1234', proof: paraCamposProva(prova) };
+}
+
 async function montar(opcoes: { tamanhoLote?: number } = {}) {
   const { db } = await criarBaseDadosSqlJs();
   await aplicarMigracoes(db);
@@ -65,6 +91,9 @@ async function montar(opcoes: { tamanhoLote?: number } = {}) {
     sessao: ANA as SessaoSync | null,
     online: true,
     responder: respostaNormal,
+    chave: CHAVE_OK,
+    /** Pedidos HTTP já feitos quando o motor pediu o registo da chave. */
+    registosChave: [] as number[],
     renovacoes: 0,
     renovar: async (): Promise<SessaoSync | null> => {
       // Como o supabase-js: a sessão renovada passa a ser a sessão guardada.
@@ -82,6 +111,10 @@ async function montar(opcoes: { tamanhoLote?: number } = {}) {
       return ctx.renovar();
     },
     estaOnline: async () => ctx.online,
+    garantirChaveRegistada: async () => {
+      ctx.registosChave.push(pedidos.length);
+      return ctx.chave;
+    },
     lerFicheiro: async (c) => disco.get(c) ?? null,
     apagarFicheiro: async (c) => {
       disco.delete(c);
@@ -600,5 +633,95 @@ describe('ficheiros locais', () => {
     await t.motor.sincronizar();
     expect(await t.fila.obter(op.operation_id)).toBeNull();
     expect(avisos).toBe(2);
+  });
+});
+
+describe('chave do aparelho e provas de entrega', () => {
+  test('pede o registo da chave antes de enviar a prova assinada', async () => {
+    const t = await montar();
+    const op = await t.operacao('delivery_proof', await provaAssinada());
+
+    const r = await t.motor.sincronizar();
+
+    expect(t.ctx.registosChave).toEqual([0]); // antes de qualquer pedido HTTP
+    expect(t.pedidosSync().map(idsEnviados)).toEqual([[op.operation_id]]);
+    expect((await t.fila.obter(op.operation_id))!.estado).toBe('concluida');
+    expect(r).toMatchObject({ concluidas: 1, aguardamChave: 0 });
+  });
+
+  test('sem provas de entrega não pede o registo da chave', async () => {
+    const t = await montar();
+    await t.operacao('create_address', { nome: 'Rua 1' });
+    await t.motor.sincronizar();
+    expect(t.ctx.registosChave).toEqual([]);
+  });
+
+  test('se o registo falhar, a prova espera sem somar tentativas e as outras seguem', async () => {
+    const t = await montar();
+    const prova = await t.operacao('delivery_proof', await provaAssinada());
+    const outra = await t.operacao('create_address', { nome: 'Rua 1' });
+    t.ctx.chave = { tipo: 'falhou', erro: 'Sem ligação ao servidor.' };
+
+    const r = await t.motor.sincronizar();
+
+    expect(t.pedidosSync().map(idsEnviados)).toEqual([[outra.operation_id]]);
+    expect(await t.fila.obter(prova.operation_id)).toMatchObject({
+      estado: 'pendente',
+      tentativas: 0,
+      ultimo_erro: null,
+      proxima_tentativa_em: null,
+    });
+    expect(r).toMatchObject({ concluidas: 1, adiadas: 1, aguardamChave: 1 });
+    expect(t.motor.estado.obter().ultimoErro).toBe(MENSAGENS.chave);
+
+    // Várias voltas sem registo: continua sem tentativas somadas.
+    await t.motor.sincronizar();
+    await t.motor.sincronizar();
+    expect((await t.fila.obter(prova.operation_id))!.tentativas).toBe(0);
+
+    // O registo passa a funcionar: a prova segue logo (não ficou à espera de nenhuma pausa).
+    t.ctx.chave = CHAVE_OK;
+    await t.motor.sincronizar();
+    expect(t.pedidosSync().map(idsEnviados).at(-1)).toEqual([prova.operation_id]);
+    expect((await t.fila.obter(prova.operation_id))!.estado).toBe('concluida');
+  });
+
+  test('o registo recusado com 401 pára e pede para entrar de novo', async () => {
+    const t = await montar();
+    const prova = await t.operacao('delivery_proof', await provaAssinada());
+    t.ctx.chave = { tipo: 'sessao' };
+
+    const r = await t.motor.sincronizar();
+
+    expect(r.motivo).toBe('precisa_entrar');
+    expect(t.pedidosSync()).toEqual([]);
+    expect((await t.fila.obter(prova.operation_id))!).toMatchObject({ estado: 'pendente', tentativas: 0 });
+    expect(t.motor.estado.obter().precisaEntrarDeNovo).toBe(true);
+  });
+
+  test.each([
+    ['assinada com outra chave', async () => provaAssinada(p256.keygen().secretKey)],
+    ['assinada por outro aparelho', async () => provaAssinada(CHAVE_TESTE.secretKey, 'app-outro')],
+    [
+      'com o texto alterado depois de assinar',
+      async () => {
+        const p = await provaAssinada();
+        p.proof.crypto_payload = p.proof.crypto_payload.replace('"lat":-8.8383', '"lat":-8.8384');
+        return p;
+      },
+    ],
+  ])('a prova %s nunca é enviada e fica como evidência', async (_n, criar) => {
+    const t = await montar();
+    const op = await t.operacao('delivery_proof', await criar());
+
+    const r = await t.motor.sincronizar();
+
+    expect(t.pedidosSync()).toEqual([]);
+    expect(await t.fila.obter(op.operation_id)).toMatchObject({
+      estado: 'falhou_definitivo',
+      ultimo_erro: ERRO_CHAVE_ANTIGA,
+    });
+    expect(r).toMatchObject({ definitivas: 1 });
+    expect(t.motor.estado.obter().ultimoErro).toBe(MENSAGENS.chaveAntiga);
   });
 });

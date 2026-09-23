@@ -5,13 +5,15 @@ import { paraBit, paraIso, paraJson, relogioDoSistema, type Relogio } from '../u
  * Chave PÚBLICA do dispositivo.
  *
  * NUNCA guardar aqui a chave privada. A chave privada vai para o
- * expo-secure-store (feito noutro PR). Esta base de dados não é cifrada.
+ * expo-secure-store (src/services/crypto). Esta base de dados não é cifrada.
  */
 export interface ChaveDispositivo {
   device_id: string;
   /** Chave pública em formato JWK. */
   chave_publica_jwk: Record<string, unknown>;
   registada: boolean;
+  /** Utilizador para quem a chave foi registada no servidor (null se ainda não se sabe). */
+  registada_user_id: string | null;
   criada_em: string;
 }
 
@@ -19,6 +21,7 @@ interface LinhaChave {
   device_id: string;
   chave_publica_jwk: string;
   registada: 0 | 1;
+  registada_user_id: string | null;
   criada_em: string;
 }
 
@@ -31,7 +34,7 @@ export function criarRepositorioChavesDispositivo(
 ) {
   return {
     async guardar(
-      chave: Omit<ChaveDispositivo, 'criada_em' | 'registada'> & {
+      chave: Omit<ChaveDispositivo, 'criada_em' | 'registada' | 'registada_user_id'> & {
         registada?: boolean;
         criada_em?: string;
       },
@@ -43,6 +46,8 @@ export function criarRepositorioChavesDispositivo(
             'A chave privada vai para o expo-secure-store, nunca para o SQLite.',
         );
       }
+      // INSERT OR REPLACE: uma chave nova apaga o registo da anterior
+      // (registada e registada_user_id voltam ao início).
       await db.run(
         `INSERT OR REPLACE INTO chaves_dispositivo
            (device_id, chave_publica_jwk, registada, criada_em)
@@ -66,13 +71,18 @@ export function criarRepositorioChavesDispositivo(
             device_id: linha.device_id,
             chave_publica_jwk: JSON.parse(linha.chave_publica_jwk),
             registada: linha.registada === 1,
+            registada_user_id: linha.registada_user_id ?? null,
             criada_em: linha.criada_em,
           }
         : null;
     },
 
-    async marcarRegistada(deviceId: string): Promise<void> {
-      await db.run('UPDATE chaves_dispositivo SET registada = 1 WHERE device_id = ?', [deviceId]);
+    /** Marca a chave como registada no servidor (para o utilizador `userId`, se indicado). */
+    async marcarRegistada(deviceId: string, userId: string | null = null): Promise<void> {
+      await db.run(
+        'UPDATE chaves_dispositivo SET registada = 1, registada_user_id = ? WHERE device_id = ?',
+        [userId, deviceId],
+      );
     },
 
     async apagar(deviceId: string): Promise<void> {

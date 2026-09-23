@@ -19,7 +19,7 @@ const fila = criarRepositorioFilaSaida(db, { deviceId });
 | `levantamentos.ts` | `levantamentos` | `guardar`, `obter`, `listar`, `listarPorEstado`, `mudarEstado`, `apagar` |
 | `entregas.ts` | `entregas` | `guardar`, `guardarVarias`, `obter`, `listar`, `apagar` |
 | `referencias.ts` | `referencias` | `guardarVarias`, `obter`, `listar(tipo, paiId)`, `apagar` |
-| `chavesDispositivo.ts` | `chaves_dispositivo` | `guardar` (só chave pública), `obter`, `marcarRegistada`, `apagar` |
+| `chavesDispositivo.ts` | `chaves_dispositivo` | `guardar` (só chave pública), `obter`, `marcarRegistada(deviceId, userId)` (guarda para que utilizador foi registada), `apagar`. Uma chave nova volta a `registada = 0`. |
 
 ## Fila de saída e a Edge Function "sync"
 
