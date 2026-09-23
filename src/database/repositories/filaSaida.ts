@@ -133,18 +133,117 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
      * (a espera após a última falha já passou), das mais antigas para as mais
      * recentes. As de outros utilizadores e as sem user_id nunca aparecem.
      */
-    async listarProntas(userId: string, limite = 50): Promise<OperacaoFila[]> {
+    async listarProntas(
+      userId: string,
+      limite = 50,
+      opcoesLista: { ignorarEspera?: boolean } = {},
+    ): Promise<OperacaoFila[]> {
       exigirUtilizador(userId);
+      // ignorarEspera: botão "Sincronizar agora" (não espera o fim da pausa após falha).
       const linhas = await db.getAll<LinhaFila>(
         `SELECT * FROM fila_saida
           WHERE user_id = ?
             AND estado = 'pendente'
-            AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= ?)
+            AND (? = 1 OR proxima_tentativa_em IS NULL OR proxima_tentativa_em <= ?)
           ORDER BY criado_em, operation_id
           LIMIT ?`,
-        [userId, paraIso(agora()), Math.max(0, Math.trunc(limite))],
+        [
+          userId,
+          opcoesLista.ignorarEspera ? 1 : 0,
+          paraIso(agora()),
+          Math.max(0, Math.trunc(limite)),
+        ],
       );
       return linhas.map(deLinha);
+    },
+
+    /**
+     * Grava o payload já com os URLs reais das fotos (antes do POST).
+     * Só mexe numa operação do utilizador que ainda não foi concluída.
+     */
+    async atualizarPayload(userId: string, operationId: string, payload: unknown): Promise<void> {
+      exigirUtilizador(userId);
+      await db.run(
+        `UPDATE fila_saida SET payload_json = ?, atualizado_em = ?
+          WHERE operation_id = ? AND user_id = ? AND estado IN ('pendente', 'a_enviar')`,
+        [paraJson(payload), paraIso(agora()), operationId, userId],
+      );
+    },
+
+    /**
+     * Uma só operação pendente falhou antes do envio (ex.: uma foto não subiu):
+     * tentativas + 1 e espera, como em aplicarResultadosSync. As outras não mudam.
+     */
+    async registarFalhaOperacao(userId: string, operationId: string, erro: string): Promise<void> {
+      exigirUtilizador(userId);
+      await db.transacao(async (tx) => {
+        const linha = await tx.getFirst<{ tentativas: number }>(
+          `SELECT tentativas FROM fila_saida
+            WHERE operation_id = ? AND user_id = ? AND estado = 'pendente'`,
+          [operationId, userId],
+        );
+        if (!linha) return;
+        const novas = linha.tentativas + 1;
+        const desiste = novas >= maxTentativas;
+        const proxima = new Date(agora().getTime() + esperaAposFalha(novas));
+        await tx.run(
+          `UPDATE fila_saida
+              SET estado = ?, tentativas = ?, ultimo_erro = ?, proxima_tentativa_em = ?,
+                  atualizado_em = ?
+            WHERE operation_id = ?`,
+          [
+            desiste ? 'falhou_definitivo' : 'pendente',
+            novas,
+            erro,
+            desiste ? null : paraIso(proxima),
+            paraIso(agora()),
+            operationId,
+          ],
+        );
+      });
+    },
+
+    /**
+     * A operação nunca vai poder ser enviada (ex.: a foto foi alterada ou
+     * danificada): passa logo a "falhou_definitivo", sem novas tentativas.
+     * Não apaga nada: o payload e os ficheiros ficam como evidência.
+     */
+    async marcarFalhouDefinitivo(userId: string, operationId: string, erro: string): Promise<void> {
+      exigirUtilizador(userId);
+      await db.run(
+        `UPDATE fila_saida
+            SET estado = 'falhou_definitivo', ultimo_erro = ?, proxima_tentativa_em = NULL,
+                atualizado_em = ?
+          WHERE operation_id = ? AND user_id = ? AND estado IN ('pendente', 'a_enviar')`,
+        [erro, paraIso(agora()), operationId, userId],
+      );
+    },
+
+    /** Operações do utilizador que falharam de vez, das mais recentes para as mais antigas. */
+    async listarFalhadasDoUtilizador(userId: string): Promise<OperacaoFila[]> {
+      exigirUtilizador(userId);
+      const linhas = await db.getAll<LinhaFila>(
+        `SELECT * FROM fila_saida
+          WHERE user_id = ? AND estado = 'falhou_definitivo'
+          ORDER BY atualizado_em DESC, operation_id`,
+        [userId],
+      );
+      return linhas.map(deLinha);
+    },
+
+    /**
+     * O envio foi recusado por a sessão não ser válida (401): a culpa não é
+     * das operações. As "a_enviar" do utilizador voltam a pendente SEM somar
+     * tentativas nem mudar a espera.
+     */
+    async devolverAPendente(userId: string): Promise<number> {
+      exigirUtilizador(userId);
+      const r = await db.run(
+        `UPDATE fila_saida SET estado = 'pendente', atualizado_em = ?
+          WHERE estado = 'a_enviar' AND user_id = ?`,
+        [paraIso(agora()), userId],
+      );
+      return r.alteracoes;
     },
 
     /**
