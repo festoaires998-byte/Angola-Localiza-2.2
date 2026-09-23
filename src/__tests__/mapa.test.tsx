@@ -22,14 +22,27 @@ let mockGps: Record<string, unknown> = { estado: 'a_procurar', ultima: null };
 let mockInfo: InfoLocal | null = null;
 let mockMapa: EstadoMapaOffline = { estado: 'sem_mapa', remoto: null };
 const mockTentarDeNovo = jest.fn();
+const mockMedirDeNovo = jest.fn();
+let mockMedida: Record<string, unknown> = {};
 jest.mock('@/hooks/useOnline', () => ({ useOnline: () => mockOnline }));
 jest.mock('@/hooks/usePosicao', () => ({ usePosicao: () => ({ ...mockGps, tentarDeNovo: mockTentarDeNovo }) }));
+jest.mock('@/hooks/useCapturaGps', () => ({ useCapturaGps: () => ({ ...mockMedida, medirDeNovo: mockMedirDeNovo }) }));
 jest.mock('@/hooks/useInfoLocal', () => ({ useInfoLocal: () => mockInfo }));
 jest.mock('@/hooks/useMapaOffline', () => ({ useMapaOffline: () => mockMapa }));
 
 const Mapa = (require('@/app/(tabs)/mapa') as { default: () => React.JSX.Element }).default;
 
 const POS = { latitude: -12.7761, longitude: 15.7392, precisao: 6.2, hora: 0 };
+/** Posição medida com 3 leituras (o que o useCapturaGps devolve). */
+function medida(p: typeof POS, extra: Record<string, unknown> = {}) {
+  return {
+    captura: { latitude: p.latitude, longitude: p.longitude, precisao: p.precisao, leituras: 3, fraca: false },
+    aMedir: false,
+    leiturasBoas: 0,
+    necessarias: 3,
+    ...extra,
+  };
+}
 const MANIFESTO = { regiao: 'huambo', versao: '20260923', ficheiro: 'huambo-20260923.pmtiles', bytes: 12_582_912 };
 
 function desenhar() {
@@ -43,10 +56,12 @@ function desenhar() {
 beforeEach(() => {
   mockOnline = false;
   mockGps = { estado: 'ok', posicao: POS };
+  mockMedida = medida(POS);
   mockInfo = null;
   mockMapa = { estado: 'sem_mapa', remoto: null };
   mockDescarregar.mockClear();
   mockTentarDeNovo.mockClear();
+  mockMedirDeNovo.mockClear();
 });
 
 describe('separador Mapa', () => {
@@ -60,6 +75,7 @@ describe('separador Mapa', () => {
     expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
     expect(encode(POS.latitude, POS.longitude).replace('+', '')).toHaveLength(11);
     expect(screen.getByText('± 6 m (boa)')).toBeTruthy();
+    expect(screen.getByText('Média de 3 leituras do GPS.')).toBeTruthy();
     expect(screen.getByText('AO-HUA-MNFQR6JW-41')).toBeTruthy();
     expect(screen.getByText('Provisório')).toBeTruthy();
     expect(screen.getByText('Calculado neste telemóvel. É confirmado quando houver rede.')).toBeTruthy();
@@ -140,8 +156,51 @@ describe('separador Mapa', () => {
   });
 
   test('fora do Huambo: avisa que o código continua a funcionar', () => {
-    mockGps = { estado: 'ok', posicao: { ...POS, latitude: -8.8383, longitude: 13.2344 } };
+    const luanda = { ...POS, latitude: -8.8383, longitude: 13.2344 };
+    mockGps = { estado: 'ok', posicao: luanda };
+    mockMedida = medida(luanda);
     desenhar();
     expect(screen.getByText(/Estás fora da zona do mapa/)).toBeTruthy();
+  });
+
+  test('a medir pela primeira vez: mostra as leituras e ainda não mostra código', () => {
+    mockMedida = { captura: null, aMedir: true, leiturasBoas: 2, necessarias: 3 };
+    desenhar();
+    expect(screen.getByText('A medir a tua posição… leitura 2 de 3. Fica parado uns segundos.')).toBeTruthy();
+    expect(screen.queryByText('Plus Code')).toBeNull();
+  });
+
+  test('sem sinal do GPS: pede para ir para um sítio aberto', () => {
+    mockGps = { estado: 'a_procurar', ultima: null };
+    mockMedida = { captura: null, aMedir: true, leiturasBoas: 0, necessarias: 3 };
+    desenhar();
+    expect(screen.getByText(/A procurar o sinal do GPS/)).toBeTruthy();
+  });
+
+  test('o código usa a posição medida, não a leitura ao vivo', () => {
+    // A leitura ao vivo saltou 15 m; o código continua o da média.
+    mockGps = { estado: 'ok', posicao: { ...POS, latitude: POS.latitude + 0.000135 } };
+    desenhar();
+    expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
+  });
+
+  test('a medir de novo: mantém o código anterior e diz que está a medir', () => {
+    mockMedida = medida(POS, { aMedir: true, leiturasBoas: 1 });
+    desenhar();
+    expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
+    expect(screen.getByText('A medir de novo… leitura 1 de 3.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Medir de novo' })).toBeNull();
+  });
+
+  test('botão "Medir de novo"', () => {
+    desenhar();
+    fireEvent.press(screen.getByRole('button', { name: 'Medir de novo' }));
+    expect(mockMedirDeNovo).toHaveBeenCalledTimes(1);
+  });
+
+  test('sinal fraco: avisa que o código pode não ser o deste ponto', () => {
+    mockMedida = medida({ ...POS, precisao: 45 }, { captura: { ...POS, precisao: 45, leituras: 3, fraca: true }, aMedir: true });
+    desenhar();
+    expect(screen.getByText(/Sinal do GPS fraco/)).toBeTruthy();
   });
 });

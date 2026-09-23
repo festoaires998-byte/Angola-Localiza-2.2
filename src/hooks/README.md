@@ -21,7 +21,11 @@ Ponte entre ecrãs e o resto (useGps, useFilaSync, useSessao, useCargos).
   - `marcarAvisoVisto(operationId)` — botão "Já vi" de um aviso: grava `visto_em` em
     `provas_evidencia` e o aviso deixa de aparecer. A prova **nunca** é apagada.
 - `useLinkAuth()` — estado do último link do email (recuperação / confirmação).
-- `usePosicao()` — GPS enquanto o ecrã está aberto: permissão, GPS desligado, posição e precisão.
+- `usePosicao()` — GPS enquanto o ecrã está aberto: permissão, GPS desligado, posição e precisão
+  (uma leitura por segundo, mesmo parado).
+- `useCapturaGps(leitura)` — posição **medida** com várias leituras (mín. 3 com menos de ±30 m, média
+  com mais peso nas mais precisas; ver `src/domain/enderecamento/capturaGps.ts`). O Mapa usa-a para o
+  código; guardar uma morada vai usar a mesma. `medirDeNovo()` para o botão "Medir de novo".
 - `useOnline()` — há rede agora?
 - `useInfoLocal(posicao, online)` — Plus Code, Código Postal Digital e província/município (`src/services/location`).
 - `useMapaOffline(online)` — estado do mapa do Huambo no telemóvel (`src/services/mapas`).

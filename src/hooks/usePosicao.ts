@@ -45,8 +45,10 @@ export function usePosicao(): EstadoPosicao & { tentarDeNovo(): void } {
       const ultima = await Location.getLastKnownPositionAsync().catch(() => null);
       if (!ativo) return;
       setEstado({ estado: 'a_procurar', ultima: ultima ? dePosicao(ultima) : null });
+      // Uma leitura por segundo, mesmo parado (distanceInterval 0): a captura
+      // (useCapturaGps) precisa de várias leituras seguidas para fazer a média.
       const s = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 2 },
+        { accuracy: Location.Accuracy.High, timeInterval: 1000, distanceInterval: 0 },
         (l) => ativo && setEstado({ estado: 'ok', posicao: dePosicao(l) }),
         () => ativo && setEstado((e) => (e.estado === 'ok' ? e : { estado: 'gps_desligado' })),
       );

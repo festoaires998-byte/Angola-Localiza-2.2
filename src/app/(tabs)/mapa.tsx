@@ -7,10 +7,11 @@ import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
 import { dataHora, megas, textoPrecisao } from '@/components/nomes';
 import { encode } from '@/domain/enderecamento/plusCode';
+import { useCapturaGps, type CapturaGps } from '@/hooks/useCapturaGps';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
 import { useMapaOffline } from '@/hooks/useMapaOffline';
 import { useOnline } from '@/hooks/useOnline';
-import { usePosicao, type Posicao } from '@/hooks/usePosicao';
+import { usePosicao } from '@/hooks/usePosicao';
 import type { InfoLocal } from '@/services/location/infoLocal';
 import { ATRIBUICAO_OSM, criarEstilo } from '@/services/mapas/estiloMapa';
 import { mapaHuambo, type EstadoMapaOffline } from '@/services/mapas/mapaOffline';
@@ -82,16 +83,21 @@ function CartaoMapaOffline({ estado, online }: { estado: EstadoMapaOffline; onli
   );
 }
 
-function CartaoOndeEstou({ posicao, info, online }: { posicao: Posicao | null; info: InfoLocal | null; online: boolean | null }) {
-  if (!posicao) {
+function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGps; comSinal: boolean; info: InfoLocal | null; online: boolean | null }) {
+  const captura = medida.captura;
+  if (!captura) {
     return (
       <Cartao>
         <Subtitulo>Onde estou</Subtitulo>
-        <Texto>A procurar o sinal do GPS… Se demorar, vai para um sítio aberto.</Texto>
+        <Texto>
+          {comSinal
+            ? `A medir a tua posição… leitura ${medida.leiturasBoas} de ${medida.necessarias}. Fica parado uns segundos.`
+            : 'A procurar o sinal do GPS… Se demorar, vai para um sítio aberto.'}
+        </Texto>
       </Cartao>
     );
   }
-  const precisao = textoPrecisao(posicao.precisao);
+  const precisao = textoPrecisao(captura.precisao);
   const cp = info?.codigoPostal;
   const local = info?.local;
   return (
@@ -100,10 +106,23 @@ function CartaoOndeEstou({ posicao, info, online }: { posicao: Posicao | null; i
       <View style={estilos.linha}>
         <Text style={estilos.rotulo}>Plus Code</Text>
         <Text selectable style={estilos.codigo} accessibilityLabel="Plus Code">
-          {encode(posicao.latitude, posicao.longitude)}
+          {encode(captura.latitude, captura.longitude)}
         </Text>
       </View>
       <Linha nome="Precisão do GPS" valor={precisao.qualidade ? `${precisao.texto} (${precisao.qualidade})` : precisao.texto} />
+      <Text style={estilos.nota}>
+        {medida.aMedir
+          ? `A medir de novo… leitura ${medida.leiturasBoas} de ${medida.necessarias}.`
+          : `Média de ${captura.leituras} leituras do GPS.`}
+      </Text>
+      {captura.fraca ? (
+        <Caixa tipo="aviso">
+          <Text style={estilos.textoCaixa}>
+            Sinal do GPS fraco: não houve 3 leituras com menos de ±30 m. O código pode não ser o deste ponto. Vai para
+            um sítio aberto.
+          </Text>
+        </Caixa>
+      ) : null}
 
       <View style={estilos.linha}>
         <Text style={estilos.rotulo}>Código Postal Digital</Text>
@@ -146,6 +165,7 @@ function CartaoOndeEstou({ posicao, info, online }: { posicao: Posicao | null; i
           {online ? 'A perguntar ao servidor…' : 'Sem rede e sem dados guardados desta zona.'}
         </Text>
       ) : null}
+      {!medida.aMedir ? <Botao titulo="Medir de novo" variante="secundario" onPress={medida.medirDeNovo} /> : null}
     </Cartao>
   );
 }
@@ -156,8 +176,11 @@ export default function Mapa() {
   const estadoMapa = useMapaOffline(online);
   const [seguir, setSeguir] = useState(true);
 
-  const posicao = gps.estado === 'ok' ? gps.posicao : gps.estado === 'a_procurar' ? gps.ultima : null;
-  const info = useInfoLocal(posicao, online);
+  const aoVivo = gps.estado === 'ok' ? gps.posicao : null;
+  // O ponto azul segue o GPS ao vivo; o código usa a posição medida (média de várias leituras).
+  const medida = useCapturaGps(aoVivo);
+  const posicao = medida.captura ?? aoVivo ?? (gps.estado === 'a_procurar' ? gps.ultima : null);
+  const info = useInfoLocal(medida.captura, online);
   const origem = origemDoMapa(estadoMapa, online);
   const chaveOrigem = origem ? `${origem.tiles}|${origem.fontes}` : null;
   // O estilo só muda quando a origem muda (evita recarregar o mapa a cada posição).
@@ -228,7 +251,7 @@ export default function Mapa() {
             <Botao titulo="Tentar outra vez" onPress={gps.tentarDeNovo} />
           </Caixa>
         ) : null}
-        {!semPermissao ? <CartaoOndeEstou posicao={posicao} info={info} online={online} /> : null}
+        {!semPermissao ? <CartaoOndeEstou medida={medida} comSinal={aoVivo !== null} info={info} online={online} /> : null}
         {posicao && !dentroDaRegiao(REGIAO_HUAMBO, posicao.latitude, posicao.longitude) ? (
           <Caixa tipo="info">{`Estás fora da zona do mapa (${REGIAO_HUAMBO.nome}). O teu código continua a funcionar.`}</Caixa>
         ) : null}
