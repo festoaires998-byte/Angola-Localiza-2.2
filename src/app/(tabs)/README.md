@@ -16,6 +16,18 @@ e só mostram os separadores de `separadores`.
 | validar | supervisor, admin_municipal, admin_provincial, admin_nacional |
 | admin | admin_municipal, admin_provincial, admin_nacional, auditor |
 
+## Mapa (`mapa.tsx`)
+
+Mapa (MapLibre) com a posição, o **Plus Code** de 11 caracteres, a **precisão
+do GPS**, o **Código Postal Digital** (provisório sem rede, confirmado com
+rede) e a **província e o município**. O mapa do Huambo é descarregado uma vez
+e depois funciona sem rede; mostra sempre `© OpenStreetMap`. Ver
+`src/services/mapas` e `src/services/location`.
+
+A pesquisa, a partilha e o QR ficam para o PR seguinte.
+
+## Acesso
+
 Os separadores que o utilizador não pode ver ficam dentro de `Tabs.Protected`: não
 aparecem na barra e não abrem nem por link. Os que ainda não existem mostram
 "Em construção" (`src/components/EmConstrucao.tsx`).

@@ -60,7 +60,11 @@ jest.mock('@/api/auth', () => ({
   ErroAuth: class ErroAuth extends Error {},
 }));
 
-jest.mock('@/services/rede/conectividade', () => ({ estaOnline: async () => true }));
+jest.mock('@/services/rede/conectividade', () => ({ estaOnline: async () => true, subscrever: () => () => undefined }));
+jest.mock('@maplibre/maplibre-react-native', () => jest.requireActual<typeof import('@/testes/mocksMapa')>('@/testes/mocksMapa').maplibre);
+jest.mock('@/services/mapas/mapaOffline', () => jest.requireActual<typeof import('@/testes/mocksMapa')>('@/testes/mocksMapa').mapaOffline);
+jest.mock('@/hooks/usePosicao', () => ({ usePosicao: () => ({ estado: 'a_procurar', ultima: null, tentarDeNovo: () => undefined }) }));
+jest.mock('@/hooks/useInfoLocal', () => ({ useInfoLocal: () => null }));
 jest.mock('react-native-qrcode-svg', () => () => null);
 
 // ─── Ajudas ────────────────────────────────────────────────────────────────
@@ -133,7 +137,7 @@ describe('separadores', () => {
     const r = renderRouter('./src/app', { initialUrl: '/' });
     await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
     expect(separadoresVisiveis()).toEqual(['Mapa', 'Moradas', 'Enviar', 'Entregas', 'Conta']);
-    expect(screen.getByText('Em construção.')).toBeTruthy();
+    expect(await screen.findByText('Onde estou')).toBeTruthy();
   });
 
   test('técnico sem MFA ativado vai para o ecrã de ativar o MFA', async () => {
