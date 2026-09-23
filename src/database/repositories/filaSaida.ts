@@ -1,0 +1,264 @@
+import { gerarUuid, type GeradorId } from '../ids';
+import type { BaseDados } from '../tipos';
+import { marcadores, paraIso, paraJson, relogioDoSistema, type Relogio } from '../util';
+
+/** Tipos de operação aceites pela Edge Function "sync". */
+export const TIPOS_OPERACAO = [
+  'create_address',
+  'create_delivery',
+  'field_submit',
+  'delivery_proof',
+] as const;
+export type TipoOperacao = (typeof TIPOS_OPERACAO)[number];
+
+export type EstadoFila = 'pendente' | 'a_enviar' | 'concluida' | 'falhou_definitivo';
+
+/** Uma operação na fila, já com o payload convertido de JSON. */
+export interface OperacaoFila {
+  operation_id: string;
+  device_id: string;
+  operation_type: TipoOperacao;
+  payload: unknown;
+  estado: EstadoFila;
+  tentativas: number;
+  ultimo_erro: string | null;
+  proxima_tentativa_em: string | null;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+/** Forma exata de cada operação no pedido POST /functions/v1/sync. */
+export interface OperacaoParaSync {
+  operation_id: string;
+  device_id: string;
+  operation_type: TipoOperacao;
+  payload: unknown;
+}
+
+/** Um elemento de "results" na resposta da Edge Function "sync". */
+export interface ResultadoSync {
+  operation_id: string;
+  status: string;
+  error?: string;
+  message?: string;
+}
+
+export interface OpcoesFilaSaida {
+  /** device_id deste telemóvel (vai em cada operação). */
+  deviceId: string;
+  gerarId?: GeradorId;
+  relogio?: Relogio;
+  /**
+   * Depois de quantas falhas a operação passa a "falhou_definitivo".
+   * Por omissão nunca desiste, tal como o site faz hoje.
+   */
+  maxTentativas?: number;
+}
+
+interface LinhaFila extends Omit<OperacaoFila, 'payload'> {
+  payload_json: string;
+}
+
+/** Espera antes de tentar de novo: 30 s, 1 min, 2 min, ... até 1 hora. */
+export function esperaAposFalha(tentativas: number): number {
+  const segundos = 30 * 2 ** Math.max(0, tentativas - 1);
+  return Math.min(segundos, 3600) * 1000;
+}
+
+function deLinha(linha: LinhaFila): OperacaoFila {
+  const { payload_json, ...resto } = linha;
+  return { ...resto, payload: JSON.parse(payload_json) };
+}
+
+export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida) {
+  const gerarId = opcoes.gerarId ?? gerarUuid;
+  const agora = opcoes.relogio ?? relogioDoSistema;
+  const maxTentativas = opcoes.maxTentativas ?? Number.POSITIVE_INFINITY;
+
+  return {
+    /** Põe uma operação nova na fila e devolve-a. */
+    async adicionar(tipo: TipoOperacao, payload: unknown): Promise<OperacaoFila> {
+      const operacao: OperacaoFila = {
+        operation_id: gerarId(),
+        device_id: opcoes.deviceId,
+        operation_type: tipo,
+        payload,
+        estado: 'pendente',
+        tentativas: 0,
+        ultimo_erro: null,
+        proxima_tentativa_em: null,
+        criado_em: paraIso(agora()),
+        atualizado_em: paraIso(agora()),
+      };
+      await db.run(
+        `INSERT INTO fila_saida (operation_id, device_id, operation_type, payload_json,
+           estado, tentativas, criado_em, atualizado_em)
+         VALUES (?, ?, ?, ?, 'pendente', 0, ?, ?)`,
+        [
+          operacao.operation_id,
+          operacao.device_id,
+          tipo,
+          paraJson(payload),
+          operacao.criado_em,
+          operacao.atualizado_em,
+        ],
+      );
+      return operacao;
+    },
+
+    async obter(operationId: string): Promise<OperacaoFila | null> {
+      const linha = await db.getFirst<LinhaFila>(
+        'SELECT * FROM fila_saida WHERE operation_id = ?',
+        [operationId],
+      );
+      return linha ? deLinha(linha) : null;
+    },
+
+    /**
+     * Operações pendentes que já podem ser enviadas (a espera após a última
+     * falha já passou), das mais antigas para as mais recentes.
+     */
+    async listarProntas(limite = 50): Promise<OperacaoFila[]> {
+      const linhas = await db.getAll<LinhaFila>(
+        `SELECT * FROM fila_saida
+          WHERE estado = 'pendente'
+            AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= ?)
+          ORDER BY criado_em, operation_id
+          LIMIT ?`,
+        [paraIso(agora()), Math.max(0, Math.trunc(limite))],
+      );
+      return linhas.map(deLinha);
+    },
+
+    /** Marca as operações como "a_enviar" (chamar antes do POST). */
+    async marcarAEnviar(operationIds: string[]): Promise<void> {
+      if (operationIds.length === 0) return;
+      await db.run(
+        `UPDATE fila_saida SET estado = 'a_enviar', atualizado_em = ?
+          WHERE estado = 'pendente' AND operation_id IN (${marcadores(operationIds.length)})`,
+        [paraIso(agora()), ...operationIds],
+      );
+    },
+
+    /**
+     * Aplica a resposta da Edge Function "sync" às operações que estavam
+     * "a_enviar", com a mesma regra do site:
+     * - veio nos results com status diferente de "FAILED" → concluida;
+     * - veio com "FAILED" → volta a pendente, tentativas + 1, guarda o erro;
+     * - não veio nos results → volta a pendente, tentativas + 1.
+     *
+     * Tudo numa transação: ou se aplica a resposta inteira, ou nada.
+     */
+    async aplicarResultadosSync(results: ResultadoSync[]): Promise<void> {
+      const porId = new Map(results.map((r) => [r.operation_id, r]));
+      await db.transacao(async (tx) => {
+        const agoraIso = paraIso(agora());
+        const enviadas = await tx.getAll<{ operation_id: string; tentativas: number }>(
+          `SELECT operation_id, tentativas FROM fila_saida WHERE estado = 'a_enviar'`,
+        );
+        for (const { operation_id, tentativas } of enviadas) {
+          const resultado = porId.get(operation_id);
+          const falhou = !resultado || resultado.status.toUpperCase() === 'FAILED';
+          if (!falhou) {
+            await tx.run(
+              `UPDATE fila_saida
+                  SET estado = 'concluida', ultimo_erro = NULL, proxima_tentativa_em = NULL,
+                      atualizado_em = ?
+                WHERE operation_id = ?`,
+              [agoraIso, operation_id],
+            );
+            continue;
+          }
+          const novasTentativas = tentativas + 1;
+          const erro = resultado
+            ? resultado.error ?? resultado.message ?? 'FAILED'
+            : 'A operação não veio na resposta do servidor.';
+          const desiste = novasTentativas >= maxTentativas;
+          const proxima = new Date(agora().getTime() + esperaAposFalha(novasTentativas));
+          await tx.run(
+            `UPDATE fila_saida
+                SET estado = ?, tentativas = ?, ultimo_erro = ?, proxima_tentativa_em = ?,
+                    atualizado_em = ?
+              WHERE operation_id = ?`,
+            [
+              desiste ? 'falhou_definitivo' : 'pendente',
+              novasTentativas,
+              erro,
+              desiste ? null : paraIso(proxima),
+              agoraIso,
+              operation_id,
+            ],
+          );
+        }
+      });
+    },
+
+    /**
+     * Quando o envio falha por inteiro (sem rede, erro 500, ...):
+     * as operações "a_enviar" voltam a pendente com tentativas + 1.
+     */
+    async registarFalhaEnvio(erro: string): Promise<void> {
+      await db.transacao(async (tx) => {
+        const enviadas = await tx.getAll<{ operation_id: string; tentativas: number }>(
+          `SELECT operation_id, tentativas FROM fila_saida WHERE estado = 'a_enviar'`,
+        );
+        for (const { operation_id, tentativas } of enviadas) {
+          const novas = tentativas + 1;
+          const proxima = new Date(agora().getTime() + esperaAposFalha(novas));
+          await tx.run(
+            `UPDATE fila_saida
+                SET estado = 'pendente', tentativas = ?, ultimo_erro = ?,
+                    proxima_tentativa_em = ?, atualizado_em = ?
+              WHERE operation_id = ?`,
+            [novas, erro, paraIso(proxima), paraIso(agora()), operation_id],
+          );
+        }
+      });
+    },
+
+    /**
+     * Devolve a "pendente" operações que ficaram "a_enviar" (por exemplo,
+     * a app fechou a meio de um envio). Chamar ao arrancar a app.
+     * Não conta como tentativa.
+     */
+    async libertarPresasAEnviar(): Promise<number> {
+      const r = await db.run(
+        `UPDATE fila_saida SET estado = 'pendente', atualizado_em = ? WHERE estado = 'a_enviar'`,
+        [paraIso(agora())],
+      );
+      return r.alteracoes;
+    },
+
+    /** Quantas operações ainda não foram enviadas com sucesso. */
+    async contarPendentes(): Promise<number> {
+      const linha = await db.getFirst<{ total: number }>(
+        `SELECT COUNT(*) AS total FROM fila_saida WHERE estado IN ('pendente', 'a_enviar')`,
+      );
+      return linha?.total ?? 0;
+    },
+
+    /** Apaga operações concluídas há mais de `dias` dias. Devolve quantas apagou. */
+    async limparConcluidasAntigas(dias = 7): Promise<number> {
+      const limite = new Date(agora().getTime() - dias * 24 * 60 * 60 * 1000);
+      const r = await db.run(
+        `DELETE FROM fila_saida WHERE estado = 'concluida' AND atualizado_em < ?`,
+        [paraIso(limite)],
+      );
+      return r.alteracoes;
+    },
+  };
+}
+
+export type RepositorioFilaSaida = ReturnType<typeof criarRepositorioFilaSaida>;
+
+/** Converte operações da fila no formato do pedido à Edge Function "sync". */
+export function paraPedidoSync(operacoes: OperacaoFila[]): { operations: OperacaoParaSync[] } {
+  return {
+    operations: operacoes.map(({ operation_id, device_id, operation_type, payload }) => ({
+      operation_id,
+      device_id,
+      operation_type,
+      payload,
+    })),
+  };
+}
