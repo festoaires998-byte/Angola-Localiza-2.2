@@ -40,6 +40,7 @@ export interface DependenciasMotor {
     | 'listarProntas'
     | 'atualizarPayload'
     | 'registarFalhaOperacao'
+    | 'marcarFalhouDefinitivo'
     | 'marcarAEnviar'
     | 'aplicarResultadosSync'
     | 'registarFalhaEnvio'
@@ -102,6 +103,8 @@ export interface ResumoSync {
   concluidas: number;
   /** Operações que ficaram pendentes (FAILED, ausentes ou foto que falhou). */
   adiadas: number;
+  /** Operações que falharam de vez (ex.: foto alterada ou danificada). */
+  definitivas: number;
 }
 
 export interface MotorSync {
@@ -115,7 +118,7 @@ export const MENSAGENS = {
   servidor: 'O servidor teve um problema. Os dados ficam guardados e vamos tentar de novo mais tarde.',
   sessao: 'A sua sessão terminou. Entre de novo para enviar os dados guardados.',
   foto: 'Não foi possível enviar uma foto. Vamos tentar de novo.',
-  fotoAlterada: 'Uma foto foi alterada depois de ser tirada e por isso não foi enviada.',
+  fotoAlterada: 'Uma foto foi alterada ou danificada depois de ser tirada e não pode ser enviada.',
   fotoEmFalta: 'Uma foto guardada no telemóvel já não existe e não pôde ser enviada.',
   recusadas: 'Alguns registos não foram aceites pelo servidor. Vamos tentar de novo.',
 } as const;
@@ -125,9 +128,12 @@ type RespostaHttp =
   | { tipo: 'http'; estado: number; corpo: unknown }
   | { tipo: 'rede' };
 
+/** Erro gravado na operação quando o sha256 da foto não bate certo. */
+export const ERRO_FOTO_ALTERADA = 'A foto foi alterada ou danificada depois de ser tirada';
+
 type ResultadoFotos =
   | { tipo: 'ok'; payload: unknown }
-  | { tipo: 'falhou'; erro: string; mensagem: string }
+  | { tipo: 'falhou'; erro: string; mensagem: string; definitivo?: boolean }
   | { tipo: 'sessao' };
 
 function lerJson(texto: string): unknown {
@@ -236,7 +242,7 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
     if (ids.length === 0) return { tipo: 'ok', payload: op.payload };
 
     const urls = new Map<string, string>();
-    let falha: { erro: string; mensagem: string } | null = null;
+    let falha: { erro: string; mensagem: string; definitivo?: boolean } | null = null;
     let sessaoInvalida = false;
 
     for (const id of ids) {
@@ -255,10 +261,8 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
         break;
       }
       if (ficheiro.sha256 && bytesToHex(sha256(bytes)) !== ficheiro.sha256.toLowerCase()) {
-        falha = {
-          erro: `O ficheiro ${id} mudou depois de ser guardado (sha256 diferente). Não foi enviado.`,
-          mensagem: MENSAGENS.fotoAlterada,
-        };
+        // Tentar de novo não resolve: a operação falha de vez e o ficheiro fica (é evidência).
+        falha = { erro: ERRO_FOTO_ALTERADA, mensagem: MENSAGENS.fotoAlterada, definitivo: true };
         break;
       }
       const r = await enviarFicheiro(ficheiro, bytes, sessao);
@@ -297,7 +301,7 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
   }
 
   async function volta(forcar: boolean): Promise<ResumoSync> {
-    const resumo: ResumoSync = { motivo: 'ok', enviadas: 0, concluidas: 0, adiadas: 0 };
+    const resumo: ResumoSync = { motivo: 'ok', enviadas: 0, concluidas: 0, adiadas: 0, definitivas: 0 };
     if (!arrancou) {
       // Operações presas em "a_enviar" (a app fechou a meio de um envio).
       await deps.fila.libertarPresasAEnviar();
@@ -358,8 +362,13 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
           return { ...resumo, motivo: 'precisa_entrar' };
         }
         if (r.tipo === 'falhou') {
-          await deps.fila.registarFalhaOperacao(userId, op.operation_id, r.erro);
-          resumo.adiadas++;
+          if (r.definitivo) {
+            await deps.fila.marcarFalhouDefinitivo(userId, op.operation_id, r.erro);
+            resumo.definitivas++;
+          } else {
+            await deps.fila.registarFalhaOperacao(userId, op.operation_id, r.erro);
+            resumo.adiadas++;
+          }
           mensagemAviso = r.mensagem;
           continue;
         }
@@ -441,7 +450,7 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
         } catch (erro) {
           // Erro inesperado (ex.: base de dados): não perde nada, só avisa.
           mudar({ ultimoErro: MENSAGENS.servidor });
-          resumo = { motivo: 'erro_servidor', enviadas: 0, concluidas: 0, adiadas: 0 };
+          resumo = { motivo: 'erro_servidor', enviadas: 0, concluidas: 0, adiadas: 0, definitivas: 0 };
           if (!maisUmaVolta) throw erro;
         }
         f = forcarNaProxima;

@@ -38,6 +38,8 @@ Outras ajudas usadas pelo motor (`src/sync`):
 - `listarProntas(userId, limite, { ignorarEspera: true })` — botão "Sincronizar agora".
 - `atualizarPayload(userId, operationId, payload)` — grava o payload com os URLs reais das fotos.
 - `registarFalhaOperacao(userId, operationId, erro)` — só essa operação espera (ex.: foto que não subiu).
+- `marcarFalhouDefinitivo(userId, operationId, erro)` — falha de vez, sem novas tentativas (ex.: foto alterada).
+- `listarFalhadasDoUtilizador(userId)` — as operações `falhou_definitivo` do utilizador.
 - `ficheiros.listarDeOperacoesConcluidas()` e `ficheiros.contarPendentesDoUtilizador(userId)`.
 
 Depois de uma falha, a operação espera um pouco antes de voltar a ser enviada

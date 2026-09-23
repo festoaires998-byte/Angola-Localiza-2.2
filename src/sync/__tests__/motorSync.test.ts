@@ -9,7 +9,13 @@ import { criarRepositorioFicheirosPendentes } from '@/database/repositories/fich
 import { criarRepositorioFilaSaida, type TipoOperacao } from '@/database/repositories/filaSaida';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 
-import { criarMotorSync, ErroSessaoInvalida, MENSAGENS, type SessaoSync } from '../nucleoMotor';
+import {
+  criarMotorSync,
+  ERRO_FOTO_ALTERADA,
+  ErroSessaoInvalida,
+  MENSAGENS,
+  type SessaoSync,
+} from '../nucleoMotor';
 
 const URL = 'https://teste.supabase.co';
 const ANA: SessaoSync = { userId: 'u-ana', accessToken: 'token-ana', expiraEm: null };
@@ -221,20 +227,58 @@ describe('fotos', () => {
     expect((await t.fila.obter(op.operation_id))!.estado).toBe('concluida');
   });
 
-  test('o sha256 diferente não é enviado e o erro fica registado', async () => {
+  test('o sha256 diferente não é enviado: falha de vez e o ficheiro fica como evidência', async () => {
     const t = await montar();
     const op = await t.operacao('field_submit', { photo_facade_url: 'offline:f1' });
+    const outra = await t.operacao('create_address', { nome: 'Rua 3' });
     await t.foto('f1', op.operation_id, { sha256: createHash('sha256').update('outra coisa').digest('hex') });
 
-    await t.motor.sincronizar();
+    const r = await t.motor.sincronizar();
 
+    // Não sobe para o Storage e não vai no POST; as outras seguem.
     expect(t.pedidosStorage()).toHaveLength(0);
-    expect(t.pedidosSync()).toHaveLength(0);
-    const guardada = (await t.fila.obter(op.operation_id))!;
-    expect(guardada.estado).toBe('pendente');
-    expect(guardada.ultimo_erro).toMatch(/sha256/);
-    expect(t.disco.has('fotos/f1.bin')).toBe(true);
+    expect(t.pedidosSync().map(idsEnviados)).toEqual([[outra.operation_id]]);
+    expect(await t.fila.obter(op.operation_id)).toMatchObject({
+      estado: 'falhou_definitivo',
+      ultimo_erro: ERRO_FOTO_ALTERADA,
+      proxima_tentativa_em: null,
+      payload: { photo_facade_url: 'offline:f1' },
+    });
+    expect(ERRO_FOTO_ALTERADA).toBe('A foto foi alterada ou danificada depois de ser tirada');
+    expect(r).toMatchObject({ definitivas: 1, adiadas: 0, concluidas: 1 });
     expect(t.motor.estado.obter().ultimoErro).toBe(MENSAGENS.fotoAlterada);
+
+    // Aparece na lista de operações com problema do utilizador (e só do dele).
+    expect((await t.fila.listarFalhadasDoUtilizador(ANA.userId)).map((o) => o.operation_id)).toEqual([
+      op.operation_id,
+    ]);
+    expect(await t.fila.listarFalhadasDoUtilizador(BETO.userId)).toEqual([]);
+    // Já não conta como foto por enviar.
+    expect(await t.ficheiros.contarPendentesDoUtilizador(ANA.userId)).toBe(0);
+
+    // Nem com forcar volta a ser tentada; e o ficheiro local nunca é apagado,
+    // mesmo depois da limpeza das concluídas antigas.
+    await t.motor.sincronizar({ forcar: true });
+    t.avancar(30 * 24 * 60 * 60 * 1000);
+    await t.motor.sincronizar({ forcar: true });
+    expect(t.pedidosStorage()).toHaveLength(0);
+    expect(t.pedidosSync()).toHaveLength(1);
+    expect((await t.fila.obter(op.operation_id))!.estado).toBe('falhou_definitivo');
+    expect(t.disco.has('fotos/f1.bin')).toBe(true);
+    expect(await t.ficheiros.obter('f1')).toMatchObject({ estado: 'pendente' });
+  });
+
+  test('marcarFalhouDefinitivo só mexe em operações por enviar do próprio utilizador', async () => {
+    const t = await montar();
+    const doBeto = await t.operacao('create_address', {}, BETO.userId);
+    const concluida = await t.operacao();
+    await t.motor.sincronizar();
+    expect((await t.fila.obter(concluida.operation_id))!.estado).toBe('concluida');
+
+    await t.fila.marcarFalhouDefinitivo(ANA.userId, doBeto.operation_id, 'x');
+    await t.fila.marcarFalhouDefinitivo(ANA.userId, concluida.operation_id, 'x');
+    expect((await t.fila.obter(doBeto.operation_id))!.estado).toBe('pendente');
+    expect((await t.fila.obter(concluida.operation_id))!.estado).toBe('concluida');
   });
 
   test('o sha256 em maiúsculas também é aceite', async () => {

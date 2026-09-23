@@ -133,12 +133,16 @@ export function criarRepositorioFicheirosPendentes(
       return linha?.total ?? 0;
     },
 
-    /** Fotos ainda por enviar das operações do utilizador `userId`. */
+    /**
+     * Fotos ainda por enviar das operações do utilizador `userId` que ainda
+     * vão ser enviadas (as de operações "falhou_definitivo" não contam).
+     */
     async contarPendentesDoUtilizador(userId: string): Promise<number> {
       const linha = await db.getFirst<{ total: number }>(
         `SELECT COUNT(*) AS total FROM ficheiros_pendentes f
            JOIN fila_saida o ON o.operation_id = f.operation_id
-          WHERE f.estado = 'pendente' AND o.user_id = ?`,
+          WHERE f.estado = 'pendente' AND o.user_id = ?
+            AND o.estado IN ('pendente', 'a_enviar')`,
         [userId],
       );
       return linha?.total ?? 0;

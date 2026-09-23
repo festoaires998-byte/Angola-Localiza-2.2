@@ -23,11 +23,17 @@ A função `sync` em produção (versão 6) devolve em `status`:
 | status | Quando | O que a app faz |
 | --- | --- | --- |
 | `SYNCED` | Gravada (ou já tinha sido antes, mesmo `operation_id`). | `concluida` |
-| `CONFLICT` | `update_address` de uma morada já validada que mudou entretanto. | `concluida` (a regra do site: tudo o que não é `FAILED`) |
+| `CONFLICT` | `update_address` de uma morada já validada que mudou entretanto. | `concluida` (a regra do site: tudo o que não é `FAILED`) — ver o aviso abaixo |
 | `FAILED` | Erro ao gravar ou `operation_type` desconhecido (vem com `error`). | volta a `pendente`, +1 tentativa |
 | (não veio) | — | volta a `pendente`, +1 tentativa |
 
 Fora de `results`: **401** (sessão inválida), 400 (`operations` vazio) e 500.
+
+> **⚠️ A fazer quando a app começar a enviar `update_address`:** o `CONFLICT` tem
+> de deixar de ser tratado como `concluida` em silêncio. Hoje não faz mal porque
+> só o `update_address` o pode devolver e a app ainda não envia esse tipo. Nessa
+> altura, o conflito tem de ficar visível para o utilizador (ex.: um estado próprio
+> ou `falhou_definitivo` com o motivo) em vez de desaparecer da fila.
 
 ## Uma volta de `sincronizar()`
 
@@ -37,7 +43,11 @@ Fora de `results`: **401** (sessão inválida), 400 (`operations` vazio) e 500.
    (é o botão "Sincronizar agora").
 4. Fotos de cada operação (`photo_facade_url`, `photo_qr_url`, `proof.photo_url`, `proof.signature_url`):
    - lê o ficheiro (`caminho_local`: nome relativo a `documentDirectory`, caminho absoluto ou `file://`);
-   - se o registo tem `sha256` e o ficheiro mudou, **não envia** e regista o erro;
+   - se o registo tem `sha256` e o ficheiro não bate certo (foi alterado ou danificado),
+     **não envia**: tentar de novo não resolve, por isso a operação passa logo a
+     `falhou_definitivo` com o erro "A foto foi alterada ou danificada depois de ser tirada".
+     O ficheiro local **não é apagado** (é evidência) e a operação aparece em
+     `operacoesComProblema` no `useFilaSync()`;
    - envia para o Storage (`<bucket do registo>/offline-<id>.jpg`, ou `.png` se for `image/png`);
      a resposta **409** (já existe: a app fechou a meio de um envio anterior) conta como sucesso;
    - marca o ficheiro como enviado e **grava logo o payload com o URL real** na fila, antes do POST;
@@ -49,6 +59,7 @@ Fora de `results`: **401** (sessão inválida), 400 (`operations` vazio) e 500.
      `precisaEntrarDeNovo` fica `true`. Não se volta a tentar com o mesmo token;
      com um token novo (entrou de novo) tenta outra vez.
 6. Apaga os ficheiros locais **só** das operações que ficaram `concluida` (até lá são a prova).
+   Os ficheiros de operações `falhou_definitivo` nunca são apagados pelo motor.
 7. `limparConcluidasAntigas()` e o evento `sincronizado`.
 
 ### Uma volta de cada vez

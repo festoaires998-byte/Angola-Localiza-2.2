@@ -18,7 +18,7 @@ import {
   type SessaoSync,
 } from './nucleoMotor';
 
-export { ErroSessaoInvalida, MENSAGENS } from './nucleoMotor';
+export { ERRO_FOTO_ALTERADA, ErroSessaoInvalida, MENSAGENS } from './nucleoMotor';
 export type { EstadoSync, MotivoFim, ResumoSync } from './nucleoMotor';
 
 /** Estado do motor, sempre disponível (mesmo antes de a base de dados abrir). */

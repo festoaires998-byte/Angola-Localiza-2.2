@@ -204,6 +204,34 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
     },
 
     /**
+     * A operação nunca vai poder ser enviada (ex.: a foto foi alterada ou
+     * danificada): passa logo a "falhou_definitivo", sem novas tentativas.
+     * Não apaga nada: o payload e os ficheiros ficam como evidência.
+     */
+    async marcarFalhouDefinitivo(userId: string, operationId: string, erro: string): Promise<void> {
+      exigirUtilizador(userId);
+      await db.run(
+        `UPDATE fila_saida
+            SET estado = 'falhou_definitivo', ultimo_erro = ?, proxima_tentativa_em = NULL,
+                atualizado_em = ?
+          WHERE operation_id = ? AND user_id = ? AND estado IN ('pendente', 'a_enviar')`,
+        [erro, paraIso(agora()), operationId, userId],
+      );
+    },
+
+    /** Operações do utilizador que falharam de vez, das mais recentes para as mais antigas. */
+    async listarFalhadasDoUtilizador(userId: string): Promise<OperacaoFila[]> {
+      exigirUtilizador(userId);
+      const linhas = await db.getAll<LinhaFila>(
+        `SELECT * FROM fila_saida
+          WHERE user_id = ? AND estado = 'falhou_definitivo'
+          ORDER BY atualizado_em DESC, operation_id`,
+        [userId],
+      );
+      return linhas.map(deLinha);
+    },
+
+    /**
      * O envio foi recusado por a sessão não ser válida (401): a culpa não é
      * das operações. As "a_enviar" do utilizador voltam a pendente SEM somar
      * tentativas nem mudar a espera.
