@@ -1,0 +1,216 @@
+name: Mapa offline (Huambo)
+
+# Gera o ficheiro PMTiles do Huambo a partir do OpenStreetMap (builds diários
+# do Protomaps), mede-o e, quando pedido, publica-o no Supabase Storage
+# (bucket público "mapas"), junto com as fontes e os ícones do mapa.
+#
+# - Pull request que mexe neste ficheiro ou nas regiões da app: só gera e MEDE
+#   (não publica). O tamanho aparece no resumo da execução.
+# - "Run workflow" (manual) e todos os meses: gera, mede e publica.
+#   Precisa do segredo SUPABASE_SERVICE_ROLE_KEY no repositório.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/mapa-offline.yml
+      - src/services/mapas/regioes.ts
+  workflow_dispatch:
+  schedule:
+    # Dia 1 de cada mês, 03:00 UTC: mapa atualizado com o OpenStreetMap.
+    - cron: '0 3 1 * *'
+
+concurrency:
+  group: mapa-offline-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGIAO: huambo
+  # [oeste, sul, este, norte]: TEM de ser igual ao REGIAO_HUAMBO de src/services/mapas/regioes.ts.
+  BBOX: '15.45,-13.0,16.0,-12.55'
+  MAXZOOM: '15'
+  # O plano grátis do Supabase não aceita ficheiros acima de 50 MB.
+  LIMITE_MB: '45'
+  SUPABASE_URL: https://qntbknegicaghnbnghyw.supabase.co
+  BUCKET: mapas
+  ASSETS: https://raw.githubusercontent.com/protomaps/basemaps-assets/main
+
+jobs:
+  mapa:
+    name: Gerar e medir o mapa (publicar se pedido)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Confirmar que o bbox é igual ao da app
+        run: |
+          set -euo pipefail
+          app=$(grep -A4 'REGIAO_HUAMBO' src/services/mapas/regioes.ts | grep 'bbox:' | sed -E 's/.*\[(.*)\].*/\1/' | tr -d ' ')
+          echo "App: $app | Workflow: $BBOX"
+          python3 - "$app" "$BBOX" <<'EOF'
+          import sys
+          a = [float(x) for x in sys.argv[1].split(',')]
+          b = [float(x) for x in sys.argv[2].split(',')]
+          if a != b:
+              print(f"::error::O bbox do workflow ({b}) é diferente do da app ({a}).")
+              sys.exit(1)
+          EOF
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Instalar o pmtiles
+        run: |
+          go install github.com/protomaps/go-pmtiles@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Encontrar o build mais recente do OpenStreetMap (Protomaps)
+        id: build
+        run: |
+          set -uo pipefail
+          chave=$(curl -sSf https://build-metadata.protomaps.dev/builds.json | jq -r 'map(.key) | map(select(test("^[0-9]{8}\\.pmtiles$"))) | sort | last // empty' || true)
+          if [ -z "$chave" ]; then
+            # Plano B: procura para trás, dia a dia.
+            for i in $(seq 0 14); do
+              d=$(date -u -d "-$i day" +%Y%m%d)
+              if curl -sfI "https://build.protomaps.com/$d.pmtiles" > /dev/null; then chave="$d.pmtiles"; break; fi
+            done
+          fi
+          if [ -z "$chave" ]; then echo "::error::Não encontrei nenhum build do Protomaps."; exit 1; fi
+          versao="${chave%.pmtiles}"
+          echo "Build: $chave"
+          echo "chave=$chave" >> "$GITHUB_OUTPUT"
+          echo "versao=$versao" >> "$GITHUB_OUTPUT"
+
+      - name: Extrair o Huambo
+        env:
+          CHAVE: ${{ steps.build.outputs.chave }}
+          VERSAO: ${{ steps.build.outputs.versao }}
+        run: |
+          set -euo pipefail
+          mkdir -p saida/$REGIAO
+          ficheiro="$REGIAO-$VERSAO.pmtiles"
+          go-pmtiles extract "https://build.protomaps.com/$CHAVE" "saida/$REGIAO/$ficheiro" --bbox="$BBOX" --maxzoom="$MAXZOOM"
+          go-pmtiles show "saida/$REGIAO/$ficheiro"
+          echo "FICHEIRO=$ficheiro" >> "$GITHUB_ENV"
+
+      - name: Medir o tamanho real
+        run: |
+          set -euo pipefail
+          caminho="saida/$REGIAO/$FICHEIRO"
+          bytes=$(stat -c%s "$caminho")
+          md5=$(md5sum "$caminho" | cut -d' ' -f1)
+          mb=$(python3 -c "print(f'{$bytes/1048576:.1f}')")
+          echo "BYTES=$bytes" >> "$GITHUB_ENV"
+          echo "MD5=$md5" >> "$GITHUB_ENV"
+          {
+            echo "## Mapa offline: $REGIAO"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Ficheiro | \`$FICHEIRO\` |"
+            echo "| Tamanho real | **$mb MB** ($bytes bytes) |"
+            echo "| Limite | $LIMITE_MB MB |"
+            echo "| Zona (bbox) | \`$BBOX\` |"
+            echo "| Zoom máximo | $MAXZOOM |"
+            echo "| Origem | OpenStreetMap, build Protomaps \`${{ steps.build.outputs.chave }}\` |"
+            echo "| md5 | \`$md5\` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Tamanho: $mb MB"
+          if [ "$bytes" -gt $(( LIMITE_MB * 1048576 )) ]; then
+            echo "::error::O mapa tem $mb MB, acima do limite de $LIMITE_MB MB. Reduz o bbox ou o MAXZOOM."
+            exit 1
+          fi
+
+      - name: Fontes e ícones do mapa
+        run: |
+          set -euo pipefail
+          declare -A FONTES=( [NotoSansRegular]="Noto%20Sans%20Regular" [NotoSansMedium]="Noto%20Sans%20Medium" [NotoSansItalic]="Noto%20Sans%20Italic" )
+          for nome in "${!FONTES[@]}"; do
+            mkdir -p "saida/recursos/fontes/$nome"
+            for intervalo in 0-255 256-511 8192-8447; do
+              curl -sSfL "$ASSETS/fonts/${FONTES[$nome]}/$intervalo.pbf" -o "saida/recursos/fontes/$nome/$intervalo.pbf"
+            done
+          done
+          mkdir -p saida/recursos/sprite
+          for f in light.json light.png light@2x.json light@2x.png; do
+            curl -sSfL "$ASSETS/sprites/v4/$f" -o "saida/recursos/sprite/$f"
+          done
+          du -sh saida/recursos
+
+      - name: Manifesto
+        env:
+          VERSAO: ${{ steps.build.outputs.versao }}
+        run: |
+          jq -n --arg regiao "$REGIAO" --arg versao "$VERSAO" --arg ficheiro "$FICHEIRO" \
+            --argjson bytes "$BYTES" --arg md5 "$MD5" --arg gerado "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{regiao: $regiao, versao: $versao, ficheiro: $ficheiro, bytes: $bytes, md5: $md5, gerado_em: $gerado}' \
+            > "saida/$REGIAO/manifesto.json"
+          cat "saida/$REGIAO/manifesto.json"
+
+      - name: Guardar o resultado (para ver no GitHub)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapa-${{ env.REGIAO }}
+          path: saida/
+          retention-days: 7
+
+      - name: Publicar no Supabase Storage
+        if: github.event_name != 'pull_request'
+        env:
+          CHAVE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CHAVE}" ]; then
+            echo "::error::Falta o segredo SUPABASE_SERVICE_ROLE_KEY. Cria-o em Settings → Secrets and variables → Actions → New repository secret (valor: Supabase → Project Settings → API Keys → service_role / secret key)."
+            exit 1
+          fi
+          auth=(-H "Authorization: Bearer $CHAVE" -H "apikey: $CHAVE")
+
+          # Bucket público "mapas" (só é criado se ainda não existir).
+          estado=$(curl -sS -o /tmp/bucket.json -w '%{http_code}' "${auth[@]}" -H 'Content-Type: application/json' \
+            -X POST "$SUPABASE_URL/storage/v1/bucket" \
+            -d "{\"id\":\"$BUCKET\",\"name\":\"$BUCKET\",\"public\":true,\"file_size_limit\":52428800}")
+          if [ "$estado" != "200" ] && ! grep -qi 'already exists\|Duplicate' /tmp/bucket.json; then
+            echo "::error::Não foi possível criar o bucket ($estado): $(cat /tmp/bucket.json)"; exit 1
+          fi
+
+          enviar() { # enviar <ficheiro local> <caminho no bucket> <content-type> <cache-control>
+            estado=$(curl -sS -o /tmp/resposta.json -w '%{http_code}' "${auth[@]}" \
+              -H "Content-Type: $3" -H "Cache-Control: $4" -H 'x-upsert: true' \
+              --data-binary "@$1" -X POST "$SUPABASE_URL/storage/v1/object/$BUCKET/$2")
+            if [ "$estado" != "200" ]; then echo "::error::Falhou o envio de $2 ($estado): $(cat /tmp/resposta.json)"; exit 1; fi
+            echo "Enviado: $2"
+          }
+
+          cd saida
+          for f in $(find recursos -type f | sort); do
+            case "$f" in
+              *.png) tipo=image/png ;;
+              *.json) tipo=application/json ;;
+              *) tipo=application/x-protobuf ;;
+            esac
+            enviar "$f" "$f" "$tipo" "max-age=604800"
+          done
+          # O ficheiro tem a versão no nome: pode ficar em cache muito tempo.
+          enviar "$REGIAO/$FICHEIRO" "$REGIAO/$FICHEIRO" application/octet-stream "max-age=31536000, immutable"
+          # O manifesto vai no fim: a app só vê a versão nova quando o ficheiro já lá está.
+          enviar "$REGIAO/manifesto.json" "$REGIAO/manifesto.json" application/json "no-cache"
+
+          # Guarda as 2 versões mais recentes (quem estiver a descarregar a anterior não falha).
+          curl -sS "${auth[@]}" -H 'Content-Type: application/json' -X POST "$SUPABASE_URL/storage/v1/object/list/$BUCKET" \
+            -d "{\"prefix\":\"$REGIAO/\",\"limit\":100}" \
+            | jq -r '.[].name | select(endswith(".pmtiles"))' | sort -r | tail -n +3 > /tmp/velhos.txt || true
+          if [ -s /tmp/velhos.txt ]; then
+            corpo=$(jq -R -s --arg r "$REGIAO/" 'split("\n") | map(select(length > 0) | $r + .) | {prefixes: .}' /tmp/velhos.txt)
+            curl -sS "${auth[@]}" -H 'Content-Type: application/json' -X DELETE "$SUPABASE_URL/storage/v1/object/$BUCKET" -d "$corpo" > /dev/null
+            echo "Apagados: $(tr '\n' ' ' < /tmp/velhos.txt)"
+          fi
+
+          {
+            echo "✅ Publicado em \`$BUCKET/$REGIAO/$FICHEIRO\`."
+            echo ""
+            echo "- Manifesto: $SUPABASE_URL/storage/v1/object/public/$BUCKET/$REGIAO/manifesto.json"
+          } >> "$GITHUB_STEP_SUMMARY"

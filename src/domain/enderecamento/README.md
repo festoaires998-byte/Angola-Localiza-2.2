@@ -49,3 +49,11 @@ mesmo sítio (o ponto está na borda da sua área), mas o texto é diferente.
 ```bash
 npm test
 ```
+
+## Código Postal Digital (`codigoPostal.ts`)
+
+Formato `AO-{PROV}-{GRID8}[-{N}]-{CHK}`, igual à Edge Function `generate-postal-code`.
+`codigoPostalProvisorio(lat, lng, provincia)` faz no telemóvel as mesmas contas
+(sem o `-N`, que só o servidor sabe). O teste `codigoPostal.test.ts` compara-o,
+em 5000 pontos, com uma cópia do código do servidor. Os erros conhecidos do
+servidor estão descritos em `src/services/location/README.md`.

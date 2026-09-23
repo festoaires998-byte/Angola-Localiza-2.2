@@ -46,3 +46,17 @@ export function dataHora(iso: string | null): string {
   const dois = (n: number) => String(n).padStart(2, '0');
   return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()}, ${dois(d.getHours())}:${dois(d.getMinutes())}`;
 }
+
+/** "12,3 MB" */
+export function megas(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+}
+
+/** Precisão do GPS em palavras simples. */
+export function textoPrecisao(precisao: number | null): { texto: string; qualidade: string } {
+  if (precisao === null) return { texto: 'desconhecida', qualidade: '' };
+  const m = Math.round(precisao);
+  if (m <= 10) return { texto: `± ${m} m`, qualidade: 'boa' };
+  if (m <= 30) return { texto: `± ${m} m`, qualidade: 'razoável' };
+  return { texto: `± ${m} m`, qualidade: 'fraca: vai para um sítio aberto' };
+}

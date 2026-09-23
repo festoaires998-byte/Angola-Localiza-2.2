@@ -21,3 +21,7 @@ Ponte entre ecrãs e o resto (useGps, useFilaSync, useSessao, useCargos).
   - `marcarAvisoVisto(operationId)` — botão "Já vi" de um aviso: grava `visto_em` em
     `provas_evidencia` e o aviso deixa de aparecer. A prova **nunca** é apagada.
 - `useLinkAuth()` — estado do último link do email (recuperação / confirmação).
+- `usePosicao()` — GPS enquanto o ecrã está aberto: permissão, GPS desligado, posição e precisão.
+- `useOnline()` — há rede agora?
+- `useInfoLocal(posicao, online)` — Plus Code, Código Postal Digital e província/município (`src/services/location`).
+- `useMapaOffline(online)` — estado do mapa do Huambo no telemóvel (`src/services/mapas`).

@@ -3,12 +3,13 @@ import { migracao001 } from './001_inicial';
 import { migracao002 } from './002_perfil_e_utilizador';
 import { migracao003 } from './003_chaves_e_evidencias';
 import { migracao004 } from './004_avisos_vistos';
+import { migracao005 } from './005_zonas_geocodificadas';
 import type { Migracao } from './tipos';
 
 export type { Migracao } from './tipos';
 
 /** Todas as migrações, por ordem. Uma nova migração entra no fim desta lista. */
-export const MIGRACOES: readonly Migracao[] = [migracao001, migracao002, migracao003, migracao004];
+export const MIGRACOES: readonly Migracao[] = [migracao001, migracao002, migracao003, migracao004, migracao005];
 
 /** Versão em que a base de dados está agora (PRAGMA user_version). */
 export async function lerVersao(db: BaseDados): Promise<number> {

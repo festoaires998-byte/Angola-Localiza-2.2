@@ -11,6 +11,7 @@ import {
   criarRepositorioMoradas,
   criarRepositorioPerfilLocal,
   criarRepositorioProvasEvidencia,
+  criarRepositorioZonasGeocodificadas,
   idDoMarcador,
   marcadorOffline,
   paraPedidoSync,
@@ -90,6 +91,7 @@ describe('migrações', () => {
       'provas_evidencia',
       'referencias',
       'zona_offline',
+      'zonas_geocodificadas',
     ]);
   });
 
@@ -662,10 +664,48 @@ describe('migração 004', () => {
       `INSERT INTO provas_evidencia (operation_id, user_id, device_id, payload_json, motivo, criada_em)
        VALUES ('o', 'u', 'd', '{}', 'm', '2026-09-01T10:00:00.000Z')`,
     );
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(4);
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(MIGRACOES.length);
     const repo = criarRepositorioProvasEvidencia(antiga);
     expect((await repo.obter('o'))!.visto_em).toBeNull();
     expect(await repo.listarDoUtilizador('u', { soNaoVistas: true })).toHaveLength(1);
+  });
+});
+
+describe('zonas_geocodificadas (migração 005)', () => {
+  test('guarda a última resposta de cada zona e substitui a antiga', async () => {
+    const db = await baseMigrada();
+    let agora = new Date('2026-09-23T10:00:00.000Z');
+    const zonas = criarRepositorioZonasGeocodificadas(db, () => agora);
+    await zonas.guardar({ zona: '6F4HMP8Q', latitude: -12.776, longitude: 15.739, provincia: 'Huambo', municipio: 'X', resposta: { a: 1 } });
+    agora = new Date('2026-09-23T11:00:00.000Z');
+    await zonas.guardar({ zona: '6F4HMP8Q', latitude: -12.776, longitude: 15.739, provincia: 'Huambo', municipio: 'Huambo', resposta: null });
+    expect(await zonas.obter('6F4HMP8Q')).toEqual({
+      zona: '6F4HMP8Q',
+      latitude: -12.776,
+      longitude: 15.739,
+      provincia: 'Huambo',
+      municipio: 'Huambo',
+      resposta: null,
+      atualizado_em: '2026-09-23T11:00:00.000Z',
+    });
+    expect(await zonas.obter('outra')).toBeNull();
+  });
+
+  test('encontra a zona guardada mais perto, só dentro do raio', async () => {
+    const db = await baseMigrada();
+    const zonas = criarRepositorioZonasGeocodificadas(db);
+    await zonas.guardar({ zona: 'A', latitude: -12.776, longitude: 15.739, provincia: 'Huambo', municipio: 'Huambo', resposta: null });
+    await zonas.guardar({ zona: 'B', latitude: -12.85, longitude: 15.56, provincia: 'Huambo', municipio: 'Caála', resposta: null });
+    expect((await zonas.maisProxima(-12.78, 15.74, 3000))!.zona).toBe('A');
+    expect((await zonas.maisProxima(-12.84, 15.57, 3000))!.municipio).toBe('Caála');
+    expect(await zonas.maisProxima(-12.5, 15.2, 3000)).toBeNull();
+  });
+
+  test('migra uma base na versão 4', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 4));
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(5);
+    expect(await criarRepositorioZonasGeocodificadas(antiga).obter('x')).toBeNull();
   });
 });
 
