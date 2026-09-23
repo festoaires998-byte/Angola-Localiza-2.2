@@ -1,0 +1,111 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import type { CategoriaFavorito } from '@/database/repositories/favoritos';
+import { ultimaAtualizacao, type ItemMorada } from '@/services/moradas/moradas';
+import { mudancasMoradas, servicoMoradas } from '@/services/moradas/moradasApp';
+
+import { useSessao } from './useSessao';
+
+export interface EstadoMoradas {
+  /** null enquanto lê o telemóvel pela primeira vez. */
+  itens: ItemMorada[] | null;
+  aAtualizar: boolean;
+  /** Frase simples do último erro ao falar com o servidor (ou null). */
+  erro: string | null;
+  /** Quando a lista foi trazida do servidor pela última vez (ISO). */
+  atualizadoEm: string | null;
+  /** Há alterações feitas sem rede à espera de ir para o servidor. */
+  pendentes: number;
+  atualizar(): Promise<void>;
+  alterar(id: string, mudancas: { nome: string; categoria: CategoriaFavorito }): Promise<void>;
+  remover(id: string): Promise<void>;
+}
+
+function frase(e: unknown): string {
+  const texto = e instanceof Error ? e.message : String(e);
+  return /network|fetch|ligação|rede/i.test(texto)
+    ? 'Sem ligação ao servidor. A mostrar o que está neste telemóvel.'
+    : texto;
+}
+
+/**
+ * Favoritos do utilizador (separador Moradas). Mostra logo o que está no
+ * telemóvel; com rede, envia as alterações pendentes e traz a lista do servidor.
+ */
+export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } = {}): EstadoMoradas {
+  const userId = useSessao().utilizador?.id ?? null;
+  const [itens, setItens] = useState<ItemMorada[] | null>(null);
+  const [aAtualizar, setAAtualizar] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const pedido = useRef(0);
+
+  const lerLocal = useCallback(async () => {
+    if (!userId) return;
+    const meu = ++pedido.current;
+    const lista = await servicoMoradas.listar(userId).catch(() => null);
+    if (meu === pedido.current && lista) setItens(lista);
+  }, [userId]);
+
+  const atualizar = useCallback(async () => {
+    if (!userId || !online) return;
+    setAAtualizar(true);
+    try {
+      const r = await servicoMoradas.atualizar(userId);
+      setErro(r.erro ? frase(r.erro) : null);
+    } catch (e) {
+      setErro(frase(e));
+    } finally {
+      setAAtualizar(false);
+      mudancasMoradas.avisar();
+    }
+  }, [userId, online]);
+
+  // Lê o telemóvel e volta a ler quando algum ecrã muda as moradas.
+  useEffect(() => {
+    void lerLocal();
+    return mudancasMoradas.ouvir(() => void lerLocal());
+  }, [lerLocal]);
+
+  // Com rede: atualiza (ao abrir e quando a rede volta). O detalhe não precisa:
+  // a lista já o fez.
+  useEffect(() => {
+    if (atualizarAoAbrir) void atualizar();
+  }, [atualizar, atualizarAoAbrir]);
+
+  const alterar = useCallback(
+    async (id: string, mudancas: { nome: string; categoria: CategoriaFavorito }) => {
+      await servicoMoradas.alterar(id, mudancas);
+      mudancasMoradas.avisar();
+      if (online && userId) {
+        const r = await servicoMoradas.enviarPendentes(userId).catch((e: unknown) => ({ erro: e as Error }));
+        setErro(r.erro ? frase(r.erro) : null);
+        mudancasMoradas.avisar();
+      }
+    },
+    [online, userId],
+  );
+
+  const remover = useCallback(
+    async (id: string) => {
+      await servicoMoradas.remover(id);
+      mudancasMoradas.avisar();
+      if (online && userId) {
+        const r = await servicoMoradas.enviarPendentes(userId).catch((e: unknown) => ({ erro: e as Error }));
+        setErro(r.erro ? frase(r.erro) : null);
+        mudancasMoradas.avisar();
+      }
+    },
+    [online, userId],
+  );
+
+  return {
+    itens,
+    aAtualizar,
+    erro,
+    atualizadoEm: itens ? ultimaAtualizacao(itens) : null,
+    pendentes: itens ? itens.filter((i) => i.favorito.pendente !== null).length : 0,
+    atualizar,
+    alterar,
+    remover,
+  };
+}

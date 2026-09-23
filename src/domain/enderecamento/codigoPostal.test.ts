@@ -7,6 +7,8 @@ import {
   codificarGrelha,
   codigoPostalProvisorio,
   digitosControlo,
+  distanciaAoLimiteCelula,
+  limitesCelula,
   siglaProvincia,
 } from './codigoPostal';
 
@@ -134,5 +136,37 @@ describe('siglas das províncias (3 primeiras letras, como no esquema 1)', () =>
 
   test('coordenada inválida dá erro', () => {
     expect(() => codigoPostalProvisorio(Number.NaN, 15)).toThrow();
+  });
+});
+
+describe('limite das células (aviso "junto ao limite")', () => {
+  test('a célula contém o ponto e tem ~38 m × 19 m no Huambo', () => {
+    const lat = -12.7761;
+    const lng = 15.7392;
+    const c = limitesCelula(lat, lng);
+    expect(lat).toBeGreaterThanOrEqual(c.latMin);
+    expect(lat).toBeLessThan(c.latMax);
+    expect(lng).toBeGreaterThanOrEqual(c.lngMin);
+    expect(lng).toBeLessThan(c.lngMax);
+    const alturaM = (c.latMax - c.latMin) * 110_574;
+    const larguraM = (c.lngMax - c.lngMin) * 111_320 * Math.cos((lat * Math.PI) / 180);
+    expect(alturaM).toBeCloseTo(19, 0);
+    expect(larguraM).toBeGreaterThan(36);
+    expect(larguraM).toBeLessThan(39);
+  });
+
+  test('mesmas divisões que o código: 1 m para cada lado do limite dá células diferentes', () => {
+    const c = limitesCelula(-12.7761, 15.7392);
+    const umMetroLat = 1 / 110_574;
+    const dentro = codificarGrelha(c.latMax - umMetroLat, 15.7392);
+    const fora = codificarGrelha(c.latMax + umMetroLat, 15.7392);
+    expect(dentro).not.toBe(fora);
+    expect(distanciaAoLimiteCelula(c.latMax - umMetroLat, (c.lngMin + c.lngMax) / 2)).toBeCloseTo(1, 1);
+  });
+
+  test('no centro da célula está longe do limite (~9,5 m, metade da altura)', () => {
+    const c = limitesCelula(-12.7761, 15.7392);
+    const d = distanciaAoLimiteCelula((c.latMin + c.latMax) / 2, (c.lngMin + c.lngMax) / 2);
+    expect(d).toBeCloseTo(9.5, 0);
   });
 });

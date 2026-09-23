@@ -91,3 +91,14 @@ No Mapa, o ponto azul continua ao vivo; o Plus Code e o código postal usam a
 posição medida. Guardar uma morada vai usar a mesma captura e **não aceita uma
 captura fraca**.
 
+### Limite das células (`limitesCelula`, `distanciaAoLimiteCelula`)
+
+Cada célula do código postal tem ~38 m × 19 m. Um ponto a poucos metros do
+lado da célula pode, com o erro normal do GPS (±3–5 m), cair umas vezes nesta
+célula e outras na vizinha, e o código "troca" sem a pessoa se mexer. Não há
+precisão que evite isto num ponto de fronteira. Por isso, quando a posição
+medida está a menos de 5 m (ou a menos que a precisão do GPS) do limite, o
+Mapa avisa: "Estás junto ao limite entre duas células do código postal".
+Uma morada registada guarda o seu código e não muda; o registo de moradas vai
+mostrar o mesmo aviso antes de guardar.
+
