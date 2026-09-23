@@ -9,6 +9,7 @@ import {
   criarRepositorioFicheirosPendentes,
   criarRepositorioFilaSaida,
   criarRepositorioMoradas,
+  criarRepositorioPerfilLocal,
   idDoMarcador,
   marcadorOffline,
   paraPedidoSync,
@@ -32,6 +33,9 @@ function relogioManual(inicio = '2026-09-23T10:00:00.000Z') {
   };
   return relogio;
 }
+
+/** Utilizador usado nos testes da fila. */
+const U = 'utilizador-a';
 
 async function baseMigrada(): Promise<BaseDados> {
   const { db } = await criarBaseDadosSqlJs();
@@ -80,6 +84,7 @@ describe('migrações', () => {
       'fila_saida',
       'levantamentos',
       'moradas',
+      'perfil_local',
       'referencias',
       'zona_offline',
     ]);
@@ -99,7 +104,7 @@ describe('migrações', () => {
   test('uma migração que falha a meio não deixa nada feito', async () => {
     const { db } = await criarBaseDadosSqlJs();
     const partida: Migracao = {
-      versao: 2,
+      versao: MIGRACOES.length + 1,
       nome: 'partida',
       async aplicar(tx) {
         await tx.exec('CREATE TABLE temporaria (x INTEGER)');
@@ -108,10 +113,10 @@ describe('migrações', () => {
     };
 
     await expect(aplicarMigracoes(db, [...MIGRACOES, partida])).rejects.toThrow(
-      /Migração 2 \(partida\) falhou/,
+      new RegExp(`Migração ${MIGRACOES.length + 1} \\(partida\\) falhou`),
     );
 
-    expect(await lerVersao(db)).toBe(1);
+    expect(await lerVersao(db)).toBe(MIGRACOES.length);
     expect(await nomesTabelas(db)).not.toContain('temporaria');
   });
 });
@@ -220,7 +225,7 @@ describe('fila de saída', () => {
   });
 
   test('adicionar gera operation_id e usa o device_id recebido', async () => {
-    const op = await fila.adicionar('create_address', { photo_facade_url: 'offline:f1' });
+    const op = await fila.adicionar(U, 'create_address', { photo_facade_url: 'offline:f1' });
 
     expect(op.operation_id).toBe('op-1');
     expect(op.device_id).toBe('telemovel-1');
@@ -242,14 +247,14 @@ describe('fila de saída', () => {
   });
 
   test('aplicarResultadosSync segue a regra do site', async () => {
-    await fila.adicionar('create_address', { n: 1 }); // op-1: OK
-    await fila.adicionar('create_delivery', { n: 2 }); // op-2: FAILED
-    await fila.adicionar('field_submit', { n: 3 }); // op-3: não vem na resposta
-    await fila.adicionar('delivery_proof', { n: 4 }); // op-4: outro estado qualquer
-    await fila.marcarAEnviar(['op-1', 'op-2', 'op-3', 'op-4']);
+    await fila.adicionar(U, 'create_address', { n: 1 }); // op-1: OK
+    await fila.adicionar(U, 'create_delivery', { n: 2 }); // op-2: FAILED
+    await fila.adicionar(U, 'field_submit', { n: 3 }); // op-3: não vem na resposta
+    await fila.adicionar(U, 'delivery_proof', { n: 4 }); // op-4: outro estado qualquer
+    await fila.marcarAEnviar(U, ['op-1', 'op-2', 'op-3', 'op-4']);
     expect(await fila.contarPendentes()).toBe(4);
 
-    await fila.aplicarResultadosSync([
+    await fila.aplicarResultadosSync(U, [
       { operation_id: 'op-1', status: 'OK' },
       { operation_id: 'op-2', status: 'FAILED', error: 'morada inválida' },
       { operation_id: 'op-4', status: 'DUPLICATE' },
@@ -268,21 +273,21 @@ describe('fila de saída', () => {
   });
 
   test('as que falharam só voltam a estar prontas depois da espera', async () => {
-    await fila.adicionar('create_address', {});
-    await fila.marcarAEnviar(['op-1']);
-    await fila.aplicarResultadosSync([{ operation_id: 'op-1', status: 'FAILED' }]);
+    await fila.adicionar(U, 'create_address', {});
+    await fila.marcarAEnviar(U, ['op-1']);
+    await fila.aplicarResultadosSync(U, [{ operation_id: 'op-1', status: 'FAILED' }]);
 
-    expect(await fila.listarProntas(10)).toEqual([]);
+    expect(await fila.listarProntas(U, 10)).toEqual([]);
     relogio.avancar(31_000);
-    expect((await fila.listarProntas(10)).map((o) => o.operation_id)).toEqual(['op-1']);
+    expect((await fila.listarProntas(U, 10)).map((o) => o.operation_id)).toEqual(['op-1']);
   });
 
   test('listarProntas respeita o limite e a ordem de chegada', async () => {
     for (let i = 0; i < 5; i++) {
-      await fila.adicionar('field_submit', { i });
+      await fila.adicionar(U, 'field_submit', { i });
       relogio.avancar(1000);
     }
-    const prontas = await fila.listarProntas(3);
+    const prontas = await fila.listarProntas(U, 3);
     expect(prontas.map((o) => o.operation_id)).toEqual(['op-1', 'op-2', 'op-3']);
   });
 
@@ -293,10 +298,10 @@ describe('fila de saída', () => {
       relogio,
       maxTentativas: 2,
     });
-    await filaComLimite.adicionar('create_address', {});
+    await filaComLimite.adicionar(U, 'create_address', {});
     for (let i = 0; i < 2; i++) {
-      await filaComLimite.marcarAEnviar(['lim-1']);
-      await filaComLimite.aplicarResultadosSync([{ operation_id: 'lim-1', status: 'FAILED' }]);
+      await filaComLimite.marcarAEnviar(U, ['lim-1']);
+      await filaComLimite.aplicarResultadosSync(U, [{ operation_id: 'lim-1', status: 'FAILED' }]);
       relogio.avancar(3_600_000);
     }
     expect(await filaComLimite.obter('lim-1')).toMatchObject({
@@ -307,25 +312,25 @@ describe('fila de saída', () => {
   });
 
   test('registarFalhaEnvio e libertarPresasAEnviar devolvem a pendente', async () => {
-    await fila.adicionar('create_address', {});
-    await fila.adicionar('create_address', {});
-    await fila.marcarAEnviar(['op-1']);
-    await fila.registarFalhaEnvio('sem rede');
+    await fila.adicionar(U, 'create_address', {});
+    await fila.adicionar(U, 'create_address', {});
+    await fila.marcarAEnviar(U, ['op-1']);
+    await fila.registarFalhaEnvio(U, 'sem rede');
     expect(await fila.obter('op-1')).toMatchObject({
       estado: 'pendente',
       tentativas: 1,
       ultimo_erro: 'sem rede',
     });
 
-    await fila.marcarAEnviar(['op-2']);
+    await fila.marcarAEnviar(U, ['op-2']);
     expect(await fila.libertarPresasAEnviar()).toBe(1);
     expect(await fila.obter('op-2')).toMatchObject({ estado: 'pendente', tentativas: 0 });
   });
 
   test('limparConcluidasAntigas só apaga concluídas com mais de 7 dias', async () => {
     const ficheiros = criarRepositorioFicheirosPendentes(db, { relogio });
-    await fila.adicionar('create_address', {}); // op-1: concluída antiga
-    await fila.adicionar('create_address', {}); // op-2: pendente antiga
+    await fila.adicionar(U, 'create_address', {}); // op-1: concluída antiga
+    await fila.adicionar(U, 'create_address', {}); // op-2: pendente antiga
     await ficheiros.registar({
       id: 'foto-1',
       caminho_local: '/docs/foto-1.jpg',
@@ -333,12 +338,12 @@ describe('fila de saída', () => {
       content_type: 'image/jpeg',
       operation_id: 'op-1',
     });
-    await fila.marcarAEnviar(['op-1']);
-    await fila.aplicarResultadosSync([{ operation_id: 'op-1', status: 'OK' }]);
+    await fila.marcarAEnviar(U, ['op-1']);
+    await fila.aplicarResultadosSync(U, [{ operation_id: 'op-1', status: 'OK' }]);
     relogio.avancar(8 * 24 * 3_600_000);
-    await fila.adicionar('create_address', {}); // op-3: concluída recente
-    await fila.marcarAEnviar(['op-3']);
-    await fila.aplicarResultadosSync([{ operation_id: 'op-3', status: 'OK' }]);
+    await fila.adicionar(U, 'create_address', {}); // op-3: concluída recente
+    await fila.marcarAEnviar(U, ['op-3']);
+    await fila.aplicarResultadosSync(U, [{ operation_id: 'op-3', status: 'OK' }]);
 
     expect(await fila.limparConcluidasAntigas()).toBe(1);
     expect(await fila.obter('op-1')).toBeNull();
@@ -366,7 +371,7 @@ describe('ficheiros pendentes', () => {
       sha256: 'abc',
       tamanho_bytes: 1234,
     });
-    const op = await fila.adicionar('create_address', {
+    const op = await fila.adicionar(U, 'create_address', {
       photo_facade_url: marcadorOffline(foto.id),
     });
     await ficheiros.associarOperacao(foto.id, op.operation_id);
@@ -413,7 +418,7 @@ describe('transações', () => {
         await criarRepositorioFilaSaida(tx, {
           deviceId: 'd1',
           gerarId: () => 'op-1',
-        }).adicionar('create_address', {});
+        }).adicionar(U, 'create_address', {});
         expect(await tx.getFirst('SELECT operation_id FROM fila_saida')).not.toBeNull();
         throw new Error('falhou a meio');
       }),
@@ -523,5 +528,141 @@ describe('chaves do dispositivo', () => {
     await expect(
       chaves.guardar({ device_id: 'd2', chave_publica_jwk: { ...publica, d: 'segredo' } }),
     ).rejects.toThrow(/secure-store/);
+  });
+});
+
+describe('fila por utilizador (migração 002)', () => {
+  let db: BaseDados;
+  let fila: ReturnType<typeof criarRepositorioFilaSaida>;
+
+  beforeEach(async () => {
+    db = await baseMigrada();
+    fila = criarRepositorioFilaSaida(db, {
+      deviceId: 'telemovel-1',
+      gerarId: geradorSequencial('op'),
+      relogio: relogioManual(),
+    });
+  });
+
+  test('a operação do utilizador A nunca aparece para o B', async () => {
+    const a = await fila.adicionar('utilizador-a', 'create_address', { de: 'A' });
+    await fila.adicionar('utilizador-b', 'create_address', { de: 'B' });
+    expect(a.user_id).toBe('utilizador-a');
+
+    expect((await fila.listarProntas('utilizador-a')).map((o) => o.payload)).toEqual([{ de: 'A' }]);
+    expect((await fila.listarProntas('utilizador-b')).map((o) => o.payload)).toEqual([{ de: 'B' }]);
+    expect(await fila.listarProntas('utilizador-c')).toEqual([]);
+
+    // B não consegue marcar nem mexer na operação de A.
+    await fila.marcarAEnviar('utilizador-b', ['op-1']);
+    expect(await fila.obter('op-1')).toMatchObject({ estado: 'pendente' });
+
+    await fila.marcarAEnviar('utilizador-a', ['op-1']);
+    await fila.marcarAEnviar('utilizador-b', ['op-2']);
+    // A resposta do envio de B (sem a op-1) não conta como falha para A.
+    await fila.aplicarResultadosSync('utilizador-b', [{ operation_id: 'op-2', status: 'OK' }]);
+    expect(await fila.obter('op-1')).toMatchObject({ estado: 'a_enviar', tentativas: 0 });
+    await fila.registarFalhaEnvio('utilizador-b', 'sem rede');
+    expect(await fila.obter('op-1')).toMatchObject({ estado: 'a_enviar', tentativas: 0 });
+    await fila.registarFalhaEnvio('utilizador-a', 'sem rede');
+    expect(await fila.obter('op-1')).toMatchObject({ estado: 'pendente', tentativas: 1 });
+  });
+
+  test('adicionar e listarProntas exigem user_id', async () => {
+    await expect(fila.adicionar('', 'create_address', {})).rejects.toThrow(/user_id/);
+    await expect(fila.adicionar('   ', 'create_address', {})).rejects.toThrow(/user_id/);
+    await expect(
+      fila.adicionar(undefined as unknown as string, 'create_address', {}),
+    ).rejects.toThrow(/user_id/);
+    await expect(fila.listarProntas('')).rejects.toThrow(/user_id/);
+    expect(await fila.contarPendentes()).toBe(0);
+  });
+
+  test('contarPendentesDoUtilizador só conta as do utilizador e não enviadas', async () => {
+    await fila.adicionar('utilizador-a', 'create_address', {}); // op-1
+    await fila.adicionar('utilizador-a', 'field_submit', {}); // op-2
+    await fila.adicionar('utilizador-b', 'create_address', {}); // op-3
+    await fila.marcarAEnviar('utilizador-a', ['op-1', 'op-2']);
+    await fila.aplicarResultadosSync('utilizador-a', [{ operation_id: 'op-1', status: 'OK' }]);
+
+    expect(await fila.contarPendentesDoUtilizador('utilizador-a')).toBe(1);
+    expect(await fila.contarPendentesDoUtilizador('utilizador-b')).toBe(1);
+    expect(await fila.contarPendentesDoUtilizador('utilizador-c')).toBe(0);
+    expect(await fila.contarPendentes()).toBe(2);
+  });
+
+  test('a migração 002 corre sobre uma base que já tinha a 001 com dados', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, [MIGRACOES[0]]);
+    expect(await lerVersao(antiga)).toBe(1);
+    await antiga.run(
+      `INSERT INTO fila_saida (operation_id, device_id, operation_type, payload_json,
+         estado, tentativas, criado_em, atualizado_em)
+       VALUES ('antiga-1', 'telemovel-1', 'create_address', '{"n":1}', 'pendente', 0,
+         '2026-09-01T10:00:00.000Z', '2026-09-01T10:00:00.000Z')`,
+    );
+    await antiga.run(
+      `INSERT INTO favoritos (id, morada_id, nome, atualizado_em)
+       VALUES ('fav-1', 'm1', 'Casa', '2026-09-01T10:00:00.000Z')`,
+    );
+
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(2);
+
+    const filaAntiga = criarRepositorioFilaSaida(antiga, { deviceId: 'telemovel-1' });
+    // Os dados que já existiam continuam lá.
+    expect(await filaAntiga.obter('antiga-1')).toMatchObject({
+      user_id: null,
+      estado: 'pendente',
+      payload: { n: 1 },
+    });
+    expect(await antiga.getAll('SELECT id FROM favoritos')).toEqual([{ id: 'fav-1' }]);
+    // Sem dono: conta como pendente, mas não é enviada automaticamente a ninguém.
+    expect(await filaAntiga.contarPendentes()).toBe(1);
+    expect(await filaAntiga.listarProntas('utilizador-a')).toEqual([]);
+    await filaAntiga.marcarAEnviar('utilizador-a', ['antiga-1']);
+    expect(await filaAntiga.obter('antiga-1')).toMatchObject({ estado: 'pendente' });
+    // A tabela nova existe e funciona.
+    expect(await nomesTabelas(antiga)).toContain('perfil_local');
+  });
+});
+
+describe('perfil_local', () => {
+  test('guarda, substitui e lê o último perfil confirmado', async () => {
+    const db = await baseMigrada();
+    const relogio = relogioManual();
+    const perfis = criarRepositorioPerfilLocal(db, relogio);
+
+    expect(await perfis.obter('utilizador-a')).toBeNull();
+    await perfis.guardar({
+      user_id: 'utilizador-a',
+      email: 'a@exemplo.ao',
+      cargos: ['estafeta'],
+      estado_kyc: 'PENDING_ID',
+    });
+    relogio.avancar(60_000);
+    await perfis.guardar({
+      user_id: 'utilizador-a',
+      email: 'a@exemplo.ao',
+      cargos: ['estafeta', 'tecnico_campo'],
+      estado_kyc: 'ID_VERIFIED',
+    });
+
+    expect(await perfis.obter('utilizador-a')).toEqual({
+      user_id: 'utilizador-a',
+      email: 'a@exemplo.ao',
+      cargos: ['estafeta', 'tecnico_campo'],
+      estado_kyc: 'ID_VERIFIED',
+      confirmado_em: '2026-09-23T10:01:00.000Z',
+    });
+    expect(await perfis.obter('utilizador-b')).toBeNull();
+  });
+
+  test('cargos_json tem de ser uma lista JSON', async () => {
+    const db = await baseMigrada();
+    await expect(
+      db.run(
+        `INSERT INTO perfil_local (user_id, cargos_json, confirmado_em) VALUES ('u', '{}', 'x')`,
+      ),
+    ).rejects.toThrow(/CHECK/);
   });
 });

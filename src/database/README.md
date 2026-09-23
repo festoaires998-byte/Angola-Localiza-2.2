@@ -12,7 +12,8 @@ import { criarRepositorioFilaSaida } from '@/database/repositories';
 
 const db = await abrirBaseDados();
 const fila = criarRepositorioFilaSaida(db, { deviceId });
-await fila.adicionar('create_address', payload);
+await fila.adicionar(userId, 'create_address', payload);
+const prontas = await fila.listarProntas(userId); // só as deste utilizador
 ```
 
 `abrirBaseDados()` abre o ficheiro `angola_localiza.db` uma única vez,
@@ -40,6 +41,10 @@ estrangeiras, e aplica as migrações que faltarem.
 - Dentro de `db.transacao(async (tx) => ...)` use sempre o `tx`,
   nunca o `db` de fora (senão a app fica à espera para sempre).
 - A chave **privada** do dispositivo **nunca** é gravada aqui: vai para o `expo-secure-store`.
+- Cada operação da fila tem o `user_id` de quem a criou. `listarProntas`, `marcarAEnviar`,
+  `aplicarResultadosSync` e `registarFalhaEnvio` só mexem nas do utilizador indicado.
+  Sair da conta não apaga a fila (`contarPendentesDoUtilizador` serve para avisar antes).
+- `perfil_local` guarda o último perfil (cargos + KYC) confirmado de cada utilizador.
 - Fotos e assinaturas ficam em `FileSystem.documentDirectory` (não na cache,
   que o sistema pode apagar). A base de dados só guarda o registo.
 
