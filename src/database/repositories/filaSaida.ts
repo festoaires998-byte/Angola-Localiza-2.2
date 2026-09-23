@@ -17,6 +17,11 @@ export type EstadoFila = 'pendente' | 'a_enviar' | 'concluida' | 'falhou_definit
 export interface OperacaoFila {
   operation_id: string;
   device_id: string;
+  /**
+   * Utilizador que criou a operação. null nas operações criadas antes da
+   * migração 002: essas nunca são enviadas automaticamente.
+   */
+  user_id: string | null;
   operation_type: TipoOperacao;
   payload: unknown;
   estado: EstadoFila;
@@ -65,6 +70,12 @@ export function esperaAposFalha(tentativas: number): number {
   return Math.min(segundos, 3600) * 1000;
 }
 
+function exigirUtilizador(userId: string): void {
+  if (typeof userId !== 'string' || userId.trim() === '') {
+    throw new Error('A operação da fila tem de ter o utilizador (user_id).');
+  }
+}
+
 function deLinha(linha: LinhaFila): OperacaoFila {
   const { payload_json, ...resto } = linha;
   return { ...resto, payload: JSON.parse(payload_json) };
@@ -76,11 +87,13 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
   const maxTentativas = opcoes.maxTentativas ?? Number.POSITIVE_INFINITY;
 
   return {
-    /** Põe uma operação nova na fila e devolve-a. */
-    async adicionar(tipo: TipoOperacao, payload: unknown): Promise<OperacaoFila> {
+    /** Põe uma operação nova do utilizador `userId` na fila e devolve-a. */
+    async adicionar(userId: string, tipo: TipoOperacao, payload: unknown): Promise<OperacaoFila> {
+      exigirUtilizador(userId);
       const operacao: OperacaoFila = {
         operation_id: gerarId(),
         device_id: opcoes.deviceId,
+        user_id: userId,
         operation_type: tipo,
         payload,
         estado: 'pendente',
@@ -91,12 +104,13 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
         atualizado_em: paraIso(agora()),
       };
       await db.run(
-        `INSERT INTO fila_saida (operation_id, device_id, operation_type, payload_json,
+        `INSERT INTO fila_saida (operation_id, device_id, user_id, operation_type, payload_json,
            estado, tentativas, criado_em, atualizado_em)
-         VALUES (?, ?, ?, ?, 'pendente', 0, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, 'pendente', 0, ?, ?)`,
         [
           operacao.operation_id,
           operacao.device_id,
+          userId,
           tipo,
           paraJson(payload),
           operacao.criado_em,
@@ -115,28 +129,36 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
     },
 
     /**
-     * Operações pendentes que já podem ser enviadas (a espera após a última
-     * falha já passou), das mais antigas para as mais recentes.
+     * Operações pendentes DO UTILIZADOR `userId` que já podem ser enviadas
+     * (a espera após a última falha já passou), das mais antigas para as mais
+     * recentes. As de outros utilizadores e as sem user_id nunca aparecem.
      */
-    async listarProntas(limite = 50): Promise<OperacaoFila[]> {
+    async listarProntas(userId: string, limite = 50): Promise<OperacaoFila[]> {
+      exigirUtilizador(userId);
       const linhas = await db.getAll<LinhaFila>(
         `SELECT * FROM fila_saida
-          WHERE estado = 'pendente'
+          WHERE user_id = ?
+            AND estado = 'pendente'
             AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= ?)
           ORDER BY criado_em, operation_id
           LIMIT ?`,
-        [paraIso(agora()), Math.max(0, Math.trunc(limite))],
+        [userId, paraIso(agora()), Math.max(0, Math.trunc(limite))],
       );
       return linhas.map(deLinha);
     },
 
-    /** Marca as operações como "a_enviar" (chamar antes do POST). */
-    async marcarAEnviar(operationIds: string[]): Promise<void> {
+    /**
+     * Marca as operações do utilizador como "a_enviar" (chamar antes do POST).
+     * Ids de outro utilizador são ignorados.
+     */
+    async marcarAEnviar(userId: string, operationIds: string[]): Promise<void> {
+      exigirUtilizador(userId);
       if (operationIds.length === 0) return;
       await db.run(
         `UPDATE fila_saida SET estado = 'a_enviar', atualizado_em = ?
-          WHERE estado = 'pendente' AND operation_id IN (${marcadores(operationIds.length)})`,
-        [paraIso(agora()), ...operationIds],
+          WHERE estado = 'pendente' AND user_id = ?
+            AND operation_id IN (${marcadores(operationIds.length)})`,
+        [paraIso(agora()), userId, ...operationIds],
       );
     },
 
@@ -147,14 +169,18 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
      * - veio com "FAILED" → volta a pendente, tentativas + 1, guarda o erro;
      * - não veio nos results → volta a pendente, tentativas + 1.
      *
+     * Só mexe nas operações "a_enviar" do utilizador `userId`.
      * Tudo numa transação: ou se aplica a resposta inteira, ou nada.
      */
-    async aplicarResultadosSync(results: ResultadoSync[]): Promise<void> {
+    async aplicarResultadosSync(userId: string, results: ResultadoSync[]): Promise<void> {
+      exigirUtilizador(userId);
       const porId = new Map(results.map((r) => [r.operation_id, r]));
       await db.transacao(async (tx) => {
         const agoraIso = paraIso(agora());
         const enviadas = await tx.getAll<{ operation_id: string; tentativas: number }>(
-          `SELECT operation_id, tentativas FROM fila_saida WHERE estado = 'a_enviar'`,
+          `SELECT operation_id, tentativas FROM fila_saida
+            WHERE estado = 'a_enviar' AND user_id = ?`,
+          [userId],
         );
         for (const { operation_id, tentativas } of enviadas) {
           const resultado = porId.get(operation_id);
@@ -195,12 +221,15 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
 
     /**
      * Quando o envio falha por inteiro (sem rede, erro 500, ...):
-     * as operações "a_enviar" voltam a pendente com tentativas + 1.
+     * as operações "a_enviar" do utilizador voltam a pendente com tentativas + 1.
      */
-    async registarFalhaEnvio(erro: string): Promise<void> {
+    async registarFalhaEnvio(userId: string, erro: string): Promise<void> {
+      exigirUtilizador(userId);
       await db.transacao(async (tx) => {
         const enviadas = await tx.getAll<{ operation_id: string; tentativas: number }>(
-          `SELECT operation_id, tentativas FROM fila_saida WHERE estado = 'a_enviar'`,
+          `SELECT operation_id, tentativas FROM fila_saida
+            WHERE estado = 'a_enviar' AND user_id = ?`,
+          [userId],
         );
         for (const { operation_id, tentativas } of enviadas) {
           const novas = tentativas + 1;
@@ -229,10 +258,24 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
       return r.alteracoes;
     },
 
-    /** Quantas operações ainda não foram enviadas com sucesso. */
+    /** Quantas operações (de todos os utilizadores) ainda não foram enviadas com sucesso. */
     async contarPendentes(): Promise<number> {
       const linha = await db.getFirst<{ total: number }>(
         `SELECT COUNT(*) AS total FROM fila_saida WHERE estado IN ('pendente', 'a_enviar')`,
+      );
+      return linha?.total ?? 0;
+    },
+
+    /**
+     * Quantas operações do utilizador ainda não foram enviadas.
+     * Serve para o ecrã avisar antes de sair (sair não apaga a fila).
+     */
+    async contarPendentesDoUtilizador(userId: string): Promise<number> {
+      exigirUtilizador(userId);
+      const linha = await db.getFirst<{ total: number }>(
+        `SELECT COUNT(*) AS total FROM fila_saida
+          WHERE user_id = ? AND estado IN ('pendente', 'a_enviar')`,
+        [userId],
       );
       return linha?.total ?? 0;
     },

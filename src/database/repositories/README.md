@@ -10,7 +10,8 @@ const fila = criarRepositorioFilaSaida(db, { deviceId });
 
 | Ficheiro | Tabela | Principais funções |
 | --- | --- | --- |
-| `filaSaida.ts` | `fila_saida` | `adicionar`, `listarProntas`, `marcarAEnviar`, `aplicarResultadosSync`, `registarFalhaEnvio`, `libertarPresasAEnviar`, `contarPendentes`, `limparConcluidasAntigas` |
+| `filaSaida.ts` | `fila_saida` | `adicionar(userId, ...)`, `listarProntas(userId)`, `marcarAEnviar`, `aplicarResultadosSync`, `registarFalhaEnvio`, `libertarPresasAEnviar`, `contarPendentes`, `contarPendentesDoUtilizador`, `limparConcluidasAntigas` |
+| `perfilLocal.ts` | `perfil_local` | `guardar`, `obter`, `apagar` |
 | `ficheirosPendentes.ts` | `ficheiros_pendentes` | `registar`, `associarOperacao`, `listarPorOperacao`, `marcarEnviado`, `contarPendentes` |
 | `moradas.ts` | `moradas` | `guardarVarias`, `procurarPorPlusCode`, `procurarPorCodigoPostal`, `procurarPerto` |
 | `zonaOffline.ts` | `zona_offline` | `guardar`, `obter`, `listar`, `apagar` |
@@ -22,13 +23,14 @@ const fila = criarRepositorioFilaSaida(db, { deviceId });
 
 ## Fila de saída e a Edge Function "sync"
 
-1. `listarProntas()` dá as operações por enviar.
-2. `marcarAEnviar(ids)` antes do `POST /functions/v1/sync`.
-3. Com a resposta, `aplicarResultadosSync(results)`, com a mesma regra do site:
+1. `listarProntas(userId)` dá as operações por enviar **desse utilizador**
+   (as de outros e as sem `user_id` nunca aparecem).
+2. `marcarAEnviar(userId, ids)` antes do `POST /functions/v1/sync`.
+3. Com a resposta, `aplicarResultadosSync(userId, results)`, com a mesma regra do site:
    - veio com status diferente de `FAILED` → `concluida`;
    - veio com `FAILED` → volta a `pendente`, conta mais uma tentativa e guarda o erro;
    - não veio na resposta → volta a `pendente` e conta mais uma tentativa.
-4. Se o pedido falhar por inteiro (sem rede), `registarFalhaEnvio(erro)`.
+4. Se o pedido falhar por inteiro (sem rede), `registarFalhaEnvio(userId, erro)`.
 
 Depois de uma falha, a operação espera um pouco antes de voltar a ser enviada
 (30 s, 1 min, 2 min, ... no máximo 1 hora).

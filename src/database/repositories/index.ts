@@ -5,5 +5,6 @@ export * from './ficheirosPendentes';
 export * from './filaSaida';
 export * from './levantamentos';
 export * from './moradas';
+export * from './perfilLocal';
 export * from './referencias';
 export * from './zonaOffline';
