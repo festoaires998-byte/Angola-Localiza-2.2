@@ -7,7 +7,9 @@ name: Mapa offline (Huambo)
 # - Pull request que mexe neste ficheiro ou nas regiões da app: só gera e MEDE
 #   (não publica). O tamanho aparece no resumo da execução.
 # - "Run workflow" (manual) e todos os meses: gera, mede e publica.
-#   Precisa do segredo SUPABASE_SERVICE_ROLE_KEY no repositório.
+#   Envia os ficheiros pelas chaves S3 do Supabase Storage (só ficheiros, sem
+#   acesso à base de dados): segredos SUPABASE_S3_ACCESS_KEY_ID e
+#   SUPABASE_S3_SECRET_ACCESS_KEY. O bucket público "mapas" já tem de existir.
 on:
   pull_request:
     paths:
@@ -30,6 +32,9 @@ env:
   # O plano grátis do Supabase não aceita ficheiros acima de 50 MB.
   LIMITE_MB: '45'
   SUPABASE_URL: https://qntbknegicaghnbnghyw.supabase.co
+  # Endpoint S3 do Storage (hostname direto, recomendado para ficheiros grandes) e região do projeto.
+  S3_ENDPOINT: https://qntbknegicaghnbnghyw.storage.supabase.co/storage/v1/s3
+  S3_REGIAO: eu-west-1
   BUCKET: mapas
   ASSETS: https://raw.githubusercontent.com/protomaps/basemaps-assets/main
 
@@ -157,31 +162,32 @@ jobs:
           path: saida/
           retention-days: 7
 
-      - name: Publicar no Supabase Storage
+      - name: Publicar no Supabase Storage (S3)
         if: github.event_name != 'pull_request'
         env:
-          CHAVE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.S3_REGIAO }}
+          # O Supabase Storage não aceita os checksums automáticos das versões novas do AWS CLI.
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
         run: |
           set -euo pipefail
-          if [ -z "${CHAVE}" ]; then
-            echo "::error::Falta o segredo SUPABASE_SERVICE_ROLE_KEY. Cria-o em Settings → Secrets and variables → Actions → New repository secret (valor: Supabase → Project Settings → API Keys → service_role / secret key)."
+          if [ -z "${AWS_ACCESS_KEY_ID}" ] || [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
+            echo "::error::Faltam os segredos SUPABASE_S3_ACCESS_KEY_ID e/ou SUPABASE_S3_SECRET_ACCESS_KEY. Cria-os em Settings → Secrets and variables → Actions (as chaves vêm de Supabase → Storage → S3)."
             exit 1
           fi
-          auth=(-H "Authorization: Bearer $CHAVE" -H "apikey: $CHAVE")
+          aws configure set default.s3.addressing_style path
+          s3() { aws --endpoint-url "$S3_ENDPOINT" s3 "$@"; }
 
-          # Bucket público "mapas" (só é criado se ainda não existir).
-          estado=$(curl -sS -o /tmp/bucket.json -w '%{http_code}' "${auth[@]}" -H 'Content-Type: application/json' \
-            -X POST "$SUPABASE_URL/storage/v1/bucket" \
-            -d "{\"id\":\"$BUCKET\",\"name\":\"$BUCKET\",\"public\":true,\"file_size_limit\":52428800}")
-          if [ "$estado" != "200" ] && ! grep -qi 'already exists\|Duplicate' /tmp/bucket.json; then
-            echo "::error::Não foi possível criar o bucket ($estado): $(cat /tmp/bucket.json)"; exit 1
+          # O bucket "mapas" (público) é criado no painel do Supabase; aqui só se confirma que existe.
+          if ! aws --endpoint-url "$S3_ENDPOINT" s3api head-bucket --bucket "$BUCKET"; then
+            echo "::error::Não consegui abrir o bucket \"$BUCKET\". Confirma que existe (Storage → Buckets) e que as chaves S3 estão certas."
+            exit 1
           fi
 
           enviar() { # enviar <ficheiro local> <caminho no bucket> <content-type> <cache-control>
-            estado=$(curl -sS -o /tmp/resposta.json -w '%{http_code}' "${auth[@]}" \
-              -H "Content-Type: $3" -H "Cache-Control: $4" -H 'x-upsert: true' \
-              --data-binary "@$1" -X POST "$SUPABASE_URL/storage/v1/object/$BUCKET/$2")
-            if [ "$estado" != "200" ]; then echo "::error::Falhou o envio de $2 ($estado): $(cat /tmp/resposta.json)"; exit 1; fi
+            s3 cp "$1" "s3://$BUCKET/$2" --content-type "$3" --cache-control "$4" --only-show-errors
             echo "Enviado: $2"
           }
 
@@ -200,17 +206,21 @@ jobs:
           enviar "$REGIAO/manifesto.json" "$REGIAO/manifesto.json" application/json "no-cache"
 
           # Guarda as 2 versões mais recentes (quem estiver a descarregar a anterior não falha).
-          curl -sS "${auth[@]}" -H 'Content-Type: application/json' -X POST "$SUPABASE_URL/storage/v1/object/list/$BUCKET" \
-            -d "{\"prefix\":\"$REGIAO/\",\"limit\":100}" \
-            | jq -r '.[].name | select(endswith(".pmtiles"))' | sort -r | tail -n +3 > /tmp/velhos.txt || true
-          if [ -s /tmp/velhos.txt ]; then
-            corpo=$(jq -R -s --arg r "$REGIAO/" 'split("\n") | map(select(length > 0) | $r + .) | {prefixes: .}' /tmp/velhos.txt)
-            curl -sS "${auth[@]}" -H 'Content-Type: application/json' -X DELETE "$SUPABASE_URL/storage/v1/object/$BUCKET" -d "$corpo" > /dev/null
-            echo "Apagados: $(tr '\n' ' ' < /tmp/velhos.txt)"
+          { s3 ls "s3://$BUCKET/$REGIAO/" || true; } | awk '{print $4}' | { grep '\.pmtiles$' || true; } | sort -r | tail -n +3 | while read -r velho; do
+            s3 rm "s3://$BUCKET/$REGIAO/$velho" --only-show-errors
+            echo "Apagado: $velho"
+          done
+
+          # Confirma que a app consegue ler (bucket público).
+          publico="$SUPABASE_URL/storage/v1/object/public/$BUCKET/$REGIAO/manifesto.json"
+          estado=$(curl -s -o /dev/null -w '%{http_code}' "$publico")
+          if [ "$estado" != "200" ]; then
+            echo "::error::O manifesto foi enviado mas não se consegue ler em $publico (HTTP $estado). O bucket \"$BUCKET\" tem de ser público."
+            exit 1
           fi
 
           {
             echo "✅ Publicado em \`$BUCKET/$REGIAO/$FICHEIRO\`."
             echo ""
-            echo "- Manifesto: $SUPABASE_URL/storage/v1/object/public/$BUCKET/$REGIAO/manifesto.json"
+            echo "- Manifesto: $publico"
           } >> "$GITHUB_STEP_SUMMARY"
