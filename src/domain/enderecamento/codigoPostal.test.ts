@@ -1,11 +1,20 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { codigoPostalProvisorio, codificarGrelha, digitosControlo, siglaProvincia } from './codigoPostal';
+import * as servidor from '../../../supabase/functions/generate-postal-code/codigoPostal';
 
-// ─── Referência: copiado TAL COMO ESTÁ da Edge Function generate-postal-code (v2) ───
-// Não "melhorar" este bloco: serve para provar que a app calcula o mesmo que o servidor.
-const GRID_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
-function encodeGrid(lat: number, lng: number, length: number): string {
+import {
+  ALFABETO_GRELHA,
+  codificarGrelha,
+  codigoPostalProvisorio,
+  digitosControlo,
+  SIGLAS_PROVINCIAS,
+  siglaProvincia,
+} from './codigoPostal';
+
+// ─── Esquema 1: copiado TAL COMO ESTAVA na Edge Function (versão 2, SCHEME_VERSION 1) ───
+// Serve para provar que os códigos antigos que eram válidos não mudam.
+const ALFABETO_1 = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+function encodeGrid1(lat: number, lng: number, length: number): string {
   let latMin = -90, latMax = 90, lngMin = -180, lngMax = 180, bits = '';
   let isLng = true;
   for (let i = 0; i < length * 5; i++) {
@@ -19,23 +28,17 @@ function encodeGrid(lat: number, lng: number, length: number): string {
     isLng = !isLng;
   }
   let code = '';
-  for (let i = 0; i < bits.length; i += 5) code += GRID_ALPHABET[parseInt(bits.substring(i, i + 5).padEnd(5, '0'), 2)];
+  for (let i = 0; i < bits.length; i += 5) code += ALFABETO_1[parseInt(bits.substring(i, i + 5).padEnd(5, '0'), 2)];
   return code;
 }
-function checksum(input: string): string {
+function checksum1(input: string): string {
   let sum = 0;
   for (let i = 0; i < input.length; i++) {
-    const idx = GRID_ALPHABET.indexOf(input[i]);
+    const idx = ALFABETO_1.indexOf(input[i]);
     const val = idx >= 0 ? idx + 1 : input.charCodeAt(i);
     sum = (sum + val * (i + 1)) % 9973;
   }
   return (((sum % 97) + 1)).toString().padStart(2, '0');
-}
-function referencia(latitude: number, longitude: number, provinceName?: string): string {
-  const provinceCode = provinceName ? provinceName.substring(0, 3).toUpperCase() : 'XXX';
-  const gridCode = encodeGrid(latitude, longitude, 8);
-  const base = `${provinceCode}-${gridCode}`;
-  return `AO-${base}-${checksum(base)}`;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -48,39 +51,104 @@ function aleatorio(semente: number) {
   };
 }
 
-describe('Código Postal Digital (local)', () => {
-  test('dá o mesmo que o servidor em 5000 pontos de Angola', () => {
+const NOMES = [
+  'Huambo', 'Luanda', 'Bié', 'Uíge', 'Cuanza Norte', 'Cuanza Sul', 'Lunda Norte', 'Lunda Sul',
+  'Ícolo e Bengo', 'Moxico Leste', 'Cuando', 'Cubango', 'Cuando Cubango', 'Província do Huambo', 'Atlântida', null,
+];
+
+describe('Código Postal Digital: app igual ao servidor (esquema 2)', () => {
+  test('dá o mesmo que a função do servidor em 5000 pontos de Angola', () => {
     const r = aleatorio(42);
-    const provincias = ['Huambo', 'Luanda', 'Bié', 'Uíge', undefined];
     for (let i = 0; i < 5000; i++) {
       const lat = -18 + r() * 13.6; // Angola: ~-18.0 a -4.4
       const lng = 11.6 + r() * 12.5; // ~11.6 a 24.1
-      const prov = provincias[i % provincias.length];
-      expect(codigoPostalProvisorio(lat, lng, prov).codigo).toBe(referencia(lat, lng, prov));
+      const prov = NOMES[i % NOMES.length];
+      expect(codigoPostalProvisorio(lat, lng, prov).codigo).toBe(servidor.codigoBase(lat, lng, prov).postal_code);
     }
   });
 
-  test('pontos no limite de células dão o mesmo que o servidor', () => {
-    for (const [lat, lng] of [[0, 0], [-12.5, 15.75], [-90, -180], [89.999, 179.999], [-12.776, 15.739]]) {
-      expect(codigoPostalProvisorio(lat, lng, 'Huambo').codigo).toBe(referencia(lat, lng, 'Huambo'));
+  test('mesma tabela de siglas e mesma leitura dos nomes', () => {
+    expect(SIGLAS_PROVINCIAS).toEqual(servidor.SIGLAS_PROVINCIAS);
+    expect(ALFABETO_GRELHA).toBe(servidor.ALFABETO_GRELHA);
+    for (const nome of NOMES) expect(siglaProvincia(nome)).toBe(servidor.siglaProvincia(nome));
+  });
+
+  test('nunca aparece "undefined" e todos os códigos passam no validate do servidor', () => {
+    const r = aleatorio(7);
+    for (let i = 0; i < 20000; i++) {
+      const c = codigoPostalProvisorio(-13.1 + r() * 0.7, 15.4 + r() * 0.7, 'Huambo').codigo;
+      expect(c).not.toContain('undefined');
+      expect(servidor.validatePostalCode(c)).toEqual({ valid: true });
     }
   });
 
-  test('formato AO-PROV-GRID8-CHK, que o servidor valida', () => {
+  test('códigos do esquema 1 que eram válidos continuam iguais (grelha e controlo)', () => {
+    const r = aleatorio(99);
+    let comparados = 0;
+    for (let i = 0; i < 5000; i++) {
+      const lat = -18 + r() * 13.6;
+      const lng = 11.6 + r() * 12.5;
+      const antiga = encodeGrid1(lat, lng, 8);
+      if (antiga.includes('undefined')) continue;
+      comparados++;
+      expect(codificarGrelha(lat, lng)).toBe(antiga);
+      expect(digitosControlo(`HUA-${antiga}`)).toBe(checksum1(`HUA-${antiga}`));
+    }
+    expect(comparados).toBeGreaterThan(3000);
+  });
+
+  test('os códigos antigos guardados continuam a passar no validate', () => {
+    const grelha = encodeGrid1(-12.7761, 15.7392, 8);
+    const antigo = `AO-HUA-${grelha}-${checksum1(`HUA-${grelha}`)}`;
+    expect(servidor.validatePostalCode(antigo)).toEqual({ valid: true });
+    expect(servidor.validatePostalCode(`AO-BEN-${grelha}-${checksum1(`BEN-${grelha}`)}`)).toEqual({ valid: true });
+  });
+});
+
+describe('siglas das províncias', () => {
+  test('21 províncias, 21 siglas diferentes, todas com 3 letras', () => {
+    const siglas = Object.values(SIGLAS_PROVINCIAS);
+    expect(siglas).toHaveLength(21);
+    expect(new Set(siglas).size).toBe(21);
+    for (const s of siglas) expect(s).toMatch(/^[A-Z]{3}$/);
+    expect(siglas).not.toContain('CCU');
+    expect(siglas).not.toContain('XXX');
+  });
+
+  test.each<[string | null, string]>([
+    ['Huambo', 'HUA'],
+    ['Província do Huambo', 'HUA'],
+    ['Uíge', 'UIG'],
+    ['Bié', 'BIE'],
+    ['Huíla', 'HUI'],
+    ['Cuanza Norte', 'CNO'],
+    ['Cuanza-Sul', 'CUS'],
+    ['Kwanza Norte', 'CNO'],
+    ['Lunda Norte', 'LNO'],
+    ['Lunda Sul', 'LSU'],
+    ['Luanda', 'LUA'],
+    ['Ícolo e Bengo', 'ICB'],
+    ['Icolo-e-Bengo', 'ICB'],
+    ['Bengo', 'BGO'],
+    ['Benguela', 'BGU'],
+    ['Moxico', 'MOX'],
+    ['Moxico Leste', 'MXL'],
+    ['Cuando', 'CDO'],
+    ['Cubango', 'CUB'],
+    ['Cuando Cubango', 'CCU'],
+    ['Malange', 'MAL'],
+    ['Atlântida', 'XXX'],
+    [null, 'XXX'],
+    ['  ', 'XXX'],
+  ])('%j → %s', (nome, sigla) => {
+    expect(siglaProvincia(nome)).toBe(sigla);
+  });
+
+  test('formato AO-PROV-GRID8-CHK', () => {
     const c = codigoPostalProvisorio(-12.7761, 15.7392, 'Huambo');
     expect(c.sigla).toBe('HUA');
     expect(c.grelha).toHaveLength(8);
     expect(c.codigo).toMatch(/^AO-[A-Z]{3}-[2-9A-HJ-NP-Z]{8}-\d{2}$/);
-    expect(c.controlo).toBe(digitosControlo(`HUA-${c.grelha}`));
-  });
-
-  test('sem província: XXX (como o servidor)', () => {
-    expect(siglaProvincia(null)).toBe('XXX');
-    expect(codigoPostalProvisorio(-12.7761, 15.7392).codigo.startsWith('AO-XXX-')).toBe(true);
-  });
-
-  test('pontos próximos (mesma célula) dão a mesma grelha', () => {
-    expect(codificarGrelha(-12.77610, 15.73920)).toBe(codificarGrelha(-12.77611, 15.73921));
   });
 
   test('coordenada inválida dá erro', () => {

@@ -125,7 +125,7 @@ function CartaoOndeEstou({ posicao, info, online }: { posicao: Posicao | null; i
           </>
         ) : (
           <Text style={estilos.nota}>
-            {cp?.estado === 'indisponivel' ? 'Indisponível neste ponto (erro conhecido, a corrigir).' : '…'}
+            {cp?.estado === 'indisponivel' ? 'Indisponível neste ponto.' : '…'}
           </Text>
         )}
       </View>

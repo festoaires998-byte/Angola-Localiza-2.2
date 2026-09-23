@@ -87,23 +87,19 @@ describe('informação do sítio onde estou', () => {
     expect(i.codigoPostal.estado === 'provisorio' || i.codigoPostal.estado === 'indisponivel').toBe(true);
   });
 
-  test('código com "undefined" (erro conhecido do servidor) aparece como indisponível', async () => {
-    // Procura um ponto do Huambo onde o cálculo dá "undefined".
-    let ponto: [number, number] | null = null;
-    for (let i = 0; i < 2000 && !ponto; i++) {
-      const lat = -12.9 + i * 0.00017;
-      const lng = 15.6 + i * 0.00013;
-      if (codigoPostalProvisorio(lat, lng, 'Huambo').codigo.includes('undefined')) ponto = [lat, lng];
+  test('esquema 2: nunca fica indisponível (acabou o "undefined")', async () => {
+    for (let i = 0; i < 300; i++) {
+      const info = await t.info.semRede(-12.9 + i * 0.0011, 15.6 + i * 0.0009);
+      expect(info.codigoPostal.estado).toBe('provisorio');
+      expect(info.codigoPostal.codigo).not.toContain('undefined');
     }
-    expect(ponto).not.toBeNull();
-    const i = await t.info.semRede(ponto![0], ponto![1]);
-    expect(i.codigoPostal).toEqual({ codigo: null, estado: 'indisponivel' });
   });
 
   test('validação do formato (a mesma do servidor)', () => {
     expect(codigoPostalValido('AO-HUA-MNFQR6JW-41')).toBe(true);
     expect(codigoPostalValido('AO-HUA-MNFQR6JW-2-41')).toBe(true);
     expect(codigoPostalValido('AO-UÍG-MNFQR6JW-41')).toBe(false);
+    expect(codigoPostalValido('AO-HUA-MNFQR6JL-41')).toBe(true); // "L" do esquema 2
     expect(codigoPostalValido('AO-HUA-MNundefinedQ-41')).toBe(false);
   });
 });

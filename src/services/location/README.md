@@ -18,18 +18,18 @@ GPS e informação do sítio onde a pessoa está.
 - A mesma zona só é pedida outra vez ao `geocode` depois de 7 dias; o código
   da mesma célula só é confirmado outra vez depois de 10 minutos. O servidor
   aceita no máximo 30 pedidos por minuto.
-- Quando o cálculo dá um código inválido (ver "Erros conhecidos"), o ecrã mostra
-  "Indisponível neste ponto" em vez de um código partido.
+- Se, por algum motivo, o cálculo der um código que o servidor não aceita, o
+  ecrã mostra "Indisponível neste ponto" em vez de um código partido.
 
-## Erros conhecidos do `generate-postal-code` (a corrigir em PR próprio)
+## Esquema 2 do Código Postal Digital
 
-- Quando 5 bits da grelha dão 31, o alfabeto (31 letras) não tem posição 31 e o
-  código sai com a palavra `undefined` (≈14% dos pontos no Huambo). O próprio
-  `action=validate` do servidor rejeita esses códigos.
-- A sigla da província são as 3 primeiras letras do nome: Cuanza Norte/Sul dão
-  as duas `CUA`, Lunda Norte/Sul dão `LUN`, e "Uíge" dá `UÍG`, que o validador
-  rejeita.
+A partir do esquema 2 (`generate-postal-code` com `scheme_version: 2`):
 
-A app replica estas contas **exatamente** (`src/domain/enderecamento/codigoPostal.ts`,
-com um teste que compara com uma cópia do código do servidor). Quando o
-servidor mudar, a app tem de mudar com ele.
+- a grelha tem 32 símbolos (`L` no fim): acabou o `undefined` dentro do código.
+  Os códigos do esquema 1 que eram válidos continuam exatamente iguais;
+- a sigla da província é **fixa** (tabela de 21 províncias em
+  `src/domain/enderecamento/codigoPostal.ts`, igual à do servidor): ISO 3166-2:AO
+  onde existe, e siglas próprias para as 4 províncias criadas em 2024.
+
+As contas do servidor estão em `supabase/functions/generate-postal-code/codigoPostal.ts`;
+o teste `codigoPostal.test.ts` prova que a app calcula o mesmo.

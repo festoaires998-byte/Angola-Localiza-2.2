@@ -52,8 +52,38 @@ npm test
 
 ## Código Postal Digital (`codigoPostal.ts`)
 
-Formato `AO-{PROV}-{GRID8}[-{N}]-{CHK}`, igual à Edge Function `generate-postal-code`.
+Formato `AO-{PROV}-{GRID8}[-{N}]-{CHK}`, esquema 2, igual à Edge Function
+`generate-postal-code` (`supabase/functions/generate-postal-code/codigoPostal.ts`).
 `codigoPostalProvisorio(lat, lng, provincia)` faz no telemóvel as mesmas contas
-(sem o `-N`, que só o servidor sabe). O teste `codigoPostal.test.ts` compara-o,
-em 5000 pontos, com uma cópia do código do servidor. Os erros conhecidos do
-servidor estão descritos em `src/services/location/README.md`.
+(sem o `-N`, que só o servidor sabe). O teste `codigoPostal.test.ts` compara-o
+com as contas do servidor em 5000 pontos e confirma que os códigos antigos
+(esquema 1) que eram válidos não mudam.
+
+### Siglas das províncias
+
+| Província | Sigla | Origem |
+| --- | --- | --- |
+| Bengo | BGO | ISO 3166-2:AO |
+| Benguela | BGU | ISO 3166-2:AO |
+| Bié | BIE | ISO 3166-2:AO |
+| Cabinda | CAB | ISO 3166-2:AO |
+| Cuando | CDO | nova (2024), sem ISO |
+| Cubango | CUB | nova (2024), sem ISO |
+| Cuanza Norte | CNO | ISO 3166-2:AO |
+| Cuanza Sul | CUS | ISO 3166-2:AO |
+| Cunene | CNN | ISO 3166-2:AO |
+| Huambo | HUA | ISO 3166-2:AO |
+| Huíla | HUI | ISO 3166-2:AO |
+| Ícolo e Bengo | ICB | nova (2024), sem ISO |
+| Luanda | LUA | ISO 3166-2:AO |
+| Lunda Norte | LNO | ISO 3166-2:AO |
+| Lunda Sul | LSU | ISO 3166-2:AO |
+| Malanje | MAL | ISO 3166-2:AO |
+| Moxico | MOX | ISO 3166-2:AO |
+| Moxico Leste | MXL | nova (2024), sem ISO |
+| Namibe | NAM | ISO 3166-2:AO |
+| Uíge | UIG | ISO 3166-2:AO |
+| Zaire | ZAI | ISO 3166-2:AO |
+
+Casos especiais: "Cuando Cubango" (nome antigo, se o mapa ainda o devolver) → `CCU`
+(código ISO antigo); nome desconhecido ou em falta → `XXX`.
