@@ -53,7 +53,7 @@ describe('separador Mapa', () => {
   test('sem rede: Plus Code, precisão, código provisório e província guardada', () => {
     mockInfo = {
       plusCode: encode(POS.latitude, POS.longitude),
-      codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio' },
+      codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
       local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-20T10:00:00.000Z' },
     };
     desenhar();
@@ -75,7 +75,7 @@ describe('separador Mapa', () => {
     mockOnline = true;
     mockInfo = {
       plusCode: '',
-      codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-2-41', estado: 'confirmado' },
+      codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-2-41', estado: 'confirmado', confirmadoEm: '2026-09-23T21:16:00.000Z' },
       local: { provincia: 'Huambo', municipio: 'Caála', origem: 'servidor', atualizadoEm: null },
     };
     desenhar();
@@ -84,8 +84,21 @@ describe('separador Mapa', () => {
     expect(screen.queryByText('Sem rede: a mostrar o que está neste telemóvel')).toBeNull();
   });
 
+  test('sem rede, com código já confirmado nesta célula: mostra o confirmado e a data', () => {
+    mockInfo = {
+      plusCode: '',
+      codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: '2026-09-23T20:16:00.000Z' },
+      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-23T20:16:00.000Z' },
+    };
+    desenhar();
+    expect(screen.getByText('AO-HUA-MNFQPN2S-3-95')).toBeTruthy();
+    expect(screen.getByText('Confirmado')).toBeTruthy();
+    expect(screen.getByText(/Sem rede: confirmado pelo servidor a/)).toBeTruthy();
+    expect(screen.queryByText('Provisório')).toBeNull();
+  });
+
   test('código indisponível', () => {
-    mockInfo = { plusCode: '', codigoPostal: { codigo: null, estado: 'indisponivel' }, local: { provincia: null, municipio: null, origem: null, atualizadoEm: null } };
+    mockInfo = { plusCode: '', codigoPostal: { codigo: null, estado: 'indisponivel', confirmadoEm: null }, local: { provincia: null, municipio: null, origem: null, atualizadoEm: null } };
     desenhar();
     expect(screen.getByText('Indisponível neste ponto.')).toBeTruthy();
     expect(screen.getByText('Sem rede e sem dados guardados desta zona.')).toBeTruthy();

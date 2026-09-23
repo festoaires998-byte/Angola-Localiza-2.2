@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import { aplicarMigracoes } from '@/database/migrations';
+import { criarRepositorioCodigosConfirmados } from '@/database/repositories/codigosConfirmados';
 import { criarRepositorioZonasGeocodificadas } from '@/database/repositories/zonasGeocodificadas';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 import { codigoPostalProvisorio } from '@/domain/enderecamento/codigoPostal';
@@ -22,8 +23,9 @@ async function montar() {
   const confirmarCodigo = jest.fn(async (lat: number, lng: number, prov: string | null) => ({
     codigo: codigoPostalProvisorio(lat, lng, prov).codigo.replace(/-(\d{2})$/, '-2-$1'),
   }));
-  const info = criarInfoLocal({ zonas, geocodificar, confirmarCodigo, agora: () => agora });
-  return { info, zonas, geocodificar, confirmarCodigo, avancar: (ms: number) => (agora += ms) };
+  const codigos = criarRepositorioCodigosConfirmados(db, () => new Date(agora));
+  const info = criarInfoLocal({ zonas, geocodificar, confirmarCodigo, codigos, agora: () => agora });
+  return { info, zonas, codigos, geocodificar, confirmarCodigo, avancar: (ms: number) => (agora += ms) };
 }
 
 describe('informação do sítio onde estou', () => {
@@ -93,6 +95,34 @@ describe('informação do sítio onde estou', () => {
       expect(info.codigoPostal.estado).toBe('provisorio');
       expect(info.codigoPostal.codigo).not.toContain('undefined');
     }
+  });
+
+  test('sem rede, mostra o último código confirmado desta célula (com o "-N" do servidor)', async () => {
+    const online = await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+    expect(online.codigoPostal.estado).toBe('confirmado');
+    expect(online.codigoPostal.codigo).toMatch(/-2-\d{2}$/);
+    // "Reabrir a app" sem rede: outro resolvedor, a mesma base de dados.
+    const semRede = await t.info.semRede(HUAMBO.lat, HUAMBO.lng);
+    expect(semRede.codigoPostal).toEqual({
+      codigo: online.codigoPostal.codigo,
+      estado: 'confirmado',
+      confirmadoEm: '2026-09-23T10:00:00.000Z',
+    });
+  });
+
+  test('sem rede, noutra célula nunca confirmada: provisório', async () => {
+    await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+    const longe = await t.info.semRede(HUAMBO.lat + 0.01, HUAMBO.lng);
+    expect(longe.codigoPostal.estado).toBe('provisorio');
+    expect(longe.codigoPostal.confirmadoEm).toBeNull();
+  });
+
+  test('se o servidor falhar, fica o último confirmado guardado', async () => {
+    await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+    t.avancar(60 * 60 * 1000);
+    t.confirmarCodigo.mockRejectedValueOnce(new Error('Sem ligação ao servidor.'));
+    const i = await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+    expect(i.codigoPostal.estado).toBe('confirmado');
   });
 
   test('validação do formato (a mesma do servidor)', () => {

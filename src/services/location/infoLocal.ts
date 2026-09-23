@@ -1,4 +1,5 @@
 import type { ProvinciaMunicipio } from '@/api/geocodeNucleo';
+import type { CodigoConfirmado } from '@/database/repositories/codigosConfirmados';
 import type { ZonaGeocodificada } from '@/database/repositories/zonasGeocodificadas';
 import { codigoPostalProvisorio } from '@/domain/enderecamento/codigoPostal';
 import { encode } from '@/domain/enderecamento/plusCode';
@@ -16,10 +17,12 @@ export interface InfoLocal {
     codigo: string | null;
     /**
      * - provisorio: calculado no telemóvel (sem o "-N" que só o servidor sabe);
-     * - confirmado: devolvido pelo servidor;
+     * - confirmado: devolvido pelo servidor (agora ou numa vez anterior, ver confirmadoEm);
      * - indisponivel: o cálculo dá um código que o servidor não aceita (não devia acontecer).
      */
     estado: 'provisorio' | 'confirmado' | 'indisponivel';
+    /** Quando o servidor o confirmou (ISO); null se não é confirmado. */
+    confirmadoEm: string | null;
   };
   local: ProvinciaMunicipio & {
     /**
@@ -53,6 +56,11 @@ export interface DependenciasInfoLocal {
   };
   geocodificar(latitude: number, longitude: number): Promise<ProvinciaMunicipio & { resposta: unknown }>;
   confirmarCodigo(latitude: number, longitude: number, provincia: string | null): Promise<{ codigo: string }>;
+  /** Último código confirmado de cada célula, guardado no telemóvel. */
+  codigos: {
+    obter(chave: string): Promise<CodigoConfirmado | null>;
+    guardar(c: Omit<CodigoConfirmado, 'confirmado_em'>): Promise<CodigoConfirmado>;
+  };
   agora?(): number;
 }
 
@@ -65,23 +73,24 @@ export const VALIDADE_CODIGO_MS = 10 * 60 * 1000;
 
 export function criarInfoLocal(deps: DependenciasInfoLocal) {
   const agora = deps.agora ?? Date.now;
-  const confirmados = new Map<string, { codigo: string; em: number }>();
+  /** Quando se pediu cada célula ao servidor nesta sessão (para não repetir). */
+  const pedidos = new Map<string, number>();
 
-  function montar(
+  async function montar(
     latitude: number,
     longitude: number,
     local: InfoLocal['local'],
-  ): InfoLocal {
+  ): Promise<InfoLocal> {
     const provisorio = codigoPostalProvisorio(latitude, longitude, local.provincia);
     const chave = `${provisorio.sigla}-${provisorio.grelha}`;
-    const confirmado = confirmados.get(chave);
+    const confirmado = await deps.codigos.obter(chave).catch(() => null);
     let codigoPostal: InfoLocal['codigoPostal'];
     if (confirmado && codigoPostalValido(confirmado.codigo)) {
-      codigoPostal = { codigo: confirmado.codigo, estado: 'confirmado' };
+      codigoPostal = { codigo: confirmado.codigo, estado: 'confirmado', confirmadoEm: confirmado.confirmado_em };
     } else if (codigoPostalValido(provisorio.codigo)) {
-      codigoPostal = { codigo: provisorio.codigo, estado: 'provisorio' };
+      codigoPostal = { codigo: provisorio.codigo, estado: 'provisorio', confirmadoEm: null };
     } else {
-      codigoPostal = { codigo: null, estado: 'indisponivel' };
+      codigoPostal = { codigo: null, estado: 'indisponivel', confirmadoEm: null };
     }
     return { plusCode: encode(latitude, longitude), codigoPostal, local };
   }
@@ -139,13 +148,16 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
 
       const provisorio = codigoPostalProvisorio(latitude, longitude, local.provincia);
       const chave = `${provisorio.sigla}-${provisorio.grelha}`;
-      const anterior = confirmados.get(chave);
-      if (!anterior || agora() - anterior.em > VALIDADE_CODIGO_MS) {
+      const anterior = pedidos.get(chave);
+      if (anterior === undefined || agora() - anterior > VALIDADE_CODIGO_MS) {
         try {
           const r = await deps.confirmarCodigo(latitude, longitude, local.provincia);
-          confirmados.set(chave, { codigo: r.codigo, em: agora() });
+          pedidos.set(chave, agora());
+          if (codigoPostalValido(r.codigo)) {
+            await deps.codigos.guardar({ chave, codigo: r.codigo, latitude, longitude }).catch(() => null);
+          }
         } catch {
-          // Fica o provisório.
+          // Fica o último confirmado guardado (ou o provisório).
         }
       }
       return montar(latitude, longitude, local);

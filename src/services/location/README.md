@@ -12,7 +12,7 @@ GPS e informação do sítio onde a pessoa está.
 | O quê | Sem rede | Com rede (e sessão) |
 | --- | --- | --- |
 | Plus Code (11 caracteres, ~3 m) | Calculado no telemóvel | Igual |
-| Código Postal Digital | **Provisório**: mesmas contas do `generate-postal-code`, sem o `-N` | **Confirmado** pelo `generate-postal-code` |
+| Código Postal Digital | O último **confirmado** desta célula, com a data; se nunca houve rede aqui, **Provisório** (mesmas contas do `generate-postal-code`, sem o `-N`) | **Confirmado** pelo `generate-postal-code` e guardado (`codigos_confirmados`) |
 | Província e município | Último guardado desta zona (Plus Code de 8 dígitos, ~275 m) ou de uma zona até 3 km | `geocode?action=reverse` (a chave da LocationIQ fica no servidor) |
 
 - A mesma zona só é pedida outra vez ao `geocode` depois de 7 dias; o código

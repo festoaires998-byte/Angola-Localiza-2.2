@@ -115,6 +115,9 @@ function CartaoOndeEstou({ posicao, info, online }: { posicao: Posicao | null; i
             <Text style={[estilos.etiqueta, cp.estado === 'confirmado' ? estilos.confirmado : estilos.provisorio]}>
               {cp.estado === 'confirmado' ? 'Confirmado' : 'Provisório'}
             </Text>
+            {cp.estado === 'confirmado' && !online && cp.confirmadoEm ? (
+              <Text style={estilos.nota}>{`Sem rede: confirmado pelo servidor a ${dataHora(cp.confirmadoEm)}.`}</Text>
+            ) : null}
             {cp.estado === 'provisorio' ? (
               <Text style={estilos.nota}>
                 {online
