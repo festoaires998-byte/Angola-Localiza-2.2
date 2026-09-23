@@ -7,6 +7,7 @@ import { aplicarMigracoes, lerVersao, MIGRACOES, type Migracao } from '../migrat
 import {
   criarRepositorioChavesDispositivo,
   criarRepositorioCodigosConfirmados,
+  criarRepositorioFavoritos,
   criarRepositorioFicheirosPendentes,
   criarRepositorioFilaSaida,
   criarRepositorioMoradas,
@@ -732,8 +733,33 @@ describe('codigos_confirmados (migração 006)', () => {
   test('migra uma base na versão 5', async () => {
     const { db: antiga } = await criarBaseDadosSqlJs();
     await aplicarMigracoes(antiga, MIGRACOES.slice(0, 5));
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(6);
+    await expect(aplicarMigracoes(antiga, MIGRACOES.slice(0, 6))).resolves.toBe(6);
     expect(await criarRepositorioCodigosConfirmados(antiga).obter('x')).toBeNull();
+  });
+});
+
+describe('favoritos do utilizador (migração 007)', () => {
+  test('uma base na versão 6 migra; os favoritos antigos (sem dono) não aparecem a ninguém', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 6));
+    await antiga.run(
+      `INSERT INTO favoritos (id, morada_id, nome, categoria, atualizado_em)
+       VALUES ('fav-velho', 'm1', 'Casa', 'casa', '2026-09-01T10:00:00.000Z')`,
+    );
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(7);
+    const favoritos = criarRepositorioFavoritos(antiga);
+    expect(await favoritos.obter('fav-velho')).toMatchObject({ user_id: null, pendente: null, criado_em: null });
+    expect(await favoritos.listarDoUtilizador('user-1')).toEqual([]);
+  });
+
+  test('pendente só aceita "atualizar" ou "remover"', async () => {
+    const db = await baseMigrada();
+    await expect(
+      db.run(
+        `INSERT INTO favoritos (id, morada_id, nome, categoria, pendente, atualizado_em)
+         VALUES ('f1', 'm1', 'Casa', 'casa', 'talvez', '2026-09-01T10:00:00.000Z')`,
+      ),
+    ).rejects.toThrow(/CHECK/);
   });
 });
 

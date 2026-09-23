@@ -1,3 +1,4 @@
+import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import type { TipoOperacao } from '@/database/repositories/filaSaida';
 import type { Cargo, Separador } from '@/domain/organizacao/cargos';
 
@@ -32,6 +33,55 @@ export const NOMES_OPERACOES: Record<TipoOperacao, string> = {
   field_submit: 'Levantamento de campo',
   delivery_proof: 'Prova de entrega',
 };
+
+/** Categorias dos favoritos (as mesmas do site). */
+export const NOMES_CATEGORIAS: Record<CategoriaFavorito, string> = {
+  casa: 'Casa',
+  trabalho: 'Trabalho',
+  familia: 'Família',
+  cliente: 'Cliente',
+  loja: 'Loja',
+  entrega: 'Entrega',
+  outro: 'Outro',
+};
+
+/** Estado da morada no servidor (addresses.status), em palavras simples. */
+export function nomeEstadoMorada(estado: string | null): string {
+  switch (estado) {
+    case 'PROPOSED':
+      return 'Proposta (à espera de validação)';
+    case 'APPROVED':
+      return 'Aprovada';
+    case 'PUBLISHED':
+      return 'Publicada';
+    case 'OFFICIAL':
+      return 'Oficial';
+    case 'REJECTED':
+      return 'Rejeitada';
+    case null:
+      return '—';
+    default:
+      return estado;
+  }
+}
+
+/** Quem pode ver a morada (addresses.visibility_level). */
+export function nomeVisibilidade(nivel: string | null): string {
+  switch (nivel) {
+    case 'PUBLIC':
+      return 'Pública (visível a todos no link/cartão)';
+    case 'LIMITED':
+      return 'Limitada (esconde o contacto)';
+    case 'PRIVATE':
+      return 'Privada (só tu e os administradores)';
+    case 'RESTRICTED':
+      return 'Restrita';
+    case null:
+      return '—';
+    default:
+      return nivel;
+  }
+}
 
 /** "1 trabalho" / "3 trabalhos". */
 export function plural(n: number, singular: string, varios: string): string {

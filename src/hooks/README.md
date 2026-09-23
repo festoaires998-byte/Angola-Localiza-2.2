@@ -30,3 +30,7 @@ Ponte entre ecrãs e o resto (useGps, useFilaSync, useSessao, useCargos).
 - `useInfoLocal(posicao, online, preciso)` — Plus Code, Código Postal Digital e província/município
   (`src/services/location`). Com `preciso` false (mais de ±10 m) o código fica provisório e não é confirmado.
 - `useMapaOffline(online)` — estado do mapa do Huambo no telemóvel (`src/services/mapas`).
+- `useMoradas(online, { atualizarAoAbrir })` — favoritos do utilizador (separador Moradas): `itens`,
+  `aAtualizar`, `erro`, `atualizadoEm`, `pendentes`, `atualizar()`, `alterar(id, { nome, categoria })`,
+  `remover(id)`. Abre logo com o que está no telemóvel; com rede envia o que ficou pendente e traz a lista.
+
