@@ -21,10 +21,14 @@ aparecem na barra e não abrem nem por link. Os que ainda não existem mostram
 "Em construção" (`src/components/EmConstrucao.tsx`).
 
 Staff com KYC por verificar vê, por cima de tudo, o aviso fixo: "A tua identidade
-ainda não foi verificada. Até lá só tens acesso ao Mapa e às Definições."
+ainda não foi verificada. Até lá só tens acesso ao Mapa e à Conta."
 
 `definicoes/` tem o ecrã das Definições (conta, sincronização, avisos, Sair, versão)
 e `definicoes/diagnostico.tsx` (o antigo ecrã provisório de diagnóstico).
+
+Nomes na barra (curtos, para caberem os 8): Mapa, Moradas (`guardados`),
+Enviar (`entrega`), Entregas (`minhas-entregas`), Campo, Validar, Gestão (`admin`)
+e Conta (`definicoes`). Os nomes das rotas não mudaram.
 
 O super_admin vê todos. Staff (quem tem cargos) só vê mais do que mapa e
 definicoes depois de ter o KYC em `ID_VERIFIED` **e** a sessão em AAL2 (código MFA).
