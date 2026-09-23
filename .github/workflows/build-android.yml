@@ -21,6 +21,16 @@ jobs:
       # Lido pelo eas-cli. O GitHub esconde (***) o valor dos segredos nos registos.
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
+      # Pára logo no início, com uma explicação, se o segredo não estiver criado.
+      # (Sem ele, o EXPO_TOKEN chega vazio e o eas só diz "Not logged in".)
+      - name: Verificar o segredo EXPO_TOKEN
+        run: |
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "::error::O segredo EXPO_TOKEN não existe neste repositório (ou está vazio). Cria-o em Settings → Secrets and variables → Actions → separador 'Secrets' → 'New repository secret', com o nome exato EXPO_TOKEN e um token de expo.dev/settings/access-tokens. Depois corre este workflow outra vez."
+            exit 1
+          fi
+          echo "Segredo EXPO_TOKEN encontrado."
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
