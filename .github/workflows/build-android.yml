@@ -72,11 +72,18 @@ jobs:
           fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
-          # Só nesta cópia temporária: o eas build precisa do ID no app.json.
-          jq --arg id "$id" '.expo.extra.eas.projectId = $id' app.json > app.json.novo
-          mv app.json.novo app.json
-          # O eas build envia o que está no git: fica num commit local (não é enviado ao GitHub).
-          git -c user.name=ci -c user.email=ci@localhost commit -q -am "Project ID (só no CI)"
+          # O app.json já traz o projectId. Só se for diferente é que se muda, e só
+          # nesta cópia temporária (o eas build precisa do ID certo no app.json).
+          atual=$(jq -r '.expo.extra.eas.projectId // empty' app.json)
+          if [ "$atual" != "$id" ]; then
+            echo "::warning::O projectId do app.json ($atual) é diferente do da Expo ($id). Neste build usa-se o da Expo."
+            jq --arg id "$id" '.expo.extra.eas.projectId = $id' app.json > app.json.novo
+            mv app.json.novo app.json
+            # O eas build envia o que está no git: fica num commit local (não é enviado ao GitHub).
+            git -c user.name=ci -c user.email=ci@localhost commit -q -am "Project ID (só no CI)"
+          else
+            echo "O projectId do app.json já está certo."
+          fi
 
           {
             echo "## Projeto Expo"
