@@ -16,7 +16,7 @@ jobs:
     # Se a fila da Expo demorar mais do que isto, o build continua lá na mesma.
     timeout-minutes: 120
     env:
-      EXPO_OWNER: aires_festo
+      EXPO_OWNER: airesfestos-team
       EXPO_SLUG: angola-localiza
       # Lido pelo eas-cli. O GitHub esconde (***) o valor dos segredos nos registos.
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -52,7 +52,7 @@ jobs:
       - name: Confirmar a conta Expo
         run: eas whoami
 
-      # Procura o projeto que JÁ existe (@aires_festo/angola-localiza) e usa o
+      # Procura o projeto que JÁ existe (@airesfestos-team/angola-localiza) e usa o
       # seu ID. Não cria nenhum projeto: se não o encontrar, pára com erro.
       - name: Ligar ao projeto Expo existente
         id: projeto
