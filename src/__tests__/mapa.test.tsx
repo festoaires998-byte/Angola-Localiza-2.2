@@ -40,6 +40,8 @@ function medida(p: typeof POS, extra: Record<string, unknown> = {}) {
     aMedir: false,
     leiturasBoas: 0,
     necessarias: 3,
+    limite: 10,
+    melhorAteAgora: null,
     ...extra,
   };
 }
@@ -75,7 +77,8 @@ describe('separador Mapa', () => {
     expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
     expect(encode(POS.latitude, POS.longitude).replace('+', '')).toHaveLength(11);
     expect(screen.getByText('± 6 m (boa)')).toBeTruthy();
-    expect(screen.getByText('Média de 3 leituras do GPS.')).toBeTruthy();
+    expect(screen.getByText('Média de 3 leituras do GPS com menos de ±10 m.')).toBeTruthy();
+    expect(screen.queryByText(/Pouco preciso/)).toBeNull();
     expect(screen.getByText('AO-HUA-MNFQR6JW-41')).toBeTruthy();
     expect(screen.getByText('Provisório')).toBeTruthy();
     expect(screen.getByText('Calculado neste telemóvel. É confirmado quando houver rede.')).toBeTruthy();
@@ -164,15 +167,16 @@ describe('separador Mapa', () => {
   });
 
   test('a medir pela primeira vez: mostra as leituras e ainda não mostra código', () => {
-    mockMedida = { captura: null, aMedir: true, leiturasBoas: 2, necessarias: 3 };
+    mockMedida = { captura: null, aMedir: true, leiturasBoas: 2, necessarias: 3, limite: 10, melhorAteAgora: 7.6 };
     desenhar();
-    expect(screen.getByText('A medir a tua posição… leitura 2 de 3. Fica parado uns segundos.')).toBeTruthy();
+    expect(screen.getByText('A medir a tua posição… leitura 2 de 3 com menos de ±10 m. Fica parado uns segundos.')).toBeTruthy();
+    expect(screen.getByText('Melhor até agora: ± 8 m.')).toBeTruthy();
     expect(screen.queryByText('Plus Code')).toBeNull();
   });
 
   test('sem sinal do GPS: pede para ir para um sítio aberto', () => {
     mockGps = { estado: 'a_procurar', ultima: null };
-    mockMedida = { captura: null, aMedir: true, leiturasBoas: 0, necessarias: 3 };
+    mockMedida = { captura: null, aMedir: true, leiturasBoas: 0, necessarias: 3, limite: 10, melhorAteAgora: null };
     desenhar();
     expect(screen.getByText(/A procurar o sinal do GPS/)).toBeTruthy();
   });
@@ -198,9 +202,12 @@ describe('separador Mapa', () => {
     expect(mockMedirDeNovo).toHaveBeenCalledTimes(1);
   });
 
-  test('sinal fraco: avisa que o código pode não ser o deste ponto', () => {
-    mockMedida = medida({ ...POS, precisao: 45 }, { captura: { ...POS, precisao: 45, leituras: 3, fraca: true }, aMedir: true });
+  test('acima de 10 m: mostra o código com "Pouco preciso" e o aviso, e continua a medir', () => {
+    mockMedida = medida(POS, { captura: { ...POS, precisao: 15, leituras: 3, fraca: true }, aMedir: true, leiturasBoas: 1 });
     desenhar();
-    expect(screen.getByText(/Sinal do GPS fraco/)).toBeTruthy();
+    expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
+    expect(screen.getByText('Pouco preciso (± 15 m)')).toBeTruthy();
+    expect(screen.getByText('A tentar ter 3 leituras com menos de ±10 m… (1 de 3)')).toBeTruthy();
+    expect(screen.getByText(/Precisão acima de 10 m: o código pode não ser o deste ponto/)).toBeTruthy();
   });
 });

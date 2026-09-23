@@ -4,8 +4,10 @@ import {
   CAPTURA_INICIAL,
   juntarLeitura,
   LEITURAS_NECESSARIAS,
+  LIMITE_PRECISAO_M,
   leiturasBoas,
   medirDeNovo,
+  melhorPrecisao,
   type Captura,
   type Leitura,
 } from '@/domain/enderecamento/capturaGps';
@@ -18,6 +20,10 @@ export interface CapturaGps {
   /** Leituras boas já juntas na medição em curso (para "leitura 2 de 3"). */
   leiturasBoas: number;
   necessarias: number;
+  /** Precisão pedida (m): só as leituras abaixo disto contam. */
+  limite: number;
+  /** Melhor precisão da medição em curso (m), para "melhor até agora ±15 m". */
+  melhorAteAgora: number | null;
   medirDeNovo(): void;
 }
 
@@ -40,6 +46,8 @@ export function useCapturaGps(leitura: Leitura | null): CapturaGps {
     aMedir: estado.aMedir,
     leiturasBoas: leiturasBoas(estado.leituras),
     necessarias: LEITURAS_NECESSARIAS,
+    limite: LIMITE_PRECISAO_M,
+    melhorAteAgora: melhorPrecisao(estado.leituras),
     medirDeNovo: denovo,
   };
 }

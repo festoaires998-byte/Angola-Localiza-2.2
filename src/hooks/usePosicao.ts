@@ -45,10 +45,11 @@ export function usePosicao(): EstadoPosicao & { tentarDeNovo(): void } {
       const ultima = await Location.getLastKnownPositionAsync().catch(() => null);
       if (!ativo) return;
       setEstado({ estado: 'a_procurar', ultima: ultima ? dePosicao(ultima) : null });
-      // Uma leitura por segundo, mesmo parado (distanceInterval 0): a captura
-      // (useCapturaGps) precisa de várias leituras seguidas para fazer a média.
+      // A precisão mais alta que o telemóvel dá, uma leitura por segundo, mesmo
+      // parado (distanceInterval 0): a captura (useCapturaGps) precisa de várias
+      // leituras seguidas abaixo de 10 m para fazer a média.
       const s = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 1000, distanceInterval: 0 },
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
         (l) => ativo && setEstado({ estado: 'ok', posicao: dePosicao(l) }),
         () => ativo && setEstado((e) => (e.estado === 'ok' ? e : { estado: 'gps_desligado' })),
       );

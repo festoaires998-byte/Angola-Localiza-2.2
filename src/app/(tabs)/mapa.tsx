@@ -91,9 +91,12 @@ function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGp
         <Subtitulo>Onde estou</Subtitulo>
         <Texto>
           {comSinal
-            ? `A medir a tua posição… leitura ${medida.leiturasBoas} de ${medida.necessarias}. Fica parado uns segundos.`
+            ? `A medir a tua posição… leitura ${medida.leiturasBoas} de ${medida.necessarias} com menos de ±${medida.limite} m. Fica parado uns segundos.`
             : 'A procurar o sinal do GPS… Se demorar, vai para um sítio aberto.'}
         </Texto>
+        {comSinal && medida.melhorAteAgora !== null ? (
+          <Text style={estilos.nota}>{`Melhor até agora: ± ${Math.round(medida.melhorAteAgora)} m.`}</Text>
+        ) : null}
       </Cartao>
     );
   }
@@ -110,16 +113,20 @@ function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGp
         </Text>
       </View>
       <Linha nome="Precisão do GPS" valor={precisao.qualidade ? `${precisao.texto} (${precisao.qualidade})` : precisao.texto} />
+      {captura.fraca ? (
+        <Text style={[estilos.etiqueta, estilos.provisorio]}>{`Pouco preciso (± ${Math.round(captura.precisao)} m)`}</Text>
+      ) : null}
       <Text style={estilos.nota}>
-        {medida.aMedir
-          ? `A medir de novo… leitura ${medida.leiturasBoas} de ${medida.necessarias}.`
-          : `Média de ${captura.leituras} leituras do GPS.`}
+        {captura.fraca
+          ? `A tentar ter 3 leituras com menos de ±${medida.limite} m… (${medida.leiturasBoas} de ${medida.necessarias})`
+          : medida.aMedir
+            ? `A medir de novo… leitura ${medida.leiturasBoas} de ${medida.necessarias}.`
+            : `Média de ${captura.leituras} leituras do GPS com menos de ±${medida.limite} m.`}
       </Text>
       {captura.fraca ? (
         <Caixa tipo="aviso">
           <Text style={estilos.textoCaixa}>
-            Sinal do GPS fraco: não houve 3 leituras com menos de ±30 m. O código pode não ser o deste ponto. Vai para
-            um sítio aberto.
+            {`Precisão acima de ${medida.limite} m: o código pode não ser o deste ponto. Vai para um sítio aberto (longe de paredes e tetos). O código melhora sozinho.`}
           </Text>
         </Caixa>
       ) : null}

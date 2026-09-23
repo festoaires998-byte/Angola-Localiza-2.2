@@ -72,15 +72,19 @@ com acento nas primeiras letras (ex.: "Uíge" → `UÍG`) dá um código que o
 Uma leitura do GPS sozinha pode saltar 10–20 m e mudar o código postal de célula
 (cada célula tem ~38 m × 19 m). Por isso o código não usa uma leitura só:
 
-1. junta pelo menos **3 leituras**;
-2. deita fora as piores que **±30 m**;
-3. faz a **média com peso** 1/precisão² (uma leitura de ±5 m pesa 16 vezes mais
-   que uma de ±20 m). A precisão mostrada é a melhor das leituras usadas.
+1. junta pelo menos **3 leituras**, uma por segundo, com a precisão mais alta do telemóvel;
+2. só contam as leituras com menos de **±10 m**;
+3. faz a **média com peso** 1/precisão² (uma leitura de ±4 m pesa 4 vezes mais
+   que uma de ±8 m). A precisão mostrada é a melhor das leituras usadas.
 
-Se ao fim de 10 leituras não houver 3 boas, usa as 3 melhores e marca a
-captura como **fraca** (o ecrã avisa). Depois de medida, a posição só volta a
-ser medida se uma leitura boa mostrar que a pessoa se afastou mais de 20 m (ou
-com o botão "Medir de novo"). No Mapa, o ponto azul continua ao vivo; o Plus
-Code e o código postal usam a posição medida. Guardar uma morada vai usar a
-mesma captura e não deve aceitar uma captura fraca.
+Com a pessoa parada, cada leitura nova abaixo de 10 m entra na média (até às
+10 mais precisas), e a posição vai melhorando. Se uma leitura boa mostrar que a
+pessoa se afastou mais de 20 m, mede-se de novo (também há o botão "Medir de novo").
+
+Se ao fim de 20 leituras (~20 s) não houver 3 abaixo de 10 m (é comum dentro de
+casa), usa as 3 melhores e marca a captura como **fraca**: o Mapa mostra o
+código com a etiqueta "Pouco preciso (± N m)" e um aviso, e continua a medir.
+No Mapa, o ponto azul continua ao vivo; o Plus Code e o código postal usam a
+posição medida. Guardar uma morada vai usar a mesma captura e **não aceita uma
+captura fraca**.
 
