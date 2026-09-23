@@ -17,4 +17,7 @@ Ponte entre ecrãs e o resto (useGps, useFilaSync, useSessao, useCargos).
   - `aSincronizar`, `ultimaSincronizacao` (ISO);
   - `ultimoErro` — frase simples para mostrar ao utilizador (ou `null`);
   - `precisaEntrarDeNovo` — o servidor recusou a sessão; mostrar "Entrar de novo";
-  - `sincronizarAgora()` — botão "Sincronizar agora" (`forcar: true`, não espera a pausa entre tentativas).
+  - `sincronizarAgora()` — botão "Sincronizar agora" (`forcar: true`, não espera a pausa entre tentativas);
+  - `marcarAvisoVisto(operationId)` — botão "Já vi" de um aviso: grava `visto_em` em
+    `provas_evidencia` e o aviso deixa de aparecer. A prova **nunca** é apagada.
+- `useLinkAuth()` — estado do último link do email (recuperação / confirmação).

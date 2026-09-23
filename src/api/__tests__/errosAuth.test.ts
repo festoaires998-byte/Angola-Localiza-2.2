@@ -17,6 +17,8 @@ describe('traduzirErroAuth', () => {
     ['otp_expired', 'Este link expirou ou já foi usado. Pede um novo.'],
     ['Email link is invalid or has expired', 'Este link expirou ou já foi usado. Pede um novo.'],
     ['New password should be different from the old password. same password', 'A nova palavra-passe tem de ser diferente da anterior.'],
+    ['Invalid TOTP code entered', 'O código está errado ou já mudou. Escreve o código que aparece agora na app de autenticação.'],
+    ['Network request failed', 'Sem ligação à internet. Liga os dados móveis ou o Wi-Fi e tenta outra vez.'],
     ['Algo diferente aconteceu', 'Algo diferente aconteceu'],
     ['', 'Erro ao processar.'],
     ['   ', 'Erro ao processar.'],

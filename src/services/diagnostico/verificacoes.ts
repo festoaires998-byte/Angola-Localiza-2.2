@@ -1,5 +1,5 @@
 /**
- * Verificações do ecrã provisório de diagnóstico (primeiro build no telemóvel).
+ * Verificações do ecrã de diagnóstico (Definições → Diagnóstico).
  *
  * Cada módulo é importado só dentro da sua verificação: se uma peça nativa
  * falhar ao carregar, só essa verificação fica com ❌ e as outras correm na mesma.

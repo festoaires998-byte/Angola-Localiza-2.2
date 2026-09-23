@@ -576,7 +576,7 @@ describe('migração 003', () => {
        VALUES ('d1', '{"kty":"EC","crv":"P-256","x":"xx","y":"yy"}', 0, '2026-09-01T10:00:00.000Z')`,
     );
 
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(3);
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(MIGRACOES.length);
 
     expect((await criarRepositorioChavesDispositivo(antiga).obter('d1'))!.chave_publica_jwk).toEqual({
       kty: 'EC',
@@ -623,10 +623,49 @@ describe('provas_evidencia', () => {
         payload: { proof: { crypto_signature: 'sig', photo_url: 'https://x' } },
         motivo: 'não confere',
         criada_em: '2026-09-23T10:00:00.000Z',
+        visto_em: null,
       },
     ]);
     expect((await evidencias.obter('op-2'))!.user_id).toBe('u-beto');
     expect(await evidencias.obter('op-3')).toBeNull();
+  });
+
+  test('"Já vi" esconde o aviso da lista, mas nunca apaga a prova', async () => {
+    const db = await baseMigrada();
+    let agora = new Date('2026-09-23T10:00:00.000Z');
+    const evidencias = criarRepositorioProvasEvidencia(db, () => agora);
+    await evidencias.guardar({ operation_id: 'op-1', user_id: 'u-ana', device_id: 'a', payload: {}, motivo: 'm' });
+    await evidencias.guardar({ operation_id: 'op-2', user_id: 'u-ana', device_id: 'a', payload: {}, motivo: 'm' });
+
+    // Outro utilizador não consegue marcar.
+    expect(await evidencias.marcarVista('u-beto', 'op-1')).toBe(false);
+    agora = new Date('2026-09-23T12:00:00.000Z');
+    expect(await evidencias.marcarVista('u-ana', 'op-1')).toBe(true);
+    expect(await evidencias.marcarVista('u-ana', 'op-1')).toBe(false);
+
+    const naoVistas = await evidencias.listarDoUtilizador('u-ana', { soNaoVistas: true });
+    expect(naoVistas.map((e) => e.operation_id)).toEqual(['op-2']);
+    expect(await evidencias.listarDoUtilizador('u-ana')).toHaveLength(2);
+    expect((await evidencias.obter('op-1'))!.visto_em).toBe('2026-09-23T12:00:00.000Z');
+
+    // Reenviar a mesma prova não volta a mostrar o aviso.
+    await evidencias.guardar({ operation_id: 'op-1', user_id: 'u-ana', device_id: 'a', payload: { x: 1 }, motivo: 'm' });
+    expect((await evidencias.obter('op-1'))!.visto_em).toBe('2026-09-23T12:00:00.000Z');
+  });
+});
+
+describe('migração 004', () => {
+  test('mantém as provas que já existiam, ainda por ver', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 3));
+    await antiga.run(
+      `INSERT INTO provas_evidencia (operation_id, user_id, device_id, payload_json, motivo, criada_em)
+       VALUES ('o', 'u', 'd', '{}', 'm', '2026-09-01T10:00:00.000Z')`,
+    );
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(4);
+    const repo = criarRepositorioProvasEvidencia(antiga);
+    expect((await repo.obter('o'))!.visto_em).toBeNull();
+    expect(await repo.listarDoUtilizador('u', { soNaoVistas: true })).toHaveLength(1);
   });
 });
 

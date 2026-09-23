@@ -3,11 +3,13 @@ import type { Factor } from '@supabase/supabase-js';
 import { cofreApp } from '@/services/cofre/cofreApp';
 
 import { criarAdesao, type ResultadoAdesao, type ResultadoConsumo } from './adesao';
+import type { LinkAuth } from '@/services/links/linksProfundos';
+
 import { chamarFuncao } from './edge/chamarFuncao';
 import { ErroAuth } from './errosAuth';
 import { supabase } from './supabase';
 
-export { ErroAuth, traduzirErroAuth } from './errosAuth';
+export { eErroDeRede, ErroAuth, traduzirErroAuth } from './errosAuth';
 export type { ResultadoConsumo } from './adesao';
 
 /**
@@ -44,12 +46,19 @@ export async function entrar(email: string, password: string): Promise<Resultado
 /**
  * Cria conta. Se o projeto exigir confirmação por email, `precisaConfirmar`
  * vem a true e ainda não há sessão.
+ * `redirecionarPara` é o link que o email de confirmação abre
+ * (ex.: angolalocaliza://email-confirmado).
  */
 export async function criarConta(
   email: string,
   password: string,
+  redirecionarPara?: string,
 ): Promise<{ userId: string | null; precisaConfirmar: boolean }> {
-  const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    ...(redirecionarPara ? { options: { emailRedirectTo: redirecionarPara } } : {}),
+  });
   if (error) falhar(error);
   if (data.session) await consumirAdesaoPendente();
   return { userId: data.user?.id ?? null, precisaConfirmar: !data.session };
@@ -64,6 +73,24 @@ export async function recuperarPassword(email: string, redirecionarPara?: string
     email.trim(),
     redirecionarPara ? { redirectTo: redirecionarPara } : undefined,
   );
+  if (error) falhar(error);
+}
+
+/**
+ * Abre a sessão que vem num link do email (recuperação ou confirmação).
+ * Lança ErroAuth (em português) se o link expirou ou não serve.
+ */
+export async function abrirSessaoDoLink(link: LinkAuth): Promise<void> {
+  if (link.tipo === 'erro') falhar({ message: link.codigo === 'otp_expired' ? 'otp_expired' : link.mensagem });
+  if (link.tipo === 'codigo') {
+    const { error } = await supabase.auth.exchangeCodeForSession(link.codigo);
+    if (error) falhar(error);
+    return;
+  }
+  const { error } = await supabase.auth.setSession({
+    access_token: link.accessToken,
+    refresh_token: link.refreshToken,
+  });
   if (error) falhar(error);
 }
 
@@ -141,6 +168,20 @@ export async function desafiarEVerificarTotp(factorId: string, codigo: string): 
     code: codigo.replace(/\s+/g, ''),
   });
   if (error) falhar(error);
+}
+
+/**
+ * Apaga os fatores TOTP que ficaram a meio (inscrição começada e nunca
+ * confirmada), para se poder começar de novo. Os verificados não são tocados.
+ */
+export async function removerFatoresPorVerificar(): Promise<void> {
+  const { todos } = await listarFatores();
+  for (const fator of todos) {
+    if (fator.factor_type === 'totp' && fator.status !== 'verified') {
+      const { error } = await supabase.auth.mfa.unenroll({ factorId: fator.id });
+      if (error) falhar(error);
+    }
+  }
 }
 
 /** Fatores do utilizador: todos e só os TOTP verificados. Precisa de rede. */

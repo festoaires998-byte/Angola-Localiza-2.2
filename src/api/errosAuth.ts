@@ -14,7 +14,23 @@ const TRADUCOES: readonly [readonly string[], string][] = [
     'Este link expirou ou já foi usado. Pede um novo.',
   ],
   [['same password'], 'A nova palavra-passe tem de ser diferente da anterior.'],
+  [
+    ['invalid totp code', 'invalid mfa code', 'totp code', 'challenge and verify'],
+    'O código está errado ou já mudou. Escreve o código que aparece agora na app de autenticação.',
+  ],
+  [
+    ['network request failed', 'failed to fetch', 'fetch failed', 'network error', 'sem ligação'],
+    'Sem ligação à internet. Liga os dados móveis ou o Wi-Fi e tenta outra vez.',
+  ],
 ];
+
+/** A mensagem (original, em inglês) indica falta de rede? */
+export function eErroDeRede(mensagem: string | null | undefined): boolean {
+  const m = (mensagem ?? '').toLowerCase();
+  return ['network request failed', 'failed to fetch', 'fetch failed', 'network error', 'sem ligação'].some(
+    (p) => m.includes(p),
+  );
+}
 
 export function traduzirErroAuth(mensagem: string | null | undefined): string {
   const texto = (mensagem ?? '').trim();
