@@ -8,15 +8,26 @@ import { createHash } from 'crypto';
 import { aplicarMigracoes } from '@/database/migrations';
 import { criarRepositorioFicheirosPendentes } from '@/database/repositories/ficheirosPendentes';
 import { criarRepositorioFilaSaida, type TipoOperacao } from '@/database/repositories/filaSaida';
+import { criarRepositorioChavesDispositivo } from '@/database/repositories/chavesDispositivo';
+import { criarRepositorioProvasEvidencia } from '@/database/repositories/provasEvidencia';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
-import { criarAssinarProva, paraCamposProva } from '@/services/crypto/assinarProva';
-import type { ResultadoRegisto } from '@/services/crypto/chaveDispositivo';
+import {
+  criarAssinarProva,
+  paraCamposProva,
+  provaAssinadaCom,
+} from '@/services/crypto/assinarProva';
+import {
+  criarChaveDispositivo,
+  type EstadoChaves,
+  type ResultadoRegisto,
+} from '@/services/crypto/chaveDispositivo';
 import { chavePublicaParaJwk } from '@/services/crypto/jwk';
 
 import {
+  AVISO_ASSINATURA_NAO_CONFERE,
   criarMotorSync,
-  ERRO_CHAVE_ANTIGA,
   ERRO_FOTO_ALTERADA,
+  type DependenciasMotor,
   ErroSessaoInvalida,
   MENSAGENS,
   type SessaoSync,
@@ -85,20 +96,34 @@ async function montar(opcoes: { tamanhoLote?: number } = {}) {
   const gerarId = () => `op-${String(++n).padStart(3, '0')}`;
   const fila = criarRepositorioFilaSaida(db, { deviceId: 'app-teste', relogio, gerarId });
   const ficheiros = criarRepositorioFicheirosPendentes(db, { relogio });
+  const evidencias = criarRepositorioProvasEvidencia(db, relogio);
   const disco = new Map<string, Uint8Array>();
   const pedidos: Pedido[] = [];
   const ctx = {
     sessao: ANA as SessaoSync | null,
     online: true,
     responder: respostaNormal,
+    /** O que o registo falso da chave devolve. */
     chave: CHAVE_OK,
+    /** Chaves vistas pelo motor (falso): a local ainda não está no servidor. */
+    chaves: { deviceId: 'app-teste', local: JWK_TESTE, noServidor: {} } as EstadoChaves,
     /** Pedidos HTTP já feitos quando o motor pediu o registo da chave. */
     registosChave: [] as number[],
+    /** Chave de assinatura usada pelo motor (trocável por uma real). */
+    chaveAssinatura: null as unknown as DependenciasMotor['chaveAssinatura'],
     renovacoes: 0,
     renovar: async (): Promise<SessaoSync | null> => {
       // Como o supabase-js: a sessão renovada passa a ser a sessão guardada.
       ctx.sessao = { ...ANA, accessToken: 'token-novo', expiraEm: null };
       return ctx.sessao;
+    },
+  };
+  ctx.chaveAssinatura = {
+    estado: async () => ({ ...ctx.chaves, noServidor: { ...ctx.chaves.noServidor } }),
+    garantirRegistada: async () => {
+      ctx.registosChave.push(pedidos.length);
+      if (ctx.chave.tipo === 'ok') ctx.chaves.noServidor['app-teste'] = ctx.chaves.local!;
+      return ctx.chave;
     },
   };
 
@@ -111,10 +136,11 @@ async function montar(opcoes: { tamanhoLote?: number } = {}) {
       return ctx.renovar();
     },
     estaOnline: async () => ctx.online,
-    garantirChaveRegistada: async () => {
-      ctx.registosChave.push(pedidos.length);
-      return ctx.chave;
+    chaveAssinatura: {
+      estado: (u) => ctx.chaveAssinatura.estado(u),
+      garantirRegistada: (s) => ctx.chaveAssinatura.garantirRegistada(s),
     },
+    evidencias,
     lerFicheiro: async (c) => disco.get(c) ?? null,
     apagarFicheiro: async (c) => {
       disco.delete(c);
@@ -168,6 +194,7 @@ async function montar(opcoes: { tamanhoLote?: number } = {}) {
     db,
     fila,
     ficheiros,
+    evidencias,
     disco,
     pedidos,
     ctx,
@@ -637,7 +664,21 @@ describe('ficheiros locais', () => {
 });
 
 describe('chave do aparelho e provas de entrega', () => {
-  test('pede o registo da chave antes de enviar a prova assinada', async () => {
+  const corpoEnviado = (t: Awaited<ReturnType<typeof montar>>, i = 0) =>
+    (t.pedidosSync()[i].corpo as { operations: { payload: unknown }[] }).operations[0].payload;
+
+  test('prova assinada com a chave que o servidor já tem: segue sem pedir registo', async () => {
+    const t = await montar();
+    t.ctx.chaves.noServidor['app-teste'] = JWK_TESTE;
+    const op = await t.operacao('delivery_proof', await provaAssinada());
+
+    await t.motor.sincronizar();
+
+    expect(t.ctx.registosChave).toEqual([]);
+    expect((await t.fila.obter(op.operation_id))!.estado).toBe('concluida');
+  });
+
+  test('prova assinada com a chave local ainda não registada: regista antes de enviar', async () => {
     const t = await montar();
     const op = await t.operacao('delivery_proof', await provaAssinada());
 
@@ -646,14 +687,16 @@ describe('chave do aparelho e provas de entrega', () => {
     expect(t.ctx.registosChave).toEqual([0]); // antes de qualquer pedido HTTP
     expect(t.pedidosSync().map(idsEnviados)).toEqual([[op.operation_id]]);
     expect((await t.fila.obter(op.operation_id))!.estado).toBe('concluida');
-    expect(r).toMatchObject({ concluidas: 1, aguardamChave: 0 });
+    expect(r).toMatchObject({ concluidas: 1, aguardamChave: 0, avisos: 0 });
   });
 
-  test('sem provas de entrega não pede o registo da chave', async () => {
+  test('sem provas assinadas não pede o registo da chave', async () => {
     const t = await montar();
     await t.operacao('create_address', { nome: 'Rua 1' });
+    await t.operacao('delivery_proof', { delivery_id: 'd1', new_status: 'FAILED', proof: {} });
     await t.motor.sincronizar();
     expect(t.ctx.registosChave).toEqual([]);
+    expect(t.pedidosSync()).toHaveLength(1);
   });
 
   test('se o registo falhar, a prova espera sem somar tentativas e as outras seguem', async () => {
@@ -710,18 +753,221 @@ describe('chave do aparelho e provas de entrega', () => {
         return p;
       },
     ],
-  ])('a prova %s nunca é enviada e fica como evidência', async (_n, criar) => {
+  ])('a prova %s é enviada na mesma, com a assinatura original, e fica uma cópia local', async (_n, criar) => {
     const t = await montar();
-    const op = await t.operacao('delivery_proof', await criar());
+    t.ctx.chaves.noServidor['app-teste'] = JWK_TESTE;
+    const payload = await criar();
+    const op = await t.operacao('delivery_proof', payload);
 
     const r = await t.motor.sincronizar();
 
-    expect(t.pedidosSync()).toEqual([]);
-    expect(await t.fila.obter(op.operation_id)).toMatchObject({
-      estado: 'falhou_definitivo',
-      ultimo_erro: ERRO_CHAVE_ANTIGA,
+    // Enviada tal como foi assinada: o servidor verifica e marca crypto_verified = false.
+    expect(t.pedidosSync().map(idsEnviados)).toEqual([[op.operation_id]]);
+    expect(corpoEnviado(t)).toEqual(payload);
+    // Não fica marcada como falhada.
+    expect((await t.fila.obter(op.operation_id))!.estado).toBe('concluida');
+    expect(await t.fila.listarFalhadasDoUtilizador(ANA.userId)).toEqual([]);
+    // Cópia local como evidência (sobrevive à limpeza das concluídas).
+    expect(await t.evidencias.obter(op.operation_id)).toMatchObject({
+      user_id: ANA.userId,
+      device_id: 'app-teste',
+      payload,
+      motivo: AVISO_ASSINATURA_NAO_CONFERE,
     });
-    expect(r).toMatchObject({ definitivas: 1 });
-    expect(t.motor.estado.obter().ultimoErro).toBe(MENSAGENS.chaveAntiga);
+    t.avancar(30 * 24 * 60 * 60 * 1000);
+    await t.motor.sincronizar();
+    expect(await t.fila.obter(op.operation_id)).toBeNull();
+    expect(await t.evidencias.listarDoUtilizador(ANA.userId)).toHaveLength(1);
+    expect(r).toMatchObject({ concluidas: 1, definitivas: 0, avisos: 1 });
+    expect(t.ctx.registosChave).toEqual([]); // não conferir não obriga a registar nada
+  });
+
+  test('iPhone restaurado (device_id novo): as provas do aparelho anterior seguem sem aviso', async () => {
+    const t = await montar();
+    // O SQLite veio do backup: a app sabe que o servidor tem a chave do aparelho anterior.
+    const anterior = p256.keygen();
+    t.ctx.chaves.noServidor['app-anterior'] = chavePublicaParaJwk(anterior.publicKey);
+    const op = await t.operacao('delivery_proof', await provaAssinada(anterior.secretKey, 'app-anterior'));
+
+    const r = await t.motor.sincronizar();
+
+    expect((await t.fila.obter(op.operation_id))!.estado).toBe('concluida');
+    expect(await t.evidencias.obter(op.operation_id)).toBeNull();
+    expect(t.ctx.registosChave).toEqual([]);
+    expect(r).toMatchObject({ avisos: 0 });
+  });
+
+  test('a cópia local guarda o payload já com o URL real da foto', async () => {
+    const t = await montar();
+    t.ctx.chaves.noServidor['app-teste'] = JWK_TESTE;
+    const payload = await provaAssinada(p256.keygen().secretKey);
+    const op = await t.operacao('delivery_proof', {
+      ...payload,
+      proof: { ...payload.proof, photo_url: 'offline:f1' },
+    });
+    await t.foto('f1', op.operation_id, { bucket: 'delivery-proofs' });
+
+    await t.motor.sincronizar();
+
+    const guardada = (await t.evidencias.obter(op.operation_id))!.payload as { proof: Record<string, unknown> };
+    expect(guardada.proof.photo_url).toBe(`${URL}/storage/v1/object/public/delivery-proofs/offline-f1.jpg`);
+    expect(guardada.proof.crypto_signature).toBe(payload.proof.crypto_signature);
+  });
+});
+
+describe('chave nova: primeiro as provas da chave antiga, depois o registo (chave real)', () => {
+  const DEVICE = 'app-teste';
+
+  /** Liga o motor a uma chave real (criarChaveDispositivo) com cofre em memória. */
+  async function montarComChaveReal() {
+    const t = await montar();
+    const cofre = new Map<string, string>();
+    const chaves = criarRepositorioChavesDispositivo(t.db);
+    const ordem: string[] = [];
+    let registoResponde: 'ok' | string = 'ok';
+    const criar = () =>
+      criarChaveDispositivo({
+        cofre: {
+          getItemAsync: async (n) => cofre.get(n) ?? null,
+          setItemAsync: async (n, v) => {
+            cofre.set(n, v);
+          },
+          deleteItemAsync: async (n) => {
+            cofre.delete(n);
+          },
+        },
+        chaves,
+        obterIdDispositivo: async () => DEVICE,
+        prepararAleatorio: () => undefined,
+        erroDeLeituraEPerda: false,
+        obterSessao: async () => ANA,
+        estaOnline: async () => true,
+        pedirRegisto: async (_token, corpo) => {
+          ordem.push(`registo ${corpo.public_key_jwk.x.slice(0, 6)}`);
+          return registoResponde;
+        },
+        haProvasPorEnviarAssinadasCom: async (userId, deviceId, jwk) =>
+          (await t.fila.listarPorEnviarDoTipo(userId, 'delivery_proof')).some((op) =>
+            provaAssinadaCom(op.payload, deviceId, jwk),
+          ),
+      });
+    let chave = criar();
+    t.ctx.chaveAssinatura = {
+      estado: (u) => chave.estado(u),
+      garantirRegistada: (s) => chave.garantirChaveRegistada(s),
+    };
+    const responderAntes = t.ctx.responder;
+    t.ctx.responder = (p) => {
+      if (eSync(p)) ordem.push(`sync ${idsEnviados(p).join(',')}`);
+      return responderAntes(p);
+    };
+    async function prova(deliveryId: string) {
+      const assinar = criarAssinarProva(chave, () => new Date('2026-09-23T09:00:00.000Z'));
+      const p = await assinar({
+        delivery_id: deliveryId,
+        lat: -8.8,
+        lng: 13.2,
+        plus_code: '6CVJ5QP7+M9',
+        foto_sha256: null,
+        assinatura_manuscrita_sha256: null,
+      });
+      return t.operacao('delivery_proof', { delivery_id: deliveryId, new_status: 'DELIVERED', proof: paraCamposProva(p) });
+    }
+    return {
+      t,
+      chaves,
+      ordem,
+      prova,
+      chavePublica: () => chave.chavePublica(),
+      /** A chave privada desaparece (ex.: backup restaurado) e a app reabre. */
+      perderChavePrivada() {
+        cofre.clear();
+        chave = criar();
+      },
+      registoResponde(r: string) {
+        registoResponde = r;
+      },
+    };
+  }
+
+  test('envia as provas da chave antiga, regista a chave nova e envia as novas, numa só sincronização', async () => {
+    const c = await montarComChaveReal();
+    // A chave antiga foi registada e há uma prova dela por enviar (sem rede na altura).
+    const antiga = await c.chavePublica();
+    const provaAntiga = await c.prova('d-antiga');
+    c.t.ctx.online = false;
+    await c.t.motor.sincronizar();
+    c.t.ctx.online = true;
+    c.registoResponde('ok');
+    await c.chaves.registarNoServidor(ANA.userId, DEVICE, antiga.jwk);
+
+    c.perderChavePrivada();
+    const provaNova = await c.prova('d-nova'); // gera a chave nova ao assinar
+    const nova = await c.chavePublica();
+    expect(nova.jwk).not.toEqual(antiga.jwk);
+
+    const r = await c.t.motor.sincronizar();
+
+    expect(c.ordem).toEqual([
+      `sync ${provaAntiga.operation_id}`,
+      `registo ${nova.jwk.x.slice(0, 6)}`,
+      `sync ${provaNova.operation_id}`,
+    ]);
+    expect((await c.t.fila.obter(provaAntiga.operation_id))!.estado).toBe('concluida');
+    expect((await c.t.fila.obter(provaNova.operation_id))!.estado).toBe('concluida');
+    expect(await c.chaves.chaveNoServidor(ANA.userId, DEVICE)).toEqual(nova.jwk);
+    expect(await c.t.evidencias.listarDoUtilizador(ANA.userId)).toEqual([]); // ambas conferem
+    expect(r.motivo).toBe('ok');
+  });
+
+  test('se a prova antiga não passar, a chave nova não é registada e a prova nova espera sem tentativas', async () => {
+    const c = await montarComChaveReal();
+    const antiga = await c.chavePublica();
+    await c.chaves.registarNoServidor(ANA.userId, DEVICE, antiga.jwk);
+    const provaAntiga = await c.prova('d-antiga');
+    c.perderChavePrivada();
+    const provaNova = await c.prova('d-nova');
+    c.t.ctx.responder = (p) => {
+      if (eSync(p)) c.ordem.push(`sync ${idsEnviados(p).join(',')}`);
+      return eSync(p) ? { estado: 500, corpo: { error: 'falhou' } } : respostaNormal(p);
+    };
+
+    await c.t.motor.sincronizar();
+
+    expect(c.ordem).toEqual([`sync ${provaAntiga.operation_id}`]); // sem registo
+    expect(await c.chaves.chaveNoServidor(ANA.userId, DEVICE)).toEqual(antiga.jwk);
+    expect((await c.t.fila.obter(provaAntiga.operation_id))!.tentativas).toBe(1);
+    expect(await c.t.fila.obter(provaNova.operation_id)).toMatchObject({ estado: 'pendente', tentativas: 0 });
+
+    // O servidor volta: primeiro a antiga, depois o registo, depois a nova.
+    c.t.ctx.responder = (p) => {
+      if (eSync(p)) c.ordem.push(`sync ${idsEnviados(p).join(',')}`);
+      return respostaNormal(p);
+    };
+    await c.t.motor.sincronizar({ forcar: true });
+    expect(c.ordem.slice(1)).toEqual([
+      `sync ${provaAntiga.operation_id}`,
+      `registo ${(await c.chavePublica()).jwk.x.slice(0, 6)}`,
+      `sync ${provaNova.operation_id}`,
+    ]);
+  });
+
+  test('uma prova da chave antiga que chega depois do registo da nova é enviada com aviso', async () => {
+    const c = await montarComChaveReal();
+    const antiga = await c.chavePublica();
+    await c.chaves.registarNoServidor(ANA.userId, DEVICE, antiga.jwk);
+    // Assinada com a chave antiga mas só posta na fila depois (ex.: restaurada de outro lado).
+    const payloadAntigo = (await c.prova('d-antiga')).payload;
+    await c.t.db.run('DELETE FROM fila_saida');
+    c.perderChavePrivada();
+    await c.prova('d-nova');
+    await c.t.motor.sincronizar();
+    expect(await c.chaves.chaveNoServidor(ANA.userId, DEVICE)).toEqual((await c.chavePublica()).jwk);
+
+    const atrasada = await c.t.operacao('delivery_proof', payloadAntigo);
+    await c.t.motor.sincronizar();
+
+    expect((await c.t.fila.obter(atrasada.operation_id))!.estado).toBe('concluida');
+    expect((await c.t.evidencias.obter(atrasada.operation_id))!.motivo).toBe(AVISO_ASSINATURA_NAO_CONFERE);
   });
 });

@@ -91,6 +91,8 @@ let registos: { token: string; corpo: CorpoRegisto }[];
 let online: boolean;
 let respostaRegisto: 'ok' | 'sessao' | string;
 let preparacoes: number;
+/** Chaves com provas "por enviar" na fila falsa (JSON das JWK). */
+let provasPorEnviarCom: Set<string>;
 
 beforeEach(async () => {
   ({ db } = await criarBaseDadosSqlJs());
@@ -100,6 +102,7 @@ beforeEach(async () => {
   online = true;
   respostaRegisto = 'ok';
   preparacoes = 0;
+  provasPorEnviarCom = new Set();
 });
 
 function montar(extra: Partial<DependenciasChave> = {}) {
@@ -118,6 +121,7 @@ function montar(extra: Partial<DependenciasChave> = {}) {
       registos.push({ token, corpo });
       return respostaRegisto;
     },
+    haProvasPorEnviarAssinadasCom: async (_u, _d, jwk) => provasPorEnviarCom.has(JSON.stringify(jwk)),
     ...extra,
   });
   const assinarProva = criarAssinarProva(chave, () => AGORA);
@@ -264,11 +268,8 @@ describe('chave do aparelho', () => {
     const [a, b] = await Promise.all([chave.chavePublica(), chave.chavePublica()]);
     expect(a).toEqual(b);
     expect(preparacoes).toBe(1); // getRandomValues preparado antes de gerar
-    expect(await chaves.obter(DEVICE)).toMatchObject({
-      chave_publica_jwk: a.jwk,
-      registada: false,
-      registada_user_id: null,
-    });
+    expect(await chaves.obter(DEVICE)).toMatchObject({ chave_publica_jwk: a.jwk, registada: false });
+    expect(await chaves.chaveNoServidor('u-ana', DEVICE)).toBeNull();
 
     // Uma nova instância (a app reabriu) usa a mesma chave.
     const outra = montar();
@@ -303,7 +304,8 @@ describe('chave do aparelho', () => {
     const primeira = montar();
     const antiga = await primeira.chave.chavePublica();
     await primeira.chave.garantirChaveRegistada();
-    expect(await primeira.chaves.obter(DEVICE)).toMatchObject({ registada: true, registada_user_id: 'u-ana' });
+    expect((await primeira.chaves.obter(DEVICE))!.registada).toBe(true);
+    expect(await primeira.chaves.chaveNoServidor('u-ana', DEVICE)).toEqual(antiga.jwk);
 
     // Backup restaurado: o SQLite e o device_id vêm, a chave privada (THIS_DEVICE_ONLY) não.
     cofre.itens.clear();
@@ -312,10 +314,12 @@ describe('chave do aparelho', () => {
 
     expect(nova.deviceId).toBe(DEVICE);
     expect(nova.jwk).not.toEqual(antiga.jwk);
-    expect(await depois.chaves.obter(DEVICE)).toMatchObject({
-      chave_publica_jwk: nova.jwk,
-      registada: false,
-      registada_user_id: null,
+    expect(await depois.chaves.obter(DEVICE)).toMatchObject({ chave_publica_jwk: nova.jwk, registada: false });
+    // A app continua a saber que o servidor tem a chave antiga.
+    expect(await depois.chave.estado('u-ana')).toEqual({
+      deviceId: DEVICE,
+      local: nova.jwk,
+      noServidor: { [DEVICE]: antiga.jwk },
     });
 
     // A próxima vez com rede regista a chave nova.
@@ -433,7 +437,8 @@ describe('garantirChaveRegistada', () => {
 
     expect(await chave.garantirChaveRegistada()).toEqual({ tipo: 'ok', deviceId: DEVICE, jwk });
     expect(registos).toEqual([{ token: 'token-ana', corpo: { device_id: DEVICE, public_key_jwk: jwk } }]);
-    expect(await chaves.obter(DEVICE)).toMatchObject({ registada: true, registada_user_id: 'u-ana' });
+    expect((await chaves.obter(DEVICE))!.registada).toBe(true);
+    expect(await chaves.chaveNoServidor('u-ana', DEVICE)).toEqual(jwk);
     const linha = await db.getFirst<{ registada: number }>('SELECT registada FROM chaves_dispositivo');
     expect(linha!.registada).toBe(1);
 
@@ -448,7 +453,33 @@ describe('garantirChaveRegistada', () => {
     await chave.garantirChaveRegistada(ANA);
     await chave.garantirChaveRegistada(BETO);
     expect(registos.map((r) => r.token)).toEqual(['token-ana', 'token-beto']);
-    expect((await chaves.obter(DEVICE))!.registada_user_id).toBe('u-beto');
+    expect(await chaves.chaveNoServidor('u-beto', DEVICE)).toEqual((await chave.chavePublica()).jwk);
+
+    // Já registada para os dois: não volta à rede.
+    await chave.garantirChaveRegistada(ANA);
+    await chave.garantirChaveRegistada(BETO);
+    expect(registos).toHaveLength(2);
+  });
+
+  test('chave local nova: espera enquanto houver provas da chave antiga por enviar, depois regista', async () => {
+    const primeira = montar();
+    const antiga = await primeira.chave.chavePublica();
+    await primeira.chave.garantirChaveRegistada();
+    cofre.itens.clear(); // a chave privada perdeu-se
+    const depois = montar();
+    const nova = await depois.chave.chavePublica();
+
+    provasPorEnviarCom.add(JSON.stringify(antiga.jwk));
+    expect(await depois.chave.garantirChaveRegistada()).toMatchObject({ tipo: 'espera' });
+    expect(registos).toHaveLength(1); // não substituiu a chave do servidor
+    expect(await depois.chaves.chaveNoServidor('u-ana', DEVICE)).toEqual(antiga.jwk);
+
+    // As provas antigas foram enviadas: agora regista a nova.
+    provasPorEnviarCom.clear();
+    expect(await depois.chave.garantirChaveRegistada()).toMatchObject({ tipo: 'ok', jwk: nova.jwk });
+    expect(registos.map((r) => r.corpo.public_key_jwk)).toEqual([antiga.jwk, nova.jwk]);
+    expect(await depois.chaves.chaveNoServidor('u-ana', DEVICE)).toEqual(nova.jwk);
+    expect((await depois.chaves.obter(DEVICE))!.registada).toBe(true);
   });
 
   test('401 devolve "sessao"; outro erro devolve "falhou"; nenhum marca registada', async () => {
@@ -458,6 +489,7 @@ describe('garantirChaveRegistada', () => {
     respostaRegisto = 'signing-keys respondeu 500';
     expect(await chave.garantirChaveRegistada()).toEqual({ tipo: 'falhou', erro: 'signing-keys respondeu 500' });
     expect((await chaves.obter(DEVICE))!.registada).toBe(false);
+    expect(await chaves.chaveNoServidor('u-ana', DEVICE)).toBeNull();
   });
 });
 

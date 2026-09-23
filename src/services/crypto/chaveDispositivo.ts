@@ -2,11 +2,11 @@ import { p256 } from '@noble/curves/nist.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
 import type { RepositorioChavesDispositivo } from '@/database/repositories/chavesDispositivo';
+import { NOME_CHAVE_ASSINATURA } from '@/services/cofre/nomes';
 
 import { chavePublicaParaJwk, mesmaChave, type JwkPublicaP256 } from './jwk';
 
-/** Nome do item no expo-secure-store com a chave PRIVADA de assinatura. */
-export const NOME_CHAVE_ASSINATURA = 'angola_localiza.chave_assinatura';
+export { NOME_CHAVE_ASSINATURA } from '@/services/cofre/nomes';
 
 /** Formato guardado: "v1:<device_id>:<chave privada em hex>". */
 const VERSAO = 'v1';
@@ -33,12 +33,20 @@ export type ResultadoRegisto =
   | { tipo: 'ok'; deviceId: string; jwk: JwkPublicaP256 }
   /** O servidor recusou a sessão (401). */
   | { tipo: 'sessao' }
+  /**
+   * A chave local mudou e ainda há provas por enviar assinadas com a chave que
+   * o servidor tem: essas vão primeiro, a chave nova só é registada depois.
+   */
+  | { tipo: 'espera'; erro: string }
   /** Sem rede, sem sessão, cofre fechado ou erro do servidor: tentar mais tarde. */
   | { tipo: 'falhou'; erro: string };
 
 export interface DependenciasChave {
   cofre: CofreChavePrivada;
-  chaves: Pick<RepositorioChavesDispositivo, 'obter' | 'guardar' | 'marcarRegistada'>;
+  chaves: Pick<
+    RepositorioChavesDispositivo,
+    'obter' | 'guardar' | 'chaveNoServidor' | 'chavesNoServidorDoUtilizador' | 'registarNoServidor'
+  >;
   obterIdDispositivo(): Promise<string>;
   /** Garante crypto.getRandomValues antes de o @noble gerar a chave. */
   prepararAleatorio(): void;
@@ -52,6 +60,24 @@ export interface DependenciasChave {
   estaOnline(): Promise<boolean>;
   /** POST signing-keys?action=register. Devolve 'ok', 'sessao' (401) ou a mensagem de erro. */
   pedirRegisto(token: string, corpo: CorpoRegisto): Promise<'ok' | 'sessao' | string>;
+  /**
+   * Há provas do utilizador ainda por enviar assinadas com esta chave?
+   * (Vem da fila de saída.) Enquanto houver, a chave do servidor não é substituída.
+   */
+  haProvasPorEnviarAssinadasCom(userId: string, deviceId: string, jwk: unknown): Promise<boolean>;
+}
+
+/** Chaves conhecidas, sem rede nem cofre (só SQLite). */
+export interface EstadoChaves {
+  deviceId: string;
+  /** Chave pública local atual (null se ainda não foi gerada). */
+  local: Record<string, unknown> | null;
+  /**
+   * Chaves que a app sabe estarem registadas no servidor para este utilizador,
+   * por device_id (inclui aparelhos anteriores, ex.: um iPhone restaurado de um
+   * backup tem outro device_id, mas as provas antigas trazem o antigo).
+   */
+  noServidor: Record<string, Record<string, unknown>>;
 }
 
 interface ChaveCarregada {
@@ -147,22 +173,37 @@ export function criarChaveDispositivo(deps: DependenciasChave) {
       return { deviceId, assinatura };
     },
 
+    /** Chave local e chave do servidor para o utilizador, sem rede nem cofre. */
+    async estado(userId: string): Promise<EstadoChaves> {
+      const deviceId = await deps.obterIdDispositivo();
+      const [linha, noServidor] = await Promise.all([
+        deps.chaves.obter(deviceId),
+        deps.chaves.chavesNoServidorDoUtilizador(userId),
+      ]);
+      return { deviceId, local: linha?.chave_publica_jwk ?? null, noServidor };
+    },
+
     /**
      * Garante que o servidor conhece a chave pública deste aparelho para o
      * utilizador da sessão. Só usa a rede se ainda não estiver registada.
+     * Se a chave local mudou e ainda há provas por enviar assinadas com a
+     * chave que o servidor tem, NÃO regista (devolve "espera").
      */
     async garantirChaveRegistada(sessaoDada?: SessaoRegisto): Promise<ResultadoRegisto> {
       try {
         const sessao = sessaoDada ?? (await deps.obterSessao());
         if (!sessao) return { tipo: 'falhou', erro: 'Sem sessão iniciada.' };
         const { deviceId, jwk } = await obterChave();
-        const linha = await deps.chaves.obter(deviceId);
+        const servidor = await deps.chaves.chaveNoServidor(sessao.userId, deviceId);
+        if (servidor && mesmaChave(servidor, jwk)) return { tipo: 'ok', deviceId, jwk };
         if (
-          linha?.registada &&
-          linha.registada_user_id === sessao.userId &&
-          mesmaChave(linha.chave_publica_jwk, jwk)
+          servidor &&
+          (await deps.haProvasPorEnviarAssinadasCom(sessao.userId, deviceId, servidor))
         ) {
-          return { tipo: 'ok', deviceId, jwk };
+          return {
+            tipo: 'espera',
+            erro: 'Há provas assinadas com a chave anterior por enviar; a chave nova é registada depois.',
+          };
         }
         if (!(await deps.estaOnline())) {
           return { tipo: 'falhou', erro: 'Sem rede para registar a chave do aparelho.' };
@@ -173,7 +214,7 @@ export function criarChaveDispositivo(deps: DependenciasChave) {
         });
         if (r === 'sessao') return { tipo: 'sessao' };
         if (r !== 'ok') return { tipo: 'falhou', erro: r };
-        await deps.chaves.marcarRegistada(deviceId, sessao.userId);
+        await deps.chaves.registarNoServidor(sessao.userId, deviceId, jwk);
         return { tipo: 'ok', deviceId, jwk };
       } catch (erro) {
         return { tipo: 'falhou', erro: erro instanceof Error ? erro.message : String(erro) };

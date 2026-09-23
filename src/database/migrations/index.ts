@@ -1,7 +1,7 @@
 import type { BaseDados } from '../tipos';
 import { migracao001 } from './001_inicial';
 import { migracao002 } from './002_perfil_e_utilizador';
-import { migracao003 } from './003_chave_registada_utilizador';
+import { migracao003 } from './003_chaves_e_evidencias';
 import type { Migracao } from './tipos';
 
 export type { Migracao } from './tipos';

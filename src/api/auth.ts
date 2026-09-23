@@ -1,5 +1,6 @@
 import type { Factor } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
+
+import { cofreApp } from '@/services/cofre/cofreApp';
 
 import { criarAdesao, type ResultadoAdesao, type ResultadoConsumo } from './adesao';
 import { chamarFuncao } from './edge/chamarFuncao';
@@ -18,7 +19,7 @@ function falhar(erro: { message?: string } | null | undefined): never {
   throw new ErroAuth(erro?.message);
 }
 
-const adesao = criarAdesao(SecureStore, (token) =>
+const adesao = criarAdesao(cofreApp, (token) =>
   chamarFuncao<ResultadoAdesao>('join-link', 'consume', { body: { token } }),
 );
 

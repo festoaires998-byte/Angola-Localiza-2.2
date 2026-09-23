@@ -1,5 +1,9 @@
 import { abrirBaseDados } from '@/database/client';
 import {
+  criarRepositorioChavesDispositivo,
+  type RepositorioChavesDispositivo,
+} from '@/database/repositories/chavesDispositivo';
+import {
   criarRepositorioFicheirosPendentes,
   type RepositorioFicheirosPendentes,
 } from '@/database/repositories/ficheirosPendentes';
@@ -9,6 +13,10 @@ import {
   type RepositorioFilaSaida,
   type TipoOperacao,
 } from '@/database/repositories/filaSaida';
+import {
+  criarRepositorioProvasEvidencia,
+  type RepositorioProvasEvidencia,
+} from '@/database/repositories/provasEvidencia';
 import { obterIdDispositivo } from '@/services/cofre/idDispositivo';
 
 import { eventosSync } from './eventos';
@@ -16,6 +24,9 @@ import { eventosSync } from './eventos';
 export interface RepositoriosSync {
   fila: RepositorioFilaSaida;
   ficheiros: RepositorioFicheirosPendentes;
+  chaves: RepositorioChavesDispositivo;
+  /** Cópias locais das provas cuja assinatura não confere com a chave registada. */
+  evidencias: RepositorioProvasEvidencia;
 }
 
 let repositorios: Promise<RepositoriosSync> | null = null;
@@ -28,6 +39,8 @@ export function obterRepositoriosSync(): Promise<RepositoriosSync> {
       return {
         fila: criarRepositorioFilaSaida(db, { deviceId }),
         ficheiros: criarRepositorioFicheirosPendentes(db),
+        chaves: criarRepositorioChavesDispositivo(db),
+        evidencias: criarRepositorioProvasEvidencia(db),
       };
     })().catch((erro) => {
       repositorios = null;

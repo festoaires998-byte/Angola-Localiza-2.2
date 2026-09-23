@@ -16,16 +16,20 @@ Compatível com o site e com as Edge Functions `signing-keys` e `deliveries` (We
 
 - É gerada **uma vez** com `@noble/curves` (`p256.keygen()`).
 - A chave **privada** só fica no `expo-secure-store` (`angola_localiza.chave_assinatura`, formato
-  `v1:<device_id>:<hex>`) com `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`: não vai para backups do
-  iCloud/iTunes nem passa para outro telemóvel, e pode ser lida com o ecrã bloqueado depois
-  do primeiro desbloqueio (sincronização em segundo plano). **Nunca** vai para o SQLite: o
-  repositório `chaves_dispositivo` recusa JWK com `d`, e há um teste que procura a chave
-  privada em todas as tabelas.
-- A chave **pública** fica na tabela `chaves_dispositivo` em JWK, com `registada` e
-  `registada_user_id`.
-- **Chave privada desaparecida** (ex.: backup restaurado — o SQLite e o `device_id` voltam,
-  a chave privada não): gera-se uma chave nova, que fica `registada = 0` até ser registada.
-  Uma chave guardada com outro `device_id` também não é usada.
+  `v1:<device_id>:<hex>`), através do `cofreApp` (`AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`): não vai
+  para backups do iCloud/iTunes nem passa para outro telemóvel, fica fora do backup automático
+  do Android, e pode ser lida com o ecrã bloqueado depois do primeiro desbloqueio (sincronização
+  em segundo plano). **Nunca** vai para o SQLite: os repositórios recusam JWK com `d`, e há um
+  teste que procura a chave privada em todas as tabelas.
+- A chave **pública** fica na tabela `chaves_dispositivo` em JWK (`registada = 1` depois de o
+  servidor a aceitar).
+- `chaves_no_servidor` guarda a chave que a app sabe estar registada no servidor para cada
+  (utilizador, aparelho) — o servidor guarda-a assim e substitui-a quando se regista outra.
+  Continua lá mesmo que a chave local mude.
+- **Chave privada desaparecida:** gera-se uma chave nova, que fica `registada = 0`. Uma chave
+  guardada com outro `device_id` também não é usada. (Como o `device_id` também é
+  `THIS_DEVICE_ONLY`, num telemóvel restaurado de um backup os dois perdem-se juntos e a app
+  começa com um `device_id` novo.)
 - **Leitura do cofre com erro:** no iOS quase sempre é o telemóvel ainda não desbloqueado
   depois de ligar — **não** se gera outra chave, só dá erro (tenta-se depois). No Android
   o erro quer dizer que o Keystore perdeu a chave: gera-se uma nova.
@@ -33,10 +37,17 @@ Compatível com o site e com as Edge Functions `signing-keys` e `deliveries` (We
 ## Registo no servidor: `garantirChaveRegistada()`
 
 `POST /functions/v1/signing-keys?action=register` com `{ device_id, public_key_jwk }` e o token
-da sessão. Só usa a rede quando ainda não está registada **para o utilizador da sessão**
-(o servidor guarda a chave por utilizador + aparelho; se outra pessoa entrar no mesmo
-telemóvel, regista-se de novo para ela). Resultado: `ok`, `sessao` (401) ou `falhou`
-(sem rede, sem sessão, cofre fechado ou erro do servidor). Se correr bem, `registada = 1`.
+da sessão. Só usa a rede quando a chave local ainda não é a que o servidor tem **para o
+utilizador da sessão** (se outra pessoa entrar no mesmo telemóvel, regista-se de novo para ela).
+
+**Chave local nova e o servidor ainda com a antiga:** registar a nova substitui a antiga no
+servidor, e as provas assinadas com a antiga que ainda não foram enviadas deixariam de ser
+verificadas. Por isso, enquanto houver na fila provas por enviar assinadas com a chave que o
+servidor tem, `garantirChaveRegistada()` **não regista** e devolve `espera`. O motor de sync
+envia primeiro essas provas e só depois regista a chave nova (ver `src/sync/README.md`).
+
+Resultado: `ok`, `espera`, `sessao` (401) ou `falhou` (sem rede, sem sessão, cofre fechado ou
+erro do servidor). Se correr bem, grava em `chaves_no_servidor` e marca `registada = 1`.
 
 ## Assinar: `assinarProva()`
 
@@ -65,13 +76,16 @@ proof = { ...proof, ...paraCamposProva(prova) }; // crypto_payload, crypto_signa
 
 ## O que o servidor faz (lido em produção, `signing-keys` v1 e `deliveries` v17)
 
-- Prova com `crypto_*` e chave do (utilizador, aparelho) registada → verifica e grava
+- Prova com `crypto_*` e chave do (utilizador, `crypto_device_id`) registada → verifica e grava
   `crypto_verified = true/false`.
 - Chave **não registada** → a entrega muda de estado na mesma, mas a prova fica gravada com
   `crypto_verified = false` para sempre (não há nova verificação). Por isso o motor de sync
-  só envia provas depois de `garantirChaveRegistada()` (ver `src/sync/README.md`).
+  regista a chave local antes de enviar as provas assinadas com ela.
 - Registar outra chave com o mesmo `device_id` **substitui** a anterior (upsert). As provas
   já gravadas mantêm o `crypto_verified` que tinham.
+- Uma prova cuja assinatura não confere com a chave registada é **enviada na mesma** com a
+  assinatura original (o servidor marca `crypto_verified = false`, que é a verdade); a app
+  guarda uma cópia em `provas_evidencia` e mostra um aviso (ver `src/sync/README.md`).
 
 ## Testes
 
@@ -79,4 +93,5 @@ proof = { ...proof, ...paraCamposProva(prova) }; // crypto_payload, crypto_signa
 Node exatamente como a Edge Function faz (`importKey('jwk')` + `verify`, `atob`, `TextEncoder`),
 e o inverso (assinatura do Web Crypto aceite pelo `@noble`, incluindo S "alto"); mensagem
 alterada num caractere; JWK sem `d` e com x/y de 32 bytes; chave privada nunca no SQLite;
-chave desaparecida → nova e não registada; iPhone bloqueado não gera outra chave; registo.
+chave desaparecida → nova e não registada; iPhone bloqueado não gera outra chave; registo por
+utilizador; a chave nova espera enquanto houver provas da chave antiga por enviar.

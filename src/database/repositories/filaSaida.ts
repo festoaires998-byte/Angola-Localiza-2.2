@@ -158,6 +158,22 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
     },
 
     /**
+     * Todas as operações do utilizador de um tipo que ainda não foram enviadas
+     * com sucesso ("pendente" ou "a_enviar"), mesmo as que estão na pausa após
+     * uma falha. Das mais antigas para as mais recentes.
+     */
+    async listarPorEnviarDoTipo(userId: string, tipo: TipoOperacao): Promise<OperacaoFila[]> {
+      exigirUtilizador(userId);
+      const linhas = await db.getAll<LinhaFila>(
+        `SELECT * FROM fila_saida
+          WHERE user_id = ? AND operation_type = ? AND estado IN ('pendente', 'a_enviar')
+          ORDER BY criado_em, operation_id`,
+        [userId, tipo],
+      );
+      return linhas.map(deLinha);
+    },
+
+    /**
      * Grava o payload já com os URLs reais das fotos (antes do POST).
      * Só mexe numa operação do utilizador que ainda não foi concluída.
      */

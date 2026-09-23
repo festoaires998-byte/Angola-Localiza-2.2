@@ -7,9 +7,13 @@ Ponte entre ecrãs e o resto (useGps, useFilaSync, useSessao, useCargos).
 - `useFilaSync()` — estado da sincronização para os ecrãs:
   - `pendentes` e `fotosPendentes` (do utilizador com sessão; atualizam-se sozinhos
     depois de cada envio e de cada operação nova);
-  - `operacoesComProblema` — operações que já não vão ser enviadas (`falhou_definitivo`),
-    cada uma com `operation_id`, `operation_type`, `erro` e `criado_em`. Ex.: foto alterada
-    ou danificada depois de ser tirada. Os ficheiros locais dessas operações ficam guardados;
+  - `operacoesComProblema` — o que precisa da atenção do utilizador, das mais recentes para as
+    mais antigas, cada uma com `operation_id`, `operation_type`, `gravidade`, `erro` e `criado_em`:
+    - `gravidade: 'falhou'` — não vai ser enviada (`falhou_definitivo`). Ex.: foto alterada ou
+      danificada depois de ser tirada. Os ficheiros locais dessas operações ficam guardados;
+    - `gravidade: 'aviso'` — prova de entrega enviada cuja assinatura não confere com a chave
+      registada (o servidor marcou-a como não verificada). Não está falhada; ficou uma cópia
+      local em `provas_evidencia`;
   - `aSincronizar`, `ultimaSincronizacao` (ISO);
   - `ultimoErro` — frase simples para mostrar ao utilizador (ou `null`);
   - `precisaEntrarDeNovo` — o servidor recusou a sessão; mostrar "Entrar de novo";

@@ -1,37 +1,28 @@
 import { getRandomValues } from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { supabase } from '@/api/supabase';
 import { obterConfigSupabase } from '@/config/env';
-import { abrirBaseDados } from '@/database/client';
-import { criarRepositorioChavesDispositivo } from '@/database/repositories/chavesDispositivo';
+import { cofreApp } from '@/services/cofre/cofreApp';
 import { obterIdDispositivo } from '@/services/cofre/idDispositivo';
 import { estaOnline } from '@/services/rede/conectividade';
+import { obterRepositoriosSync } from '@/sync/fila';
 
 import { garantirGetRandomValues } from './aleatorio';
-import { criarAssinarProva } from './assinarProva';
+import { criarAssinarProva, provaAssinadaCom } from './assinarProva';
 import {
   criarChaveDispositivo,
   type ChaveDispositivo,
   type CorpoRegisto,
+  type EstadoChaves,
   type ResultadoRegisto,
   type SessaoRegisto,
 } from './chaveDispositivo';
 
 export { ALGORITMO_ASSINATURA, paraCamposProva, verificarAssinatura } from './assinarProva';
 export type { DadosProva, ProvaAssinada } from './assinarProva';
-export type { ResultadoRegisto } from './chaveDispositivo';
+export type { EstadoChaves, ResultadoRegisto } from './chaveDispositivo';
 export type { JwkPublicaP256 } from './jwk';
-
-/**
- * A chave privada só pode ser lida neste telemóvel (THIS_DEVICE_ONLY): não vai
- * para backups do iCloud/iTunes nem passa para outro iPhone. AFTER_FIRST_UNLOCK
- * deixa assinar e sincronizar com o ecrã bloqueado depois do primeiro desbloqueio.
- */
-export const OPCOES_CHAVE_PRIVADA: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
-};
 
 const TEMPO_MAXIMO_REGISTO = 20_000;
 
@@ -68,20 +59,17 @@ let chave: Promise<ChaveDispositivo> | null = null;
 
 function obterChaveApp(): Promise<ChaveDispositivo> {
   if (!chave) {
-    chave = abrirBaseDados()
-      .then((db) =>
+    chave = obterRepositoriosSync()
+      .then(({ fila, chaves }) =>
         criarChaveDispositivo({
-          cofre: {
-            getItemAsync: (nome) => SecureStore.getItemAsync(nome, OPCOES_CHAVE_PRIVADA),
-            setItemAsync: (nome, valor) =>
-              SecureStore.setItemAsync(nome, valor, OPCOES_CHAVE_PRIVADA),
-            deleteItemAsync: (nome) => SecureStore.deleteItemAsync(nome, OPCOES_CHAVE_PRIVADA),
-          },
-          chaves: criarRepositorioChavesDispositivo(db),
+          // cofreApp: AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY (não vai para backups nem
+          // para outro telemóvel) e fora do backup automático do Android.
+          cofre: cofreApp,
+          chaves,
           obterIdDispositivo,
           prepararAleatorio: () => garantirGetRandomValues(getRandomValues),
-          // Android: se o Keystore perdeu a chave (ex.: dados restaurados), a leitura
-          // falha para sempre. iOS: a falha é quase sempre o telemóvel ainda bloqueado.
+          // Android: se o Keystore perdeu a chave, a leitura falha para sempre.
+          // iOS: a falha é quase sempre o telemóvel ainda não desbloqueado depois de ligar.
           erroDeLeituraEPerda: Platform.OS === 'android',
           async obterSessao() {
             const { data } = await supabase.auth.getSession();
@@ -92,6 +80,10 @@ function obterChaveApp(): Promise<ChaveDispositivo> {
           },
           estaOnline,
           pedirRegisto,
+          async haProvasPorEnviarAssinadasCom(userId, deviceId, jwk) {
+            const provas = await fila.listarPorEnviarDoTipo(userId, 'delivery_proof');
+            return provas.some((op) => provaAssinadaCom(op.payload, deviceId, jwk));
+          },
         }),
       )
       .catch((erro) => {
@@ -105,10 +97,17 @@ function obterChaveApp(): Promise<ChaveDispositivo> {
 /**
  * Regista a chave pública deste aparelho no servidor, se ainda não estiver
  * registada para o utilizador da sessão. Precisa de rede e sessão.
+ * Se a chave local mudou e ainda há provas por enviar assinadas com a chave
+ * antiga, espera (devolve "espera") até essas provas serem enviadas.
  * Sem `sessao`, usa a sessão atual do supabase-js.
  */
 export async function garantirChaveRegistada(sessao?: SessaoRegisto): Promise<ResultadoRegisto> {
   return (await obterChaveApp()).garantirChaveRegistada(sessao);
+}
+
+/** Chave local e chave registada no servidor para o utilizador (sem rede). */
+export async function estadoChaves(userId: string): Promise<EstadoChaves> {
+  return (await obterChaveApp()).estado(userId);
 }
 
 /**

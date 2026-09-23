@@ -19,7 +19,8 @@ const fila = criarRepositorioFilaSaida(db, { deviceId });
 | `levantamentos.ts` | `levantamentos` | `guardar`, `obter`, `listar`, `listarPorEstado`, `mudarEstado`, `apagar` |
 | `entregas.ts` | `entregas` | `guardar`, `guardarVarias`, `obter`, `listar`, `apagar` |
 | `referencias.ts` | `referencias` | `guardarVarias`, `obter`, `listar(tipo, paiId)`, `apagar` |
-| `chavesDispositivo.ts` | `chaves_dispositivo` | `guardar` (só chave pública), `obter`, `marcarRegistada(deviceId, userId)` (guarda para que utilizador foi registada), `apagar`. Uma chave nova volta a `registada = 0`. |
+| `chavesDispositivo.ts` | `chaves_dispositivo`, `chaves_no_servidor` | `guardar` (só chave pública; uma chave nova volta a `registada = 0`), `obter`, `marcarRegistada`, `apagar`, `chaveNoServidor(userId, deviceId)`, `registarNoServidor(userId, deviceId, jwk)` (recusa campos privados) |
+| `provasEvidencia.ts` | `provas_evidencia` | `guardar` (mantém a data da primeira gravação), `obter`, `listarDoUtilizador` |
 
 ## Fila de saída e a Edge Function "sync"
 
@@ -40,6 +41,8 @@ Outras ajudas usadas pelo motor (`src/sync`):
 - `registarFalhaOperacao(userId, operationId, erro)` — só essa operação espera (ex.: foto que não subiu).
 - `marcarFalhouDefinitivo(userId, operationId, erro)` — falha de vez, sem novas tentativas (ex.: foto alterada).
 - `listarFalhadasDoUtilizador(userId)` — as operações `falhou_definitivo` do utilizador.
+- `listarPorEnviarDoTipo(userId, tipo)` — todas as `pendente`/`a_enviar` de um tipo, mesmo na pausa após falha
+  (usado para saber se ainda há provas assinadas com a chave antiga por enviar).
 - `ficheiros.listarDeOperacoesConcluidas()` e `ficheiros.contarPendentesDoUtilizador(userId)`.
 
 Depois de uma falha, a operação espera um pouco antes de voltar a ser enviada

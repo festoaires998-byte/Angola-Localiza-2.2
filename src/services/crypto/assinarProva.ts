@@ -112,3 +112,37 @@ export function verificarAssinatura(payload: string, assinaturaBase64: string, j
     return false;
   }
 }
+
+/** Campos crypto_* do `proof` de um payload delivery_proof (ou null se não estiver assinada). */
+function camposAssinatura(payload: unknown) {
+  const prova = (payload as { proof?: Record<string, unknown> } | null)?.proof;
+  if (!prova || prova.crypto_signature == null) return null;
+  return prova;
+}
+
+/** device_id que assinou a prova (proof.crypto_device_id), ou null. */
+export function dispositivoDaProva(payload: unknown): string | null {
+  const id = camposAssinatura(payload)?.crypto_device_id;
+  return typeof id === 'string' && id !== '' ? id : null;
+}
+
+/** O payload delivery_proof traz uma prova assinada (proof.crypto_signature)? */
+export function provaEstaAssinada(payload: unknown): boolean {
+  return camposAssinatura(payload) !== null;
+}
+
+/**
+ * A prova do payload foi assinada por este aparelho com esta chave?
+ * (Mesma verificação que o servidor faz, mais o device_id.)
+ */
+export function provaAssinadaCom(payload: unknown, deviceId: string, jwk: unknown): boolean {
+  const prova = camposAssinatura(payload);
+  return (
+    !!prova &&
+    jwk != null &&
+    prova.crypto_device_id === deviceId &&
+    typeof prova.crypto_payload === 'string' &&
+    typeof prova.crypto_signature === 'string' &&
+    verificarAssinatura(prova.crypto_payload, prova.crypto_signature, jwk)
+  );
+}
