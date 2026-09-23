@@ -117,6 +117,24 @@ describe('informação do sítio onde estou', () => {
     expect(longe.codigoPostal.confirmadoEm).toBeNull();
   });
 
+  test('posição com mais de ±10 m: pede a província mas não confirma o código', async () => {
+    const i = await t.info.comRede(HUAMBO.lat, HUAMBO.lng, { preciso: false });
+    expect(t.geocodificar).toHaveBeenCalledTimes(1);
+    expect(i.local.provincia).toBe('Huambo');
+    expect(t.confirmarCodigo).not.toHaveBeenCalled();
+    expect(i.codigoPostal).toMatchObject({ estado: 'provisorio', confirmadoEm: null });
+    expect(i.codigoPostal.codigo).toMatch(/^AO-HUA-.{8}-\d{2}$/);
+  });
+
+  test('posição com mais de ±10 m: não mostra o confirmado guardado (pode ser da célula vizinha)', async () => {
+    await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+    const semRede = await t.info.semRede(HUAMBO.lat, HUAMBO.lng, { preciso: false });
+    expect(semRede.codigoPostal.estado).toBe('provisorio');
+    // Quando a precisão chega aos 10 m, volta a mostrar e a confirmar.
+    const preciso = await t.info.semRede(HUAMBO.lat, HUAMBO.lng, { preciso: true });
+    expect(preciso.codigoPostal.estado).toBe('confirmado');
+  });
+
   test('se o servidor falhar, fica o último confirmado guardado', async () => {
     await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
     t.avancar(60 * 60 * 1000);

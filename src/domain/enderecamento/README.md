@@ -66,3 +66,28 @@ esquema 1); `XXX` se não veio nome. Há siglas repetidas entre províncias
 (Cuanza Norte e Cuanza Sul dão `CUA`; Lunda Norte e Lunda Sul dão `LUN`) e um nome
 com acento nas primeiras letras (ex.: "Uíge" → `UÍG`) dá um código que o
 `validate` não aceita; o ecrã mostra então "Indisponível neste ponto".
+
+## Captura do GPS (`capturaGps.ts`)
+
+Uma leitura do GPS sozinha pode saltar 10–20 m e mudar o código postal de célula
+(cada célula tem ~38 m × 19 m). Por isso o código não usa uma leitura só:
+
+1. junta pelo menos **3 leituras**, uma por segundo, com a precisão mais alta do telemóvel;
+2. só contam as leituras com menos de **±10 m**;
+3. faz a **média com peso** 1/precisão² (uma leitura de ±4 m pesa 4 vezes mais
+   que uma de ±8 m). A precisão mostrada é a melhor das leituras usadas.
+
+Com a pessoa parada, cada leitura nova abaixo de 10 m entra na média (até às
+10 mais precisas), e a posição vai melhorando. Se uma leitura boa mostrar que a
+pessoa se afastou mais de 20 m, mede-se de novo (também há o botão "Medir de novo").
+
+Se ao fim de 20 leituras (~20 s) não houver 3 abaixo de 10 m (é comum dentro de
+casa), usa as 3 melhores e marca a captura como **fraca**: o Mapa mostra o
+código com a etiqueta "Pouco preciso (± N m)" e um aviso, e continua a medir.
+Com uma captura fraca, o código fica **Provisório**: não se pede a confirmação
+ao servidor nem se mostra um código confirmado guardado (podia ser o da célula
+vizinha). A província e o município continuam a aparecer (as zonas têm ~275 m).
+No Mapa, o ponto azul continua ao vivo; o Plus Code e o código postal usam a
+posição medida. Guardar uma morada vai usar a mesma captura e **não aceita uma
+captura fraca**.
+
