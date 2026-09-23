@@ -12,6 +12,13 @@ import {
   type ResultadoSync,
 } from '@/database/repositories/filaSaida';
 import { relogioDoSistema, type Relogio } from '@/database/util';
+import type { RepositorioProvasEvidencia } from '@/database/repositories/provasEvidencia';
+import {
+  dispositivoDaProva,
+  provaAssinadaCom,
+  provaEstaAssinada,
+} from '@/services/crypto/assinarProva';
+import type { EstadoChaves, ResultadoRegisto } from '@/services/crypto/chaveDispositivo';
 import { criarLoja, type Loja } from '@/state/loja';
 
 import { criarEmissor, type Emissor } from './eventos';
@@ -57,6 +64,18 @@ export interface DependenciasMotor {
   /** Renova o token. Lança ErroSessaoInvalida se o servidor recusar a sessão. */
   renovarSessao(): Promise<SessaoSync | null>;
   estaOnline(): Promise<boolean>;
+  /** Chave de assinatura do aparelho (src/services/crypto). */
+  chaveAssinatura: {
+    /** Chave local e chave que o servidor tem para o utilizador (sem rede). */
+    estado(userId: string): Promise<EstadoChaves>;
+    /**
+     * Regista a chave local no servidor, se ainda não estiver. Devolve "espera"
+     * enquanto houver provas por enviar assinadas com a chave que o servidor tem.
+     */
+    garantirRegistada(sessao: SessaoSync): Promise<ResultadoRegisto>;
+  };
+  /** Onde se guarda a cópia das provas cuja assinatura não confere. */
+  evidencias: Pick<RepositorioProvasEvidencia, 'guardar'>;
   /** Bytes do ficheiro local, ou null se não existir. */
   lerFicheiro(caminho: string): Promise<Uint8Array | null>;
   apagarFicheiro(caminho: string): Promise<void>;
@@ -105,6 +124,10 @@ export interface ResumoSync {
   adiadas: number;
   /** Operações que falharam de vez (ex.: foto alterada ou danificada). */
   definitivas: number;
+  /** Provas de entrega que esperam o registo da chave do aparelho (também contam em adiadas). */
+  aguardamChave: number;
+  /** Provas enviadas cuja assinatura não confere com a chave registada (ficou cópia local). */
+  avisos: number;
 }
 
 export interface MotorSync {
@@ -121,6 +144,7 @@ export const MENSAGENS = {
   fotoAlterada: 'Uma foto foi alterada ou danificada depois de ser tirada e não pode ser enviada.',
   fotoEmFalta: 'Uma foto guardada no telemóvel já não existe e não pôde ser enviada.',
   recusadas: 'Alguns registos não foram aceites pelo servidor. Vamos tentar de novo.',
+  chave: 'As provas de entrega esperam até este aparelho ficar registado no servidor. Vamos tentar de novo.',
 } as const;
 
 type RespostaHttp =
@@ -130,6 +154,14 @@ type RespostaHttp =
 
 /** Erro gravado na operação quando o sha256 da foto não bate certo. */
 export const ERRO_FOTO_ALTERADA = 'A foto foi alterada ou danificada depois de ser tirada';
+
+/**
+ * Aviso guardado quando uma prova é enviada com uma assinatura que não confere
+ * com a chave registada (o servidor marca-a crypto_verified = false).
+ */
+export const AVISO_ASSINATURA_NAO_CONFERE =
+  'A assinatura desta prova não confere com a chave registada deste aparelho. ' +
+  'Foi enviada na mesma (o servidor marca-a como não verificada) e ficou uma cópia no telemóvel.';
 
 type ResultadoFotos =
   | { tipo: 'ok'; payload: unknown }
@@ -301,7 +333,15 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
   }
 
   async function volta(forcar: boolean): Promise<ResumoSync> {
-    const resumo: ResumoSync = { motivo: 'ok', enviadas: 0, concluidas: 0, adiadas: 0, definitivas: 0 };
+    const resumo: ResumoSync = {
+      motivo: 'ok',
+      enviadas: 0,
+      concluidas: 0,
+      adiadas: 0,
+      definitivas: 0,
+      aguardamChave: 0,
+      avisos: 0,
+    };
     if (!arrancou) {
       // Operações presas em "a_enviar" (a app fechou a meio de um envio).
       await deps.fila.libertarPresasAEnviar();
@@ -321,6 +361,12 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
     const userId = sessao.userId;
     const vistas = new Set<string>();
     let mensagemAviso: string | null = null;
+    /** Chaves (local e do servidor): lidas uma vez por volta, só se houver provas assinadas. */
+    let chaves: EstadoChaves | null = null;
+    /** Registo da chave local: pedido no máximo uma vez por volta. */
+    let registo: ResultadoRegisto | null = null;
+    /** Provas com a chave nova à espera de que as da chave antiga sejam enviadas. */
+    let esperaPelaChaveAntiga = false;
 
     lotes: while (true) {
       const atual = await deps.obterSessao();
@@ -356,6 +402,52 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
 
       const prontas: OperacaoFila[] = [];
       for (const op of lote) {
+        let aviso: string | null = null;
+        if (op.operation_type === 'delivery_proof' && provaEstaAssinada(op.payload)) {
+          if (!chaves) {
+            try {
+              chaves = await deps.chaveAssinatura.estado(userId);
+            } catch {
+              chaves = null;
+            }
+          }
+          if (!chaves) {
+            // Não é culpa da prova: fica pendente sem somar tentativas.
+            resumo.adiadas++;
+            resumo.aguardamChave++;
+            mensagemAviso = mensagemAviso ?? MENSAGENS.chave;
+            continue;
+          }
+          const { deviceId, local, noServidor }: EstadoChaves = chaves;
+          // O servidor verifica com a chave de (utilizador, device_id da prova).
+          const idDaProva = dispositivoDaProva(op.payload);
+          const chaveDoServidor = idDaProva ? noServidor[idDaProva] : undefined;
+          if (chaveDoServidor && provaAssinadaCom(op.payload, idDaProva!, chaveDoServidor)) {
+            // Assinada com uma chave que o servidor tem: segue já (antes de qualquer registo novo).
+          } else if (local && provaAssinadaCom(op.payload, deviceId, local)) {
+            // Assinada com a chave local, que o servidor ainda não tem: registar primeiro.
+            registo = registo ?? (await deps.chaveAssinatura.garantirRegistada(sessao));
+            if (registo.tipo === 'sessao') {
+              sessaoRecusada(sessao);
+              return { ...resumo, motivo: 'precisa_entrar' };
+            }
+            if (registo.tipo !== 'ok') {
+              // Sem rede, erro do servidor, ou ainda há provas da chave antiga por
+              // enviar: fica pendente sem somar tentativas.
+              if (registo.tipo === 'espera') esperaPelaChaveAntiga = true;
+              resumo.adiadas++;
+              resumo.aguardamChave++;
+              mensagemAviso = mensagemAviso ?? MENSAGENS.chave;
+              continue;
+            }
+            chaves = { ...chaves, noServidor: { ...noServidor, [deviceId]: local } };
+          } else {
+            // Não confere com nenhuma chave conhecida: envia-se na mesma com a
+            // assinatura original (o servidor marca crypto_verified = false) e
+            // guarda-se uma cópia local como evidência.
+            aviso = AVISO_ASSINATURA_NAO_CONFERE;
+          }
+        }
         const r = await prepararFotos(op, sessao);
         if (r.tipo === 'sessao') {
           sessaoRecusada(sessao);
@@ -371,6 +463,16 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
           }
           mensagemAviso = r.mensagem;
           continue;
+        }
+        if (aviso) {
+          await deps.evidencias.guardar({
+            operation_id: op.operation_id,
+            user_id: userId,
+            device_id: op.device_id,
+            payload: r.payload,
+            motivo: aviso,
+          });
+          resumo.avisos++;
         }
         prontas.push({ ...op, payload: r.payload });
       }
@@ -424,6 +526,10 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
       }
     }
 
+    // As provas da chave antiga foram enviadas nesta volta: mais uma volta para
+    // registar a chave nova e enviar as provas que ficaram à espera dela.
+    if (esperaPelaChaveAntiga && resumo.concluidas > 0) maisUmaVolta = true;
+
     // Só agora, com as operações "concluida", se apagam as provas locais.
     // Tem de ser antes de limparConcluidasAntigas (que desliga o ficheiro da operação).
     await apagarFicheirosConcluidos();
@@ -450,7 +556,15 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
         } catch (erro) {
           // Erro inesperado (ex.: base de dados): não perde nada, só avisa.
           mudar({ ultimoErro: MENSAGENS.servidor });
-          resumo = { motivo: 'erro_servidor', enviadas: 0, concluidas: 0, adiadas: 0, definitivas: 0 };
+          resumo = {
+            motivo: 'erro_servidor',
+            enviadas: 0,
+            concluidas: 0,
+            adiadas: 0,
+            definitivas: 0,
+            aguardamChave: 0,
+            avisos: 0,
+          };
           if (!maisUmaVolta) throw erro;
         }
         f = forcarNaProxima;

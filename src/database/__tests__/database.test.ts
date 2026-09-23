@@ -10,6 +10,7 @@ import {
   criarRepositorioFilaSaida,
   criarRepositorioMoradas,
   criarRepositorioPerfilLocal,
+  criarRepositorioProvasEvidencia,
   idDoMarcador,
   marcadorOffline,
   paraPedidoSync,
@@ -78,6 +79,7 @@ describe('migrações', () => {
     expect(await lerVersao(db)).toBe(MIGRACOES.length);
     expect(await nomesTabelas(db)).toEqual([
       'chaves_dispositivo',
+      'chaves_no_servidor',
       'entregas',
       'favoritos',
       'ficheiros_pendentes',
@@ -85,6 +87,7 @@ describe('migrações', () => {
       'levantamentos',
       'moradas',
       'perfil_local',
+      'provas_evidencia',
       'referencias',
       'zona_offline',
     ]);
@@ -529,6 +532,102 @@ describe('chaves do dispositivo', () => {
       chaves.guardar({ device_id: 'd2', chave_publica_jwk: { ...publica, d: 'segredo' } }),
     ).rejects.toThrow(/secure-store/);
   });
+
+  test('chave no servidor por utilizador: fica mesmo que a chave local mude', async () => {
+    const db = await baseMigrada();
+    const chaves = criarRepositorioChavesDispositivo(db);
+    const antiga = { kty: 'EC', crv: 'P-256', x: 'xa', y: 'ya' };
+    const nova = { kty: 'EC', crv: 'P-256', x: 'xn', y: 'yn' };
+
+    await chaves.guardar({ device_id: 'd1', chave_publica_jwk: antiga });
+    expect(await chaves.chaveNoServidor('u-ana', 'd1')).toBeNull();
+    await chaves.registarNoServidor('u-ana', 'd1', antiga);
+    expect(await chaves.chaveNoServidor('u-ana', 'd1')).toEqual(antiga);
+    expect(await chaves.chaveNoServidor('u-beto', 'd1')).toBeNull();
+    expect((await chaves.obter('d1'))!.registada).toBe(true);
+
+    // Chave local nova: volta a "não registada", mas o servidor ainda tem a antiga.
+    await chaves.guardar({ device_id: 'd1', chave_publica_jwk: nova });
+    expect((await chaves.obter('d1'))!.registada).toBe(false);
+    expect(await chaves.chaveNoServidor('u-ana', 'd1')).toEqual(antiga);
+
+    // Registar outra chave que não é a local não marca a local como registada.
+    await chaves.registarNoServidor('u-beto', 'd1', antiga);
+    expect((await chaves.obter('d1'))!.registada).toBe(false);
+    await chaves.registarNoServidor('u-ana', 'd1', nova);
+    expect(await chaves.chaveNoServidor('u-ana', 'd1')).toEqual(nova);
+    await chaves.registarNoServidor('u-ana', 'd-anterior', antiga);
+    expect(await chaves.chavesNoServidorDoUtilizador('u-ana')).toEqual({ d1: nova, 'd-anterior': antiga });
+    expect(await chaves.chavesNoServidorDoUtilizador('u-carla')).toEqual({});
+    expect((await chaves.obter('d1'))!.registada).toBe(true);
+
+    await expect(chaves.registarNoServidor('u-ana', 'd1', { ...nova, d: 'segredo' })).rejects.toThrow(
+      /secure-store/,
+    );
+  });
+});
+
+describe('migração 003', () => {
+  test('corre sobre uma base na versão 2 com dados e mantém a chave local', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 2));
+    await antiga.run(
+      `INSERT INTO chaves_dispositivo (device_id, chave_publica_jwk, registada, criada_em)
+       VALUES ('d1', '{"kty":"EC","crv":"P-256","x":"xx","y":"yy"}', 0, '2026-09-01T10:00:00.000Z')`,
+    );
+
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(3);
+
+    expect((await criarRepositorioChavesDispositivo(antiga).obter('d1'))!.chave_publica_jwk).toEqual({
+      kty: 'EC',
+      crv: 'P-256',
+      x: 'xx',
+      y: 'yy',
+    });
+    await expect(
+      antiga.run(
+        `INSERT INTO provas_evidencia (operation_id, user_id, device_id, payload_json, motivo, criada_em)
+         VALUES ('o', 'u', 'd', 'não é json', 'm', 'x')`,
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe('provas_evidencia', () => {
+  test('guarda a cópia, mantém a primeira data e lista por utilizador', async () => {
+    const db = await baseMigrada();
+    let agora = new Date('2026-09-23T10:00:00.000Z');
+    const evidencias = criarRepositorioProvasEvidencia(db, () => agora);
+    await evidencias.guardar({
+      operation_id: 'op-1',
+      user_id: 'u-ana',
+      device_id: 'app-1',
+      payload: { proof: { crypto_signature: 'sig' } },
+      motivo: 'não confere',
+    });
+    agora = new Date('2026-09-23T11:00:00.000Z');
+    await evidencias.guardar({
+      operation_id: 'op-1',
+      user_id: 'u-ana',
+      device_id: 'app-1',
+      payload: { proof: { crypto_signature: 'sig', photo_url: 'https://x' } },
+      motivo: 'não confere',
+    });
+    await evidencias.guardar({ operation_id: 'op-2', user_id: 'u-beto', device_id: 'app-1', payload: {}, motivo: 'm' });
+
+    expect(await evidencias.listarDoUtilizador('u-ana')).toEqual([
+      {
+        operation_id: 'op-1',
+        user_id: 'u-ana',
+        device_id: 'app-1',
+        payload: { proof: { crypto_signature: 'sig', photo_url: 'https://x' } },
+        motivo: 'não confere',
+        criada_em: '2026-09-23T10:00:00.000Z',
+      },
+    ]);
+    expect((await evidencias.obter('op-2'))!.user_id).toBe('u-beto');
+    expect(await evidencias.obter('op-3')).toBeNull();
+  });
 });
 
 describe('fila por utilizador (migração 002)', () => {
@@ -606,7 +705,7 @@ describe('fila por utilizador (migração 002)', () => {
        VALUES ('fav-1', 'm1', 'Casa', '2026-09-01T10:00:00.000Z')`,
     );
 
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(2);
+    await expect(aplicarMigracoes(antiga, MIGRACOES.slice(0, 2))).resolves.toBe(2);
 
     const filaAntiga = criarRepositorioFilaSaida(antiga, { deviceId: 'telemovel-1' });
     // Os dados que já existiam continuam lá.
@@ -623,6 +722,26 @@ describe('fila por utilizador (migração 002)', () => {
     expect(await filaAntiga.obter('antiga-1')).toMatchObject({ estado: 'pendente' });
     // A tabela nova existe e funciona.
     expect(await nomesTabelas(antiga)).toContain('perfil_local');
+  });
+});
+
+describe('fila: listarPorEnviarDoTipo', () => {
+  test('inclui pendentes (mesmo na pausa) e a_enviar do tipo e do utilizador', async () => {
+    const db = await baseMigrada();
+    let n = 0;
+    const fila = criarRepositorioFilaSaida(db, { deviceId: 'app-1', gerarId: () => `op-${++n}` });
+    const a = await fila.adicionar('u-ana', 'delivery_proof', { n: 1 });
+    const b = await fila.adicionar('u-ana', 'delivery_proof', { n: 2 });
+    await fila.adicionar('u-ana', 'create_address', { n: 3 });
+    await fila.adicionar('u-beto', 'delivery_proof', { n: 4 });
+    const c = await fila.adicionar('u-ana', 'delivery_proof', { n: 5 });
+    await fila.registarFalhaOperacao('u-ana', a.operation_id, 'erro'); // em pausa
+    await fila.marcarAEnviar('u-ana', [b.operation_id]);
+    await fila.marcarFalhouDefinitivo('u-ana', c.operation_id, 'foto');
+
+    expect(
+      (await fila.listarPorEnviarDoTipo('u-ana', 'delivery_proof')).map((o) => o.operation_id),
+    ).toEqual([a.operation_id, b.operation_id]);
   });
 });
 

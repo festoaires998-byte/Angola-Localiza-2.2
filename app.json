@@ -89,7 +89,8 @@
       [
         "expo-secure-store",
         {
-          "faceIDPermission": "O Angola Localiza usa o Face ID para proteger as suas chaves e dados guardados no telemóvel."
+          "faceIDPermission": "O Angola Localiza usa o Face ID para proteger as suas chaves e dados guardados no telemóvel.",
+          "configureAndroidBackup": true
         }
       ],
       [
