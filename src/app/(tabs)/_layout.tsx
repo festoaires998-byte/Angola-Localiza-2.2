@@ -39,8 +39,21 @@ export default function LayoutSeparadores() {
           headerShown: false,
           tabBarActiveTintColor: CORES.primaria,
           tabBarInactiveTintColor: CORES.inativo,
-          tabBarLabelStyle: estilos.nome,
           tabBarStyle: estilos.barra,
+          tabBarItemStyle: estilos.item,
+          // Com 8 separadores o espaço é curto: a letra encolhe um pouco (até 75%)
+          // para o nome caber inteiro, mesmo com a letra do telemóvel aumentada.
+          tabBarLabel: ({ color, children }) => (
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+              maxFontSizeMultiplier={1.2}
+              style={[estilos.nome, { color }]}
+            >
+              {children}
+            </Text>
+          ),
         }}
       >
         {SEPARADORES.map((s) => (
@@ -70,6 +83,7 @@ const estilos = StyleSheet.create({
     paddingBottom: 10,
   },
   textoAviso: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: CORES.avisoTexto, paddingTop: 10 },
-  nome: { fontSize: 12, fontWeight: '600' },
+  nome: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  item: { paddingHorizontal: 0 },
   barra: { minHeight: 64, paddingTop: 4 },
 });
