@@ -163,3 +163,20 @@ describe('idDispositivo', () => {
     expect(await criarObterIdDispositivo(cofre, () => UUID)()).toBe(`app-${UUID}`);
   });
 });
+
+describe('armazenamentoSessao com o cofre fechado', () => {
+  test('se a chave não puder ser lida agora, a sessão NÃO é apagada', async () => {
+    const cofre = cofreEmMemoria();
+    const armazem = armazemEmMemoria();
+    await criarArmazenamentoSessao({ cofre, armazem, bytesAleatorios: bytes }).setItem('k', SESSAO);
+
+    // Ex.: iPhone ainda não desbloqueado desde que ligou.
+    const fechado = { ...cofre, getItemAsync: async () => { throw new Error('errSecInteractionNotAllowed'); } };
+    const emSegundoPlano = criarArmazenamentoSessao({ cofre: fechado, armazem, bytesAleatorios: bytes });
+    await expect(emSegundoPlano.getItem('k')).rejects.toThrow();
+    expect(armazem.dados.has('k')).toBe(true);
+
+    // Depois de desbloquear, a sessão continua lá.
+    expect(await criarArmazenamentoSessao({ cofre, armazem, bytesAleatorios: bytes }).getItem('k')).toBe(SESSAO);
+  });
+});

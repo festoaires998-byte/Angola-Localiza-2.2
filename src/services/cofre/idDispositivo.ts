@@ -1,10 +1,10 @@
 import { randomUUID } from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
 
 import type { CofreChaves } from './armazenamentoSessao';
+import { cofreApp } from './cofreApp';
+import { NOME_ID_DISPOSITIVO } from './nomes';
 
-/** Nome, no expo-secure-store, do identificador deste aparelho. */
-export const NOME_ID_DISPOSITIVO = 'angola_localiza.id_dispositivo';
+export { NOME_ID_DISPOSITIVO } from './nomes';
 
 const FORMATO = /^app-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -33,4 +33,4 @@ export function criarObterIdDispositivo(cofre: CofreChaves, gerarUuid: () => str
 }
 
 /** Identificador deste aparelho, ex.: "app-3b0c...". */
-export const obterIdDispositivo = criarObterIdDispositivo(SecureStore, randomUUID);
+export const obterIdDispositivo = criarObterIdDispositivo(cofreApp, randomUUID);

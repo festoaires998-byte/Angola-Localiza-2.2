@@ -31,6 +31,14 @@ const fila = criarRepositorioFilaSaida(db, { deviceId });
    - veio com `FAILED` → volta a `pendente`, conta mais uma tentativa e guarda o erro;
    - não veio na resposta → volta a `pendente` e conta mais uma tentativa.
 4. Se o pedido falhar por inteiro (sem rede), `registarFalhaEnvio(userId, erro)`.
+5. Se o servidor recusar a sessão (401), `devolverAPendente(userId)`: voltam a
+   `pendente` **sem** contar tentativa (a culpa não é das operações).
+
+Outras ajudas usadas pelo motor (`src/sync`):
+- `listarProntas(userId, limite, { ignorarEspera: true })` — botão "Sincronizar agora".
+- `atualizarPayload(userId, operationId, payload)` — grava o payload com os URLs reais das fotos.
+- `registarFalhaOperacao(userId, operationId, erro)` — só essa operação espera (ex.: foto que não subiu).
+- `ficheiros.listarDeOperacoesConcluidas()` e `ficheiros.contarPendentesDoUtilizador(userId)`.
 
 Depois de uma falha, a operação espera um pouco antes de voltar a ser enviada
 (30 s, 1 min, 2 min, ... no máximo 1 hora).

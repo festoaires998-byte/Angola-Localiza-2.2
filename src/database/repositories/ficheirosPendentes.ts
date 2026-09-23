@@ -133,6 +133,30 @@ export function criarRepositorioFicheirosPendentes(
       return linha?.total ?? 0;
     },
 
+    /** Fotos ainda por enviar das operações do utilizador `userId`. */
+    async contarPendentesDoUtilizador(userId: string): Promise<number> {
+      const linha = await db.getFirst<{ total: number }>(
+        `SELECT COUNT(*) AS total FROM ficheiros_pendentes f
+           JOIN fila_saida o ON o.operation_id = f.operation_id
+          WHERE f.estado = 'pendente' AND o.user_id = ?`,
+        [userId],
+      );
+      return linha?.total ?? 0;
+    },
+
+    /**
+     * Ficheiros cuja operação já ficou "concluida": o servidor já tem tudo,
+     * por isso o ficheiro local pode ser apagado.
+     */
+    listarDeOperacoesConcluidas(): Promise<FicheiroPendente[]> {
+      return db.getAll<FicheiroPendente>(
+        `SELECT f.* FROM ficheiros_pendentes f
+           JOIN fila_saida o ON o.operation_id = f.operation_id
+          WHERE o.estado = 'concluida'
+          ORDER BY f.criado_em, f.id`,
+      );
+    },
+
     /** Apaga só o registo (o ficheiro no disco tem de ser apagado à parte). */
     async apagar(id: string): Promise<void> {
       await db.run('DELETE FROM ficheiros_pendentes WHERE id = ?', [id]);

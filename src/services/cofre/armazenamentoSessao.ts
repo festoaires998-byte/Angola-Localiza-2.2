@@ -1,11 +1,12 @@
 import { gcm } from '@noble/ciphers/aes.js';
 import { bytesToHex, bytesToUtf8, hexToBytes, utf8ToBytes } from '@noble/ciphers/utils.js';
 import { getRandomBytes } from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
 import KvStore from 'expo-sqlite/kv-store';
 
-/** Nome, no expo-secure-store, da chave AES que cifra a sessão. */
-export const NOME_CHAVE_SESSAO = 'angola_localiza.chave_sessao';
+import { cofreApp } from './cofreApp';
+import { NOME_CHAVE_SESSAO } from './nomes';
+
+export { NOME_CHAVE_SESSAO } from './nomes';
 
 /** Prefixo do texto cifrado guardado (permite mudar o formato no futuro). */
 const VERSAO = 'v1:';
@@ -84,12 +85,20 @@ export function criarArmazenamentoSessao(deps: DependenciasArmazenamento): Armaz
     async getItem(nome) {
       const guardado = await deps.armazem.getItem(nome);
       if (guardado === null) return null;
+      let bytes: Uint8Array;
       try {
         if (!guardado.startsWith(VERSAO)) throw new Error('formato desconhecido');
-        const bytes = hexToBytes(guardado.slice(VERSAO.length));
+        bytes = hexToBytes(guardado.slice(VERSAO.length));
+      } catch {
+        await deps.armazem.removeItem(nome);
+        return null;
+      }
+      // Fora do try: se o cofre não abrir agora (ex.: iPhone bloqueado antes do
+      // primeiro desbloqueio), o erro sobe e a sessão NÃO é apagada.
+      const k = await obterChave();
+      try {
         const nonce = bytes.subarray(0, BYTES_NONCE);
         const cifrado = bytes.subarray(BYTES_NONCE);
-        const k = await obterChave();
         return bytesToUtf8(gcm(k, nonce, utf8ToBytes(nome)).decrypt(cifrado));
       } catch {
         await deps.armazem.removeItem(nome);
@@ -105,7 +114,7 @@ export function criarArmazenamentoSessao(deps: DependenciasArmazenamento): Armaz
 
 /** Adaptador usado pela app (expo-secure-store + expo-sqlite/kv-store). */
 export const armazenamentoSessao: ArmazenamentoSessao = criarArmazenamentoSessao({
-  cofre: SecureStore,
+  cofre: cofreApp,
   armazem: KvStore,
   bytesAleatorios: getRandomBytes,
 });
