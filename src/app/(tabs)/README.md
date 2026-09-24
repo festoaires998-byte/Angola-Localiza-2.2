@@ -45,6 +45,18 @@ e Conta (`definicoes`). Os nomes das rotas não mudaram.
 O super_admin vê todos. Staff (quem tem cargos) só vê mais do que mapa e
 definicoes depois de ter o KYC em `ID_VERIFIED` **e** a sessão em AAL2 (código MFA).
 
+## Moradas (`guardados/`): os meus registos
+
+Por cima das moradas guardadas, a secção **"Os meus registos"** mostra as
+moradas que a pessoa registou e em que ponto estão: à espera de rede (ainda na
+fila), à espera de validação, aprovada (com o código postal e o número),
+recusada ou duplicada. Os registos vêm de `field_records` (só os da própria
+pessoa) e ficam guardados no telemóvel.
+
+Quando um registo é aprovado, a app **junta a morada aos favoritos sozinha**,
+uma só vez (categoria pelo tipo de local: Casa → casa, Loja → loja…). Se a
+pessoa depois a tirar, não volta a entrar. Ver `src/services/moradas/registos.ts`.
+
 ## Enviar (`entrega/`)
 
 Stack com três ecrãs, que partilham o estado em `src/state/envios.ts`:

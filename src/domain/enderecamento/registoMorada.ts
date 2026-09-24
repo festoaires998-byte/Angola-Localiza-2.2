@@ -156,14 +156,33 @@ export interface DadosRegisto {
   ruaId: string | null;
   /** …ou o nome de uma rua que não está na lista. */
   ruaNome: string;
-  /** Bairro (da lista de bairros conhecidos perto, ou escrito à mão). Obrigatório. */
+  /**
+   * A rua não tem nome (nem oficial nem conhecido). O servidor cria uma
+   * "Rua S/Nº" na quadra (new_unnamed_street), em vez de um nome inventado.
+   */
+  ruaSemNome: boolean;
+  /** Bairro (da lista de bairros conhecidos perto, ou escrito à mão). */
   bairro: string;
+  /** O bairro não tem nome: vai sem bairro (neighborhood_name null). */
+  bairroSemNome: boolean;
   referencia: string;
   /** Marcador "offline:<id>" da foto da fachada (já com marca de água). */
   foto: string | null;
   /** Há uma morada a menos de 15 m e a pessoa confirmou que é um local diferente. */
   duplicadoConfirmado: boolean;
   haDuplicado: boolean;
+}
+
+/**
+ * Sem nome de rua ou de bairro, a referência é o que guia quem procura a
+ * morada: tem de ser mais completa (ex.: "portão azul, ao lado da igreja").
+ */
+export const REFERENCIA_MIN = 3;
+export const REFERENCIA_MIN_SEM_NOME = 10;
+
+/** Quantas letras a referência tem de ter (mais quando falta o nome da rua ou do bairro). */
+export function minimoReferencia(d: Pick<DadosRegisto, 'ruaId' | 'ruaSemNome' | 'bairroSemNome'>): number {
+  return (d.ruaSemNome && !d.ruaId) || d.bairroSemNome ? REFERENCIA_MIN_SEM_NOME : REFERENCIA_MIN;
 }
 
 /** O que falta para poder enviar (vazio = pode enviar). */
@@ -178,9 +197,20 @@ export function faltaParaEnviar(d: DadosRegisto): string[] {
   else if (d.tipo === 'Outro' && tipoAEnviar('Outro', d.tipoOutro).length < 3) {
     falta.push('Descrever o tipo de local (ex.: Padaria, Oficina).');
   }
-  if (!d.ruaId && !d.ruaNome.trim()) falta.push('Escolher a rua ou escrever o nome dela.');
-  if (d.bairro.trim().length < 2) falta.push('Escolher o bairro ou escrever o nome dele.');
-  if (d.referencia.trim().length < 3) falta.push('Escrever uma referência (ex.: portão azul).');
+  if (!d.ruaId && !d.ruaSemNome && !d.ruaNome.trim()) {
+    falta.push('Escolher a rua, escrever o nome dela ou marcar "Esta rua não tem nome".');
+  }
+  if (!d.bairroSemNome && d.bairro.trim().length < 2) {
+    falta.push('Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".');
+  }
+  const minimo = minimoReferencia(d);
+  if (d.referencia.trim().length < minimo) {
+    falta.push(
+      minimo === REFERENCIA_MIN
+        ? 'Escrever uma referência (ex.: portão azul).'
+        : `Sem nome de rua ou de bairro, a referência guia quem procura: escreve pelo menos ${REFERENCIA_MIN_SEM_NOME} letras (ex.: portão azul, ao lado da igreja).`,
+    );
+  }
   if (!d.foto) falta.push('Tirar a foto da fachada.');
   if (d.haDuplicado && !d.duplicadoConfirmado) falta.push('Confirmar que é um local diferente da morada que já existe perto.');
   return falta;
@@ -197,7 +227,10 @@ export interface PedidoRegisto {
   place_kind: string;
   street_id?: string;
   street_name?: string;
-  neighborhood_name: string;
+  /** A rua não tem nome: o servidor cria uma "Rua S/Nº" na quadra. */
+  new_unnamed_street?: true;
+  /** null quando o bairro não tem nome. */
+  neighborhood_name: string | null;
   accuracy_meters: number;
   override_duplicate: boolean;
   duplicate_justification: string | null;
@@ -217,8 +250,12 @@ export function montarPedidoRegisto(d: DadosRegisto, deviceId: string): PedidoRe
     photo_facade_url: d.foto!,
     reference: d.referencia.trim(),
     place_kind: tipoAEnviar(d.tipo!, d.tipoOutro),
-    ...(d.ruaId ? { street_id: d.ruaId } : { street_name: d.ruaNome.trim() }),
-    neighborhood_name: d.bairro.replace(/\s+/g, ' ').trim(),
+    ...(d.ruaId
+      ? { street_id: d.ruaId }
+      : d.ruaSemNome
+        ? { new_unnamed_street: true as const }
+        : { street_name: d.ruaNome.trim() }),
+    neighborhood_name: d.bairroSemNome ? null : d.bairro.replace(/\s+/g, ' ').trim(),
     accuracy_meters: Math.round(c.precisao * 10) / 10,
     override_duplicate: d.haDuplicado && d.duplicadoConfirmado,
     duplicate_justification: d.haDuplicado && d.duplicadoConfirmado ? 'Cidadão confirma que é um local diferente.' : null,

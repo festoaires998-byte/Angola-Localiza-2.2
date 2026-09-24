@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
+import type { Registo } from '@/domain/enderecamento/meusRegistos';
 import { ultimaAtualizacao, type ItemMorada } from '@/services/moradas/moradas';
-import { mudancasMoradas, servicoMoradas } from '@/services/moradas/moradasApp';
+import { mudancasMoradas, servicoMoradas, servicoRegistos } from '@/services/moradas/moradasApp';
+import { eventosSync } from '@/sync/eventos';
 
 import { useSessao } from './useSessao';
 
@@ -16,6 +18,8 @@ export interface EstadoMoradas {
   atualizadoEm: string | null;
   /** Há alterações feitas sem rede à espera de ir para o servidor. */
   pendentes: number;
+  /** "Os meus registos": moradas registadas e em que ponto estão (à espera de rede, por validar, aprovadas…). */
+  registos: Registo[];
   atualizar(): Promise<void>;
   alterar(id: string, mudancas: { nome: string; categoria: CategoriaFavorito }): Promise<void>;
   remover(id: string): Promise<void>;
@@ -37,19 +41,27 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
   const [itens, setItens] = useState<ItemMorada[] | null>(null);
   const [aAtualizar, setAAtualizar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [registos, setRegistos] = useState<Registo[]>([]);
   const pedido = useRef(0);
 
   const lerLocal = useCallback(async () => {
     if (!userId) return;
     const meu = ++pedido.current;
-    const lista = await servicoMoradas.listar(userId).catch(() => null);
-    if (meu === pedido.current && lista) setItens(lista);
+    const [lista, meusRegistos] = await Promise.all([
+      servicoMoradas.listar(userId).catch(() => null),
+      servicoRegistos.listar(userId).catch(() => null),
+    ]);
+    if (meu !== pedido.current) return;
+    if (lista) setItens(lista);
+    if (meusRegistos) setRegistos(meusRegistos);
   }, [userId]);
 
   const atualizar = useCallback(async () => {
     if (!userId || !online) return;
     setAAtualizar(true);
     try {
+      // Primeiro os registos: um registo aprovado entra nos favoritos e vem já na lista abaixo.
+      await servicoRegistos.atualizar(userId).catch(() => undefined);
       const r = await servicoMoradas.atualizar(userId);
       setErro(r.erro ? frase(r.erro) : null);
     } catch (e) {
@@ -63,7 +75,13 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
   // Lê o telemóvel e volta a ler quando algum ecrã muda as moradas.
   useEffect(() => {
     void lerLocal();
-    return mudancasMoradas.ouvir(() => void lerLocal());
+    const pararA = mudancasMoradas.ouvir(() => void lerLocal());
+    // Um registo feito sem rede sai pela fila: deixa de estar "à espera de rede".
+    const pararB = eventosSync.ouvir('sincronizado', () => void lerLocal());
+    return () => {
+      pararA();
+      pararB();
+    };
   }, [lerLocal]);
 
   // Com rede: atualiza (ao abrir e quando a rede volta). O detalhe não precisa:
@@ -104,6 +122,7 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
     erro,
     atualizadoEm: itens ? ultimaAtualizacao(itens) : null,
     pendentes: itens ? itens.filter((i) => i.favorito.pendente !== null).length : 0,
+    registos,
     atualizar,
     alterar,
     remover,

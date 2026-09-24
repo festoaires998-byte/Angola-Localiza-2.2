@@ -6,6 +6,7 @@ import {
   codigosDasDuasCelulas,
   faltaParaEnviar,
   linhasMarcaDeAgua,
+  minimoReferencia,
   montarPedidoRegisto,
   pontoAEnviar,
   pontoNaCelula,
@@ -35,7 +36,9 @@ function dados(extra: Partial<DadosRegisto> = {}): DadosRegisto {
     tipoOutro: '',
     ruaId: 'rua-1',
     ruaNome: '',
+    ruaSemNome: false,
     bairro: 'Académico',
+    bairroSemNome: false,
     referencia: 'Portão azul',
     foto: 'offline:foto-1',
     duplicadoConfirmado: false,
@@ -142,9 +145,9 @@ describe('o que falta para enviar', () => {
   });
 
   test('bairro obrigatório: sem ele o botão não ativa, com a frase certa', () => {
-    expect(faltaParaEnviar(dados({ bairro: '' }))).toEqual(['Escolher o bairro ou escrever o nome dele.']);
-    expect(faltaParaEnviar(dados({ bairro: '  ' }))).toEqual(['Escolher o bairro ou escrever o nome dele.']);
-    expect(() => montarPedidoRegisto(dados({ bairro: '' }), 'd')).toThrow('Escolher o bairro ou escrever o nome dele.');
+    expect(faltaParaEnviar(dados({ bairro: '' }))).toEqual(['Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".']);
+    expect(faltaParaEnviar(dados({ bairro: '  ' }))).toEqual(['Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".']);
+    expect(() => montarPedidoRegisto(dados({ bairro: '' }), 'd')).toThrow('Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".');
     expect(faltaParaEnviar(dados({ bairro: 'Bairro Académico' }))).toEqual([]);
   });
 });
@@ -210,5 +213,49 @@ describe('posição a enviar (e a usar para pedir ruas e bairros)', () => {
     }
     // A vizinha fica noutra célula (a norte).
     expect(pontoAEnviar(captura(JUNTO), 'vizinha').latitude).toBeGreaterThan(c.latMax);
+  });
+});
+
+describe('rua e bairro sem nome', () => {
+  const semNomes = { ruaId: null, ruaNome: '', ruaSemNome: true, bairro: '', bairroSemNome: true, referencia: 'Portão azul, ao lado da igreja' };
+
+  test('não bloqueiam o envio (a referência passa a ser a pista principal)', () => {
+    expect(faltaParaEnviar(dados(semNomes))).toEqual([]);
+  });
+
+  test('sem nome de rua ou de bairro, a referência tem de ter pelo menos 10 letras', () => {
+    expect(minimoReferencia(dados())).toBe(3);
+    expect(minimoReferencia(dados({ ruaId: null, ruaSemNome: true }))).toBe(10);
+    expect(minimoReferencia(dados({ bairroSemNome: true }))).toBe(10);
+    // Rua escolhida da lista: o "sem nome" da rua não conta.
+    expect(minimoReferencia(dados({ ruaId: 'rua-1', ruaSemNome: true }))).toBe(3);
+    expect(faltaParaEnviar(dados({ ...semNomes, referencia: 'Azul' }))).toEqual([
+      'Sem nome de rua ou de bairro, a referência guia quem procura: escreve pelo menos 10 letras (ex.: portão azul, ao lado da igreja).',
+    ]);
+  });
+
+  test('payload: new_unnamed_street (sem nome de rua inventado) e neighborhood_name null', () => {
+    const p = montarPedidoRegisto(dados(semNomes), 'disp-1');
+    expect(p.new_unnamed_street).toBe(true);
+    expect(p).not.toHaveProperty('street_name');
+    expect(p).not.toHaveProperty('street_id');
+    expect(p.neighborhood_name).toBeNull();
+    expect(p.reference).toBe('Portão azul, ao lado da igreja');
+  });
+
+  test('só a rua sem nome: o bairro vai; só o bairro sem nome: a rua vai', () => {
+    expect(montarPedidoRegisto(dados({ ruaId: null, ruaSemNome: true, referencia: 'Portão azul, ao lado da igreja' }), 'd')).toMatchObject({
+      new_unnamed_street: true,
+      neighborhood_name: 'Académico',
+    });
+    const soBairro = montarPedidoRegisto(dados({ bairro: '', bairroSemNome: true, referencia: 'Portão azul, ao lado da igreja' }), 'd');
+    expect(soBairro).toMatchObject({ street_id: 'rua-1', neighborhood_name: null });
+    expect(soBairro).not.toHaveProperty('new_unnamed_street');
+  });
+
+  test('sem rua nenhuma (nem nome, nem lista, nem "sem nome") continua a faltar', () => {
+    expect(faltaParaEnviar(dados({ ruaId: null, ruaNome: '', ruaSemNome: false }))).toEqual([
+      'Escolher a rua, escrever o nome dela ou marcar "Esta rua não tem nome".',
+    ]);
   });
 });

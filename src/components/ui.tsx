@@ -121,6 +121,25 @@ export function Ligacao({ titulo, onPress }: { titulo: string; onPress(): void }
   );
 }
 
+/** Caixa de marcar grande (ex.: "Esta rua não tem nome"). Área de toque de 48 px. */
+export function Marcar({ rotulo, marcado, aoMudar }: { rotulo: string; marcado: boolean; aoMudar(novo: boolean): void }) {
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={rotulo}
+      accessibilityState={{ checked: marcado }}
+      onPress={() => aoMudar(!marcado)}
+      hitSlop={4}
+      style={estilos.marcar}
+    >
+      <View style={[estilos.quadrado, marcado && estilos.quadradoMarcado]}>
+        {marcado ? <Text style={estilos.visto}>✓</Text> : null}
+      </View>
+      <Text style={estilos.textoMarcar}>{rotulo}</Text>
+    </Pressable>
+  );
+}
+
 type TipoCaixa = 'erro' | 'aviso' | 'info' | 'sucesso';
 
 /** Caixa de mensagem com fundo colorido e texto escuro. */
@@ -204,6 +223,20 @@ export const estilos = StyleSheet.create({
     color: CORES.primaria,
     textDecorationLine: 'underline',
   },
+  marcar: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  quadrado: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: CORES.primaria,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CORES.fundo,
+  },
+  quadradoMarcado: { backgroundColor: CORES.primaria },
+  visto: { color: CORES.sobrePrimaria, fontSize: 18, fontWeight: '800' },
+  textoMarcar: { flex: 1, fontSize: TAMANHOS.texto, color: CORES.texto, fontWeight: '600' },
   caixa: { borderRadius: TAMANHOS.raio, borderWidth: 2, padding: 14, gap: 10 },
   caixa_erro: { backgroundColor: CORES.erroFundo, borderColor: CORES.perigo },
   caixa_aviso: { backgroundColor: CORES.avisoFundo, borderColor: CORES.avisoBorda },

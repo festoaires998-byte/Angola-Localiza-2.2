@@ -7,7 +7,7 @@ import { CamaraFachada } from '@/components/CamaraFachada';
 import { textoPrecisao } from '@/components/nomes';
 import { Opcoes } from '@/components/Opcoes';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, Campo, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
+import { Botao, Caixa, Campo, Cartao, Linha, Marcar, Subtitulo, Texto } from '@/components/ui';
 import { codificarGrelha } from '@/domain/enderecamento/codigoPostal';
 import { encode } from '@/domain/enderecamento/plusCode';
 import {
@@ -15,6 +15,7 @@ import {
   faltaParaEnviar,
   linhasMarcaDeAgua,
   pontoAEnviar,
+  REFERENCIA_MIN_SEM_NOME,
   situacaoLimite,
   TIPO_OUTRO_MAX,
   TIPOS_LOCAL,
@@ -80,12 +81,14 @@ export default function RegistarMorada() {
   const [quadraDoPonto, setQuadraDoPonto] = useState<QuadraDoPonto | null>(null);
   const [bairro, setBairro] = useState<string | null>(null);
   const [bairroNome, setBairroNome] = useState('');
+  const [bairroSemNome, setBairroSemNome] = useState(false);
   const [duplicado, setDuplicado] = useState<Duplicado | null | undefined>(undefined);
   const [escolha, setEscolha] = useState<EscolhaCelula | null>(null);
   const [tipo, setTipo] = useState<TipoLocal | null>('Casa');
   const [tipoOutro, setTipoOutro] = useState('');
   const [rua, setRua] = useState<string | null>(null);
   const [ruaNome, setRuaNome] = useState('');
+  const [ruaSemNome, setRuaSemNome] = useState(false);
   const [referencia, setReferencia] = useState('');
   const [foto, setFoto] = useState<{ uri: string; marcador: string } | null>(null);
   const [duplicadoConfirmado, setDuplicadoConfirmado] = useState(false);
@@ -138,14 +141,19 @@ export default function RegistarMorada() {
     };
   }, [celula, online]);
 
+  // "Não tem nome" só conta quando a pessoa está a escrever o nome (não escolheu da lista).
+  const escreveRua = ruas.length === 0 || rua === RUA_NOVA;
+  const escreveBairro = bairros.length === 0 || bairro === BAIRRO_NOVO;
   const dados = {
     captura,
     escolhaCelula: escolha,
     tipo,
     tipoOutro: tipo === 'Outro' ? tipoOutro : '',
     ruaId: rua && rua !== RUA_NOVA ? rua : null,
-    ruaNome: rua === RUA_NOVA || ruas.length === 0 ? ruaNome : '',
-    bairro: bairro && bairro !== BAIRRO_NOVO ? bairro : bairro === BAIRRO_NOVO || bairros.length === 0 ? bairroNome : '',
+    ruaNome: escreveRua && !ruaSemNome ? ruaNome : '',
+    ruaSemNome: escreveRua && ruaSemNome,
+    bairro: bairro && bairro !== BAIRRO_NOVO ? bairro : escreveBairro && !bairroSemNome ? bairroNome : '',
+    bairroSemNome: escreveBairro && bairroSemNome,
     referencia,
     foto: foto?.marcador ?? null,
     duplicadoConfirmado,
@@ -291,8 +299,23 @@ export default function RegistarMorada() {
               : 'Ainda não há ruas conhecidas aqui: escreve o nome da rua.'}
           </Texto>
         )}
-        {ruas.length === 0 || rua === RUA_NOVA ? (
-          <Campo rotulo="Nome da rua" value={ruaNome} onChangeText={setRuaNome} placeholder="Ex.: Rua da Missão" maxLength={80} />
+        {escreveRua ? (
+          <>
+            {!ruaSemNome ? (
+              <Campo rotulo="Nome da rua" value={ruaNome} onChangeText={setRuaNome} placeholder="Ex.: Rua da Missão" maxLength={80} />
+            ) : null}
+            <Marcar
+              rotulo="Esta rua não tem nome"
+              marcado={ruaSemNome}
+              aoMudar={(v) => {
+                setRuaSemNome(v);
+                if (v) setRuaNome('');
+              }}
+            />
+            {ruaSemNome ? (
+              <Texto suave>Fica registada como "Rua S/Nº" desta quadra. Não inventes um nome: a referência vai guiar quem procura.</Texto>
+            ) : null}
+          </>
         ) : null}
         <Text style={estilos.rotulo}>Bairro</Text>
         {bairros.length > 0 ? (
@@ -309,8 +332,20 @@ export default function RegistarMorada() {
         ) : (
           <Texto suave>Ainda não há bairros conhecidos aqui: escreve o nome do bairro.</Texto>
         )}
-        {bairros.length === 0 || bairro === BAIRRO_NOVO ? (
-          <Campo rotulo="Nome do bairro" value={bairroNome} onChangeText={setBairroNome} placeholder="Ex.: Bairro Académico" maxLength={80} />
+        {escreveBairro ? (
+          <>
+            {!bairroSemNome ? (
+              <Campo rotulo="Nome do bairro" value={bairroNome} onChangeText={setBairroNome} placeholder="Ex.: Bairro Académico" maxLength={80} />
+            ) : null}
+            <Marcar
+              rotulo="Este bairro não tem nome"
+              marcado={bairroSemNome}
+              aoMudar={(v) => {
+                setBairroSemNome(v);
+                if (v) setBairroNome('');
+              }}
+            />
+          </>
         ) : null}
         <Campo
           rotulo="Referência (para ajudar a encontrar)"
@@ -319,6 +354,9 @@ export default function RegistarMorada() {
           placeholder="Ex.: portão azul, ao lado da farmácia"
           maxLength={120}
         />
+        {dados.ruaSemNome || dados.bairroSemNome ? (
+          <Texto suave>{`Sem nome de rua ou de bairro, a referência é a principal pista para encontrar a morada: pelo menos ${REFERENCIA_MIN_SEM_NOME} letras.`}</Texto>
+        ) : null}
       </Cartao>
 
       <Cartao>

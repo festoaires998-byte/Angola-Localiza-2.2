@@ -1,9 +1,13 @@
 import { atualizarFavorito, lerFavoritos, removerFavorito } from '@/api/moradas';
+import { juntarAosFavoritos, lerMeusRegistos } from '@/api/registos';
 import { abrirBaseDados } from '@/database/client';
 import { criarRepositorioFavoritos } from '@/database/repositories/favoritos';
 import { criarRepositorioMoradas } from '@/database/repositories/moradas';
+import { criarRepositorioPreferencias } from '@/database/repositories/preferencias';
+import { obterRepositoriosSync } from '@/sync/fila';
 
 import { criarServicoMoradas, type DependenciasMoradas } from './moradas';
+import { criarServicoRegistos } from './registos';
 
 const favoritos = () => abrirBaseDados().then((db) => criarRepositorioFavoritos(db));
 const moradas = () => abrirBaseDados().then((db) => criarRepositorioMoradas(db));
@@ -52,3 +56,15 @@ export const mudancasMoradas = {
     };
   },
 };
+
+const preferencias = () => abrirBaseDados().then((db) => criarRepositorioPreferencias(db));
+
+/** "Os meus registos" (e juntar os aprovados aos favoritos), ligado ao telemóvel, à fila e ao Supabase. */
+export const servicoRegistos = criarServicoRegistos({
+  servidor: { lerMeusRegistos, juntarAosFavoritos },
+  preferencias: {
+    obter: async (c) => (await preferencias()).obter(c),
+    guardar: async (c, v) => (await preferencias()).guardar(c, v),
+  },
+  fila: { porEnviar: async (userId) => (await obterRepositoriosSync()).fila.listarPorEnviarDoTipo(userId, 'field_submit') },
+});
