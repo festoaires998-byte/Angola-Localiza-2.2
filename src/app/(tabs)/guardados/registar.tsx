@@ -16,6 +16,7 @@ import {
   linhasMarcaDeAgua,
   pontoAEnviar,
   situacaoLimite,
+  TIPO_OUTRO_MAX,
   TIPOS_LOCAL,
   type EscolhaCelula,
   type TipoLocal,
@@ -81,6 +82,7 @@ export default function RegistarMorada() {
   const [duplicado, setDuplicado] = useState<Duplicado | null | undefined>(undefined);
   const [escolha, setEscolha] = useState<EscolhaCelula | null>(null);
   const [tipo, setTipo] = useState<TipoLocal | null>('Casa');
+  const [tipoOutro, setTipoOutro] = useState('');
   const [rua, setRua] = useState<string | null>(null);
   const [ruaNome, setRuaNome] = useState('');
   const [referencia, setReferencia] = useState('');
@@ -138,6 +140,7 @@ export default function RegistarMorada() {
     captura,
     escolhaCelula: escolha,
     tipo,
+    tipoOutro: tipo === 'Outro' ? tipoOutro : '',
     ruaId: rua && rua !== RUA_NOVA ? rua : null,
     ruaNome: rua === RUA_NOVA || ruas.length === 0 ? ruaNome : '',
     bairro: bairro && bairro !== BAIRRO_NOVO ? bairro : bairro === BAIRRO_NOVO || bairros.length === 0 ? bairroNome : '',
@@ -253,6 +256,16 @@ export default function RegistarMorada() {
         <Subtitulo>2. O local</Subtitulo>
         <Text style={estilos.rotulo}>Tipo de local</Text>
         <Opcoes<TipoLocal> grupo="Tipo de local" valor={tipo} aoEscolher={setTipo} opcoes={TIPOS_LOCAL.map((t) => ({ valor: t, nome: t }))} />
+        {tipo === 'Outro' ? (
+          <Campo
+            rotulo="Que tipo de local é?"
+            value={tipoOutro}
+            onChangeText={setTipoOutro}
+            placeholder="Descreve o tipo de local. Ex.: Padaria, Oficina…"
+            maxLength={TIPO_OUTRO_MAX}
+            autoCapitalize="sentences"
+          />
+        ) : null}
         <Text style={estilos.rotulo}>Rua</Text>
         {ruas.length > 0 ? (
           <Opcoes

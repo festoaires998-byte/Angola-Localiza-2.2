@@ -43,6 +43,20 @@ export const TIPOS_LOCAL = [
 ] as const;
 export type TipoLocal = (typeof TIPOS_LOCAL)[number];
 
+/** Com "Outro", a pessoa escreve o tipo real (ex.: Padaria); tamanho máximo. */
+export const TIPO_OUTRO_MAX = 40;
+
+/**
+ * O tipo que vai para o servidor (place_kind). Com "Outro", vai a descrição
+ * escrita (ex.: "Padaria"), para não se perder o que o local é de facto. O
+ * servidor guarda-o como texto no início da referência ("[Padaria] …"), sem
+ * lista fechada.
+ */
+export function tipoAEnviar(tipo: TipoLocal, tipoOutro: string): string {
+  if (tipo !== 'Outro') return tipo;
+  return tipoOutro.replace(/\s+/g, ' ').replace(/[[\]]/g, '').trim().slice(0, TIPO_OUTRO_MAX);
+}
+
 export type Lado = 'norte' | 'sul' | 'este' | 'oeste';
 
 export interface SituacaoLimite {
@@ -136,6 +150,8 @@ export interface DadosRegisto {
   /** Obrigatória quando a posição está junto ao limite. */
   escolhaCelula: EscolhaCelula | null;
   tipo: TipoLocal | null;
+  /** Descrição do tipo quando é "Outro" (obrigatória nesse caso). */
+  tipoOutro: string;
   /** Rua da lista do servidor… */
   ruaId: string | null;
   /** …ou o nome de uma rua que não está na lista. */
@@ -159,6 +175,9 @@ export function faltaParaEnviar(d: DadosRegisto): string[] {
     falta.push('Junto ao limite de duas células: mede no centro da entrada ou escolhe a célula.');
   }
   if (!d.tipo) falta.push('Escolher o tipo de local.');
+  else if (d.tipo === 'Outro' && tipoAEnviar('Outro', d.tipoOutro).length < 3) {
+    falta.push('Descrever o tipo de local (ex.: Padaria, Oficina).');
+  }
   if (!d.ruaId && !d.ruaNome.trim()) falta.push('Escolher a rua ou escrever o nome dela.');
   if (d.bairro.trim().length < 2) falta.push('Escolher o bairro ou escrever o nome dele.');
   if (d.referencia.trim().length < 3) falta.push('Escrever uma referência (ex.: portão azul).');
@@ -174,7 +193,8 @@ export interface PedidoRegisto {
   longitude: number;
   photo_facade_url: string;
   reference: string;
-  place_kind: TipoLocal;
+  /** Um dos TIPOS_LOCAL ou, com "Outro", a descrição escrita (ex.: "Padaria"). */
+  place_kind: string;
   street_id?: string;
   street_name?: string;
   neighborhood_name: string;
@@ -196,7 +216,7 @@ export function montarPedidoRegisto(d: DadosRegisto, deviceId: string): PedidoRe
     longitude: ponto.longitude,
     photo_facade_url: d.foto!,
     reference: d.referencia.trim(),
-    place_kind: d.tipo!,
+    place_kind: tipoAEnviar(d.tipo!, d.tipoOutro),
     ...(d.ruaId ? { street_id: d.ruaId } : { street_name: d.ruaNome.trim() }),
     neighborhood_name: d.bairro.replace(/\s+/g, ' ').trim(),
     accuracy_meters: Math.round(c.precisao * 10) / 10,

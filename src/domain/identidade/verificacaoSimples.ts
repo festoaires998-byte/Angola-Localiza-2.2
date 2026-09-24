@@ -29,6 +29,19 @@ export const DESAFIOS = [
 ] as const;
 export type Desafio = (typeof DESAFIOS)[number];
 
+/**
+ * Um emoji por gesto: mostra de relance o que fazer (menos esforço de leitura).
+ * O Record obriga a ter um emoji para cada gesto da lista.
+ */
+export const EMOJI_DESAFIO: Record<Desafio, string> = {
+  'Olha para a tua esquerda': '👀⬅️',
+  'Olha para a tua direita': '👀➡️',
+  'Põe a mão aberta ao lado da cara': '✋',
+  'Fecha um olho': '😉',
+  'Sorri com a boca aberta': '😁',
+  'Põe o polegar para cima ao lado da cara': '👍',
+};
+
 /** Um gesto ao acaso (o gerador pode ser trocado nos testes). */
 export function escolherDesafio(aleatorio: () => number = Math.random): Desafio {
   const i = Math.min(DESAFIOS.length - 1, Math.floor(aleatorio() * DESAFIOS.length));

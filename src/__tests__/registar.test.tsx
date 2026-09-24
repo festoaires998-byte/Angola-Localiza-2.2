@@ -183,6 +183,38 @@ describe('Registar morada', () => {
     expect(mockRuasPerto).toHaveBeenLastCalledWith(esta.latitude, esta.longitude, true);
   });
 
+  test('tipo "Outro": aparece o campo para descrever; em branco bloqueia; a descrição vai no registo', async () => {
+    await desenhar();
+    expect(screen.queryByLabelText('Que tipo de local é?')).toBeNull();
+    fireEvent.press(screen.getByRole('radio', { name: 'Tipo de local: Outro' }));
+    const campo = screen.getByLabelText('Que tipo de local é?');
+    expect(campo.props.placeholder).toBe('Descreve o tipo de local. Ex.: Padaria, Oficina…');
+    await preencherEFotografar();
+    expect(screen.getByText('• Descrever o tipo de local (ex.: Padaria, Oficina).')).toBeTruthy();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
+
+    fireEvent.changeText(screen.getByLabelText('Que tipo de local é?'), 'Padaria');
+    expect(screen.queryByText('• Descrever o tipo de local (ex.: Padaria, Oficina).')).toBeNull();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(false);
+    await act(async () => {
+      fireEvent.press(botaoEnviar());
+    });
+    expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ tipo: 'Outro', tipoOutro: 'Padaria' }));
+  });
+
+  test('tipo "Outro" e depois outro tipo: o campo desaparece e a descrição não conta', async () => {
+    await desenhar();
+    fireEvent.press(screen.getByRole('radio', { name: 'Tipo de local: Outro' }));
+    fireEvent.changeText(screen.getByLabelText('Que tipo de local é?'), 'Padaria');
+    fireEvent.press(screen.getByRole('radio', { name: 'Tipo de local: Loja' }));
+    expect(screen.queryByLabelText('Que tipo de local é?')).toBeNull();
+    await preencherEFotografar();
+    await act(async () => {
+      fireEvent.press(botaoEnviar());
+    });
+    expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ tipo: 'Loja', tipoOutro: '' }));
+  });
+
   test('bairro obrigatório: sem ele o "Falta" avisa e o botão fica desligado; "Outro bairro" deixa escrever', async () => {
     await desenhar();
     expect(screen.getByText('Bairro')).toBeTruthy();
