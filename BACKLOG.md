@@ -36,6 +36,15 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **Depois do hotfix do site** (enviar para `<id>/…`): tirar da regra a
   condição `or position('/' in name) = 0`.
 
+### Infraestrutura: SMTP próprio no Supabase
+
+- **Desde:** 24/09/2026.
+- **O quê:** o painel do Supabase só deixa ligar a proteção contra
+  palavras-passe roubadas ("Leaked password protection") depois de
+  configurar um servidor de email próprio (SMTP customizado).
+- **Prioridade:** baixa; não bloqueia a operação atual. Depois do SMTP,
+  ligar a proteção em Authentication → Passwords.
+
 ### Depois de validar o APK no terreno
 
 - Publicar as Edge Functions por um workflow manual (sem a service role key).
