@@ -12,6 +12,7 @@ export default function LayoutMoradas() {
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="registar" options={{ title: 'Registar morada' }} />
       <Stack.Screen name="[id]" options={{ title: 'Morada' }} />
     </Stack>
   );

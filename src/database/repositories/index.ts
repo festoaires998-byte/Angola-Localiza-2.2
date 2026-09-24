@@ -2,6 +2,7 @@ export * from './chavesDispositivo';
 export * from './codigosConfirmados';
 export * from './entregas';
 export * from './favoritos';
+export * from './preferencias';
 export * from './ficheirosPendentes';
 export * from './filaSaida';
 export * from './levantamentos';

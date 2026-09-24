@@ -4,6 +4,8 @@ Marca de água, compressão.
 
 | Ficheiro | Para que serve |
 | --- | --- |
+| `marcaDeAgua.ts` | Medidas da faixa da marca de água (testáveis): 12% da altura, duas linhas (Plus Code e data/hora). |
+| `fotoComMarca.ts` | `fotoComMarcaDeAgua(uriCamara, linhas)`: reduz para 1280 px, desenha a faixa com o Skia, grava o JPEG (qualidade 65) em `documentos/fotos/` e devolve `{ uri, sha256, tamanhoBytes }`. Se a marca de água falhar, falha (nunca há foto sem ela). |
 | `hashFoto.ts` | `hashFoto(uri)`: SHA-256 (hex, minúsculas) dos bytes do ficheiro final da foto. `sha256Hex(bytes)` para bytes já lidos. |
 
 ## hashFoto

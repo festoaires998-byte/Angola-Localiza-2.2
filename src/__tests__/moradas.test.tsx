@@ -119,6 +119,12 @@ describe('Moradas: lista', () => {
     expect(screen.getByText('AO-HUA-MNFQPN2S-3-95')).toBeTruthy();
   });
 
+  test('botão "Registar uma morada nova" abre o registo', () => {
+    desenhar(Lista);
+    fireEvent.press(screen.getByRole('button', { name: 'Registar uma morada nova' }));
+    expect(mockPush).toHaveBeenCalledWith('/guardados/registar');
+  });
+
   test('carregar numa morada abre o detalhe', () => {
     desenhar(Lista);
     fireEvent.press(screen.getByRole('button', { name: 'Escritório. Trabalho' }));
@@ -133,11 +139,11 @@ describe('Moradas: lista', () => {
     expect(screen.getByText('1 alteração à espera de rede para ir para o servidor.')).toBeTruthy();
   });
 
-  test('sem moradas: explica que por agora se guardam no site', () => {
+  test('sem moradas: convida a registar a primeira', () => {
     mockEstado = { itens: [] };
     desenhar(Lista);
     expect(screen.getByText('Ainda não tens moradas guardadas.')).toBeTruthy();
-    expect(screen.getByText(/as moradas guardam-se no site/)).toBeTruthy();
+    expect(screen.getByText(/Regista a tua casa/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Categoria: Todas' })).toBeNull();
   });
 
