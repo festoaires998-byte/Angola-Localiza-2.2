@@ -3,6 +3,7 @@ import { idDoMarcador, marcadorOffline, type FicheiroPendente, type NovoFicheiro
 import type { TipoOperacao } from '@/database/repositories/filaSaida';
 import type { Referencia } from '@/database/repositories/referencias';
 import { montarPedidoRegisto, type DadosRegisto, type PedidoRegisto } from '@/domain/enderecamento/registoMorada';
+import { chaveEstadoCidadao, eEstadoCidadao, type EstadoCidadao } from '@/domain/identidade/verificacaoSimples';
 
 /**
  * Registar uma morada nova: tudo o que o ecrã precisa, com e sem rede.
@@ -17,13 +18,18 @@ import { montarPedidoRegisto, type DadosRegisto, type PedidoRegisto } from '@/do
 export const BUCKET_FOTOS = 'field-photos';
 
 /**
- * - verificado: o servidor já a aceitou;
- * - pendente: a verificação está guardada no telemóvel e sobe quando houver rede
- *   (vai antes dos registos da fila, por isso pode registar);
+ * Só "verificado" (aprovada por um administrador) pode registar moradas:
+ * - pendente: a verificação está guardada no telemóvel, ainda por enviar;
+ * - em_revisao: enviada, à espera de um administrador;
+ * - rejeitado: recusada; tem de a fazer de novo;
  * - por_verificar: ainda não a fez;
- * - desconhecido: sem rede e sem resposta guardada.
+ * - desconhecido: sem rede e sem resposta guardada (deixa registar com aviso;
+ *   o servidor volta a confirmar ao receber).
  */
-export type Verificacao = 'verificado' | 'pendente' | 'por_verificar' | 'desconhecido';
+export type Verificacao = EstadoCidadao | 'pendente' | 'desconhecido';
+
+/** Pode registar moradas com esta verificação? */
+export const podeRegistar = (v: Verificacao | null) => v === 'verificado' || v === 'desconhecido';
 
 export interface FotoPronta {
   /** Ficheiro final (já com a marca de água) na pasta de documentos. */
@@ -47,7 +53,7 @@ export interface DependenciasRegisto {
   servidor: {
     pedirRuasDaQuadra(latitude: number, longitude: number): Promise<RuasDaQuadra>;
     procurarDuplicado(latitude: number, longitude: number): Promise<Duplicado | null>;
-    lerVerificacaoCidadao(userId: string): Promise<boolean>;
+    lerVerificacaoCidadao(userId: string): Promise<EstadoCidadao>;
   };
 }
 
@@ -83,21 +89,24 @@ export function criarServicoRegisto(deps: DependenciasRegisto) {
       return deps.servidor.procurarDuplicado(latitude, longitude).catch(() => undefined);
     },
 
-    /** O cidadão fez a verificação simples? Com rede pergunta e guarda; sem rede, a última resposta. */
+    /** Estado da verificação simples. Com rede pergunta e guarda; sem rede, a última resposta. */
     async verificacao(userId: string, online: boolean): Promise<Verificacao> {
       let resposta: Verificacao | null = null;
       if (online) {
         try {
-          const sim = await deps.servidor.lerVerificacaoCidadao(userId);
-          await deps.preferencias.guardar(chaveVerificacao(userId), sim ? '1' : '0').catch(() => undefined);
-          resposta = sim ? 'verificado' : 'por_verificar';
+          const estado = await deps.servidor.lerVerificacaoCidadao(userId);
+          await deps.preferencias.guardar(chaveVerificacao(userId), estado === 'verificado' ? '1' : '0').catch(() => undefined);
+          await deps.preferencias.guardar(chaveEstadoCidadao(userId), estado).catch(() => undefined);
+          resposta = estado;
         } catch {
           // Usa a guardada.
         }
       }
       if (!resposta) {
+        const estado = await deps.preferencias.obter(chaveEstadoCidadao(userId)).catch(() => null);
         const guardada = await deps.preferencias.obter(chaveVerificacao(userId)).catch(() => null);
-        resposta = guardada === '1' ? 'verificado' : guardada === '0' ? 'por_verificar' : 'desconhecido';
+        resposta =
+          guardada === '1' ? 'verificado' : eEstadoCidadao(estado) ? estado : guardada === '0' ? 'por_verificar' : 'desconhecido';
       }
       if (resposta === 'verificado') return resposta;
       const pedido = await deps.preferencias.obter(chavePedidoVerificacao(userId)).catch(() => null);

@@ -5,7 +5,9 @@ import { criarRepositorioPreferencias } from '@/database/repositories/preferenci
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 import { sha256Hex } from '@/services/imagem/hashFoto';
 
-import { chaveVerificado, criarServicoVerificacao, ERRO_FOTO_ALTERADA, type FotoVerificacao } from '../verificacao';
+import type { EstadoCidadao } from '@/domain/identidade/verificacaoSimples';
+
+import { chaveMotivoRecusa, chaveVerificado, criarServicoVerificacao, ERRO_FOTO_ALTERADA, type FotoVerificacao } from '../verificacao';
 
 const EU = 'user-1';
 
@@ -24,7 +26,10 @@ async function montar() {
     }),
     apagarFicheiro: jest.fn(async (uri: string) => void disco.delete(uri)),
     enviarFicheiro: jest.fn(async (nome: string, bytes: Uint8Array) => void bucket.set(nome, bytes)),
-    submeter: jest.fn(async (_p: { id_photo_front_url: string; id_photo_back_url: string; selfie_url: string }) => undefined),
+    submeter: jest.fn(
+      async (_p: { id_photo_front_url: string; id_photo_back_url: string; selfie_url: string }): Promise<EstadoCidadao> => 'em_revisao',
+    ),
+    lerEstadoServidor: jest.fn(async (): Promise<{ estado: EstadoCidadao; motivo: string | null }> => ({ estado: 'em_revisao', motivo: null })),
     agora: () => 1_790_000_000_000,
   };
   const servico = criarServicoVerificacao(deps);
@@ -52,11 +57,11 @@ describe('verificação simples: envio próprio (funciona sem rede)', () => {
     expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'nada_pendente' });
   });
 
-  test('guardado sem rede fica "pendente"; com rede sobe as 3 fotos (bucket privado) e fica verificado', async () => {
+  test('guardado sem rede fica "pendente"; com rede sobe as 3 fotos (bucket privado) e fica "em revisão"', async () => {
     await t.servico.guardarPedido(EU, t.fotos());
     expect(await t.servico.estado(EU)).toBe('pendente');
 
-    expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'verificado' });
+    expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'em_revisao' });
     expect([...t.bucket.keys()].sort()).toEqual([
       `cidadao-${EU}-frente-1790000000000.jpg`,
       `cidadao-${EU}-selfie-1790000000000.jpg`,
@@ -67,11 +72,48 @@ describe('verificação simples: envio próprio (funciona sem rede)', () => {
       id_photo_back_url: `cidadao-${EU}-verso-1790000000000.jpg`,
       selfie_url: `cidadao-${EU}-selfie-1790000000000.jpg`,
     });
-    expect(await t.servico.estado(EU)).toBe('verificado');
-    // O registo de moradas passa a ver a pessoa como verificada (mesma chave).
-    expect(await t.preferencias.obter(chaveVerificado(EU))).toBe('1');
-    // As fotos do BI não ficam no telemóvel depois de aceites.
+    // Enviar NÃO aprova: fica à espera de um administrador.
+    expect(await t.servico.estado(EU)).toBe('em_revisao');
+    expect(await t.preferencias.obter(chaveVerificado(EU))).toBe('0');
+    // As fotos do BI não ficam no telemóvel depois de entregues.
     expect(t.disco.size).toBe(0);
+  });
+
+  test('um administrador aprova: com rede a app fica a saber e guarda (o registo de moradas usa a mesma chave)', async () => {
+    await t.servico.guardarPedido(EU, t.fotos());
+    await t.servico.enviarPendente(EU);
+    t.deps.lerEstadoServidor.mockResolvedValueOnce({ estado: 'verificado', motivo: null });
+    await t.servico.atualizarDoServidor(EU);
+    expect(await t.servico.estado(EU)).toBe('verificado');
+    expect(await t.preferencias.obter(chaveVerificado(EU))).toBe('1');
+  });
+
+  test('um administrador recusa: fica "rejeitado" com o motivo; um pedido novo volta a "pendente"', async () => {
+    t.deps.lerEstadoServidor.mockResolvedValueOnce({ estado: 'rejeitado', motivo: 'A foto do BI está desfocada.' });
+    await t.servico.atualizarDoServidor(EU);
+    expect(await t.servico.estado(EU)).toBe('rejeitado');
+    expect(await t.servico.motivoRecusa(EU)).toBe('A foto do BI está desfocada.');
+
+    await t.servico.guardarPedido(EU, t.fotos());
+    expect(await t.servico.estado(EU)).toBe('pendente');
+    await t.servico.enviarPendente(EU);
+    expect(await t.servico.estado(EU)).toBe('em_revisao');
+    expect(await t.preferencias.obter(chaveMotivoRecusa(EU))).toBeNull();
+  });
+
+  test('sem resposta do servidor fica o estado guardado', async () => {
+    await t.servico.guardarPedido(EU, t.fotos());
+    await t.servico.enviarPendente(EU);
+    t.deps.lerEstadoServidor.mockRejectedValueOnce(new Error('Sem ligação ao servidor.'));
+    await t.servico.atualizarDoServidor(EU);
+    expect(await t.servico.estado(EU)).toBe('em_revisao');
+  });
+
+  test('servidor antigo que ainda aprova logo: fica verificado', async () => {
+    t.deps.submeter.mockResolvedValueOnce('verificado');
+    await t.servico.guardarPedido(EU, t.fotos());
+    expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'verificado' });
+    expect(await t.servico.estado(EU)).toBe('verificado');
   });
 
   test('a rede cai a meio: na vez seguinte continua onde parou (não reenvia o que já subiu)', async () => {
@@ -82,7 +124,7 @@ describe('verificação simples: envio próprio (funciona sem rede)', () => {
     expect(await t.servico.estado(EU)).toBe('pendente');
     expect(t.bucket.size).toBe(1);
 
-    expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'verificado' });
+    expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'em_revisao' });
     // 1 (antes da falha) + 1 que falhou + 2 que faltavam = 4 chamadas; a frente não subiu duas vezes.
     expect(t.deps.enviarFicheiro).toHaveBeenCalledTimes(4);
     expect(t.deps.enviarFicheiro.mock.calls.filter(([n]) => String(n).includes('-frente-'))).toHaveLength(1);
@@ -107,8 +149,8 @@ describe('verificação simples: envio próprio (funciona sem rede)', () => {
   test('dois gatilhos ao mesmo tempo: um só envio', async () => {
     await t.servico.guardarPedido(EU, t.fotos());
     const [a, b] = await Promise.all([t.servico.enviarPendente(EU), t.servico.enviarPendente(EU)]);
-    expect(a).toEqual({ resultado: 'verificado' });
-    expect(b).toEqual({ resultado: 'verificado' });
+    expect(a).toEqual({ resultado: 'em_revisao' });
+    expect(b).toEqual({ resultado: 'em_revisao' });
     expect(t.deps.submeter).toHaveBeenCalledTimes(1);
   });
 
@@ -129,7 +171,7 @@ describe('verificação simples: envio próprio (funciona sem rede)', () => {
     await t.servico.guardarPedido(EU, fotos);
     await t.servico.guardarPedido(EU, fotos);
     expect(t.disco.size).toBe(3);
-    expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'verificado' });
+    expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'em_revisao' });
   });
 
   test('outra pessoa no mesmo telemóvel não herda a verificação', async () => {

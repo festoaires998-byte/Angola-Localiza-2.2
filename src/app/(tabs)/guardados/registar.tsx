@@ -26,10 +26,38 @@ import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useSessao } from '@/hooks/useSessao';
 import { fotoComMarcaDeAgua } from '@/services/imagem/fotoComMarca';
-import type { Verificacao } from '@/services/moradas/registo';
+import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
 import { servicoRegisto } from '@/services/moradas/registoApp';
 
 const RUA_NOVA = '__nova__';
+/** Porque é que ainda não pode registar (null = pode). */
+function motivoBloqueio(v: Verificacao | null): { texto: string; botao: string | null } | null {
+  switch (v) {
+    case 'por_verificar':
+      return {
+        texto: 'Para registar uma morada tens de fazer primeiro a verificação simples da identidade (fotos do BI e uma selfie). Leva 2 minutos.',
+        botao: 'Fazer a verificação simples',
+      };
+    case 'pendente':
+      return {
+        texto: 'A tua verificação simples está guardada neste telemóvel e é enviada quando houver rede. Depois, a equipa revê-a; só com ela aprovada podes registar moradas.',
+        botao: null,
+      };
+    case 'em_revisao':
+      return {
+        texto: 'A tua verificação simples está em revisão pela equipa. Quando for aprovada, já podes registar moradas.',
+        botao: 'Ver a verificação',
+      };
+    case 'rejeitado':
+      return {
+        texto: 'A tua verificação simples não foi aprovada. Faz de novo (vê o motivo na verificação) para poderes registar moradas.',
+        botao: 'Fazer a verificação de novo',
+      };
+    default:
+      return null;
+  }
+}
+
 const NOME_LADO = { norte: 'a norte', sul: 'a sul', este: 'a este', oeste: 'a oeste' } as const;
 
 export default function RegistarMorada() {
@@ -110,7 +138,8 @@ export default function RegistarMorada() {
     haDuplicado: !!duplicado,
   };
   const falta = faltaParaEnviar(dados);
-  const bloqueado = verificacao === 'por_verificar';
+  const bloqueio = verificacao === null ? null : motivoBloqueio(verificacao);
+  const bloqueado = !podeRegistar(verificacao);
 
   const fotografar = async (uriCamara: string) => {
     if (!boa) throw new Error('Espera pela medição da posição.');
@@ -150,19 +179,11 @@ export default function RegistarMorada() {
 
   return (
     <ScrollView contentContainerStyle={estilos.conteudo} keyboardShouldPersistTaps="handled">
-      {bloqueado ? (
+      {bloqueio ? (
         <View style={estilos.bloco}>
-          <Caixa tipo="erro">
-            Para registar uma morada tens de fazer primeiro a verificação simples da identidade (fotos do BI e uma
-            selfie). Leva 2 minutos.
-          </Caixa>
-          <Botao titulo="Fazer a verificação simples" onPress={() => router.push('/definicoes/verificacao')} />
+          <Caixa tipo={verificacao === 'pendente' || verificacao === 'em_revisao' ? 'info' : 'erro'}>{bloqueio.texto}</Caixa>
+          {bloqueio.botao ? <Botao titulo={bloqueio.botao} onPress={() => router.push('/definicoes/verificacao')} /> : null}
         </View>
-      ) : null}
-      {verificacao === 'pendente' ? (
-        <Caixa tipo="info">
-          A tua verificação simples está guardada neste telemóvel e é enviada quando houver rede, antes deste registo.
-        </Caixa>
       ) : null}
       {verificacao === 'desconhecido' ? (
         <Caixa tipo="aviso">

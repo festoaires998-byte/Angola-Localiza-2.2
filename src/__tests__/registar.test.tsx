@@ -182,12 +182,31 @@ describe('Registar morada', () => {
     expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
   });
 
-  test('verificação pendente (guardada no telemóvel): avisa e deixa enviar', async () => {
+  test('verificação guardada no telemóvel (ainda por enviar): avisa e não deixa enviar', async () => {
     mockVerificacao = 'pendente';
     await desenhar();
     expect(screen.getByText(/verificação simples está guardada neste telemóvel/)).toBeTruthy();
     await preencherEFotografar();
-    expect(botaoEnviar().props.accessibilityState.disabled).toBe(false);
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
+  });
+
+  test('verificação em revisão: explica que espera pela equipa e não deixa enviar', async () => {
+    mockVerificacao = 'em_revisao';
+    await desenhar();
+    expect(screen.getByText(/está em revisão pela equipa/)).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'Ver a verificação' }));
+    expect(mockPush).toHaveBeenCalledWith('/definicoes/verificacao');
+    await preencherEFotografar();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
+  });
+
+  test('verificação recusada: pede para a fazer de novo e não deixa enviar', async () => {
+    mockVerificacao = 'rejeitado';
+    await desenhar();
+    expect(screen.getByText(/não foi aprovada/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Fazer a verificação de novo' })).toBeTruthy();
+    await preencherEFotografar();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
   });
 
   test('sem rede: escreve a rua à mão e o registo fica guardado para enviar depois', async () => {

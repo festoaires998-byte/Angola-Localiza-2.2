@@ -28,11 +28,18 @@ export default function VerificacaoSimples() {
   const [selfies, setSelfies] = useState<FotoComMarca | null>(null);
   const [aEnviar, setAEnviar] = useState(false);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  const [motivo, setMotivo] = useState<string | null>(null);
 
   const ler = () => {
-    if (userId) void servicoVerificacao.estado(userId).then(setEstado);
+    if (!userId) return;
+    void servicoVerificacao.estado(userId).then(setEstado);
+    void servicoVerificacao.motivoRecusa(userId).then(setMotivo);
   };
   useEffect(ler, [userId]);
+  // Com rede, pergunta ao servidor se um administrador já aprovou ou recusou.
+  useEffect(() => {
+    if (userId && online) void servicoVerificacao.atualizarDoServidor(userId).then(ler);
+  }, [userId, online]);
 
   if (!userId || estado === null) return <EcraCarregamento texto="A abrir…" />;
 
@@ -40,7 +47,7 @@ export default function VerificacaoSimples() {
     setAEnviar(true);
     const r = await servicoVerificacao.enviarPendente(userId);
     setAEnviar(false);
-    if (r.resultado === 'verificado') setResultado({ tipo: 'sucesso', texto: 'Verificação feita ✅ Já podes registar moradas.' });
+    if (r.resultado === 'verificado' || r.resultado === 'em_revisao') setResultado(textoEnviado(r.resultado));
     else if (r.resultado === 'falhou') setResultado({ tipo: 'erro', texto: `Ainda não foi possível enviar: ${r.erro}` });
     ler();
   };
@@ -49,6 +56,18 @@ export default function VerificacaoSimples() {
     return (
       <ScrollView contentContainerStyle={estilos.conteudo}>
         <Caixa tipo="sucesso">A tua identidade já está verificada ✅ Podes registar moradas.</Caixa>
+        <Botao titulo="Voltar" onPress={() => router.back()} />
+      </ScrollView>
+    );
+  }
+
+  if (estado === 'em_revisao') {
+    return (
+      <ScrollView contentContainerStyle={estilos.conteudo}>
+        {resultado ? <Caixa tipo={resultado.tipo}>{resultado.texto}</Caixa> : null}
+        <Caixa tipo="info">
+          A tua verificação foi enviada e está em revisão pela equipa. Quando for aprovada, já podes registar moradas.
+        </Caixa>
         <Botao titulo="Voltar" onPress={() => router.back()} />
       </ScrollView>
     );
@@ -67,8 +86,8 @@ export default function VerificacaoSimples() {
       if (online) {
         const r = await servicoVerificacao.enviarPendente(userId);
         setResultado(
-          r.resultado === 'verificado'
-            ? { tipo: 'sucesso', texto: 'Verificação feita ✅ Já podes registar moradas.' }
+          r.resultado === 'verificado' || r.resultado === 'em_revisao'
+            ? textoEnviado(r.resultado)
             : { tipo: 'info', texto: `Guardado neste telemóvel. Ainda não foi possível enviar (${r.erro}); tenta de novo mais tarde.` },
         );
       } else {
@@ -91,8 +110,8 @@ export default function VerificacaoSimples() {
     return (
       <ScrollView contentContainerStyle={estilos.conteudo}>
         <Caixa tipo="info">
-          A tua verificação está guardada neste telemóvel e é enviada sozinha quando houver rede. Entretanto já podes
-          registar moradas.
+          A tua verificação está guardada neste telemóvel e é enviada sozinha quando houver rede. Depois, a equipa
+          revê-a; quando for aprovada, já podes registar moradas.
         </Caixa>
         {resultado ? <Caixa tipo={resultado.tipo}>{resultado.texto}</Caixa> : null}
         {online ? <Botao titulo="Enviar agora" onPress={() => void enviarAgora()} aCarregar={aEnviar} /> : null}
@@ -105,6 +124,11 @@ export default function VerificacaoSimples() {
 
   return (
     <ScrollView contentContainerStyle={estilos.conteudo}>
+      {estado === 'rejeitado' ? (
+        <Caixa tipo="erro">
+          {`A tua verificação não foi aprovada${motivo ? `: ${motivo}` : '.'} Tira as fotos de novo e envia outra vez.`}
+        </Caixa>
+      ) : null}
       <Texto>
         Para registares moradas, confirma que és tu: tira uma foto do BI (frente e verso) e duas selfies. Leva 2
         minutos e funciona sem rede.
@@ -187,6 +211,12 @@ export default function VerificacaoSimples() {
       />
     </ScrollView>
   );
+}
+
+function textoEnviado(r: 'verificado' | 'em_revisao'): Resultado {
+  return r === 'verificado'
+    ? { tipo: 'sucesso', texto: 'Verificação feita ✅ Já podes registar moradas.' }
+    : { tipo: 'sucesso', texto: 'Verificação enviada ✅ A equipa vai rever as fotos.' };
 }
 
 const estilos = StyleSheet.create({

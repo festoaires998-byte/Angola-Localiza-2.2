@@ -41,12 +41,16 @@ const mockGuardar = jest.fn(async (_u: string, _f: unknown) => {
   mockEstado = 'pendente';
 });
 const mockEnviar = jest.fn(async (_u: string) => {
-  mockEstado = 'verificado';
-  return { resultado: 'verificado' };
+  mockEstado = 'em_revisao';
+  return { resultado: 'em_revisao' };
 });
+let mockMotivo: string | null = null;
+const mockAtualizar = jest.fn(async (_u: string) => undefined);
 jest.mock('@/services/identidade/verificacaoApp', () => ({
   servicoVerificacao: {
     estado: async () => mockEstado,
+    motivoRecusa: async () => mockMotivo,
+    atualizarDoServidor: (u: string) => mockAtualizar(u),
     guardarPedido: (u: string, f: unknown) => mockGuardar(u, f),
     enviarPendente: (u: string) => mockEnviar(u),
   },
@@ -75,9 +79,10 @@ async function fotografar() {
 
 beforeEach(() => {
   mockEstado = 'por_fazer';
+  mockMotivo = null;
   mockOnline = true;
   mockN = 0;
-  [mockBack, mockTirar, mockUma, mockDuas, mockGuardar, mockEnviar].forEach((f) => f.mockClear());
+  [mockBack, mockTirar, mockUma, mockDuas, mockGuardar, mockEnviar, mockAtualizar].forEach((f) => f.mockClear());
 });
 
 describe('Verificação simples', () => {
@@ -119,7 +124,34 @@ describe('Verificação simples', () => {
       selfie: { uri: 'file:///docs/fotos/selfies.jpg', sha256: 'sha-selfies' },
     });
     expect(mockEnviar).toHaveBeenCalledWith('user-1');
-    expect(screen.getByText(/já está verificada/)).toBeTruthy();
+    // Enviar não aprova: fica em revisão pela equipa.
+    expect(screen.getByText('Verificação enviada ✅ A equipa vai rever as fotos.')).toBeTruthy();
+    expect(screen.getByText(/está em revisão pela equipa/)).toBeTruthy();
+    expect(screen.queryByText(/já está verificada/)).toBeNull();
+  });
+
+  test('com rede pergunta ao servidor o estado; sem rede não', async () => {
+    await desenhar();
+    expect(mockAtualizar).toHaveBeenCalledWith('user-1');
+    mockAtualizar.mockClear();
+    mockOnline = false;
+    await desenhar();
+    expect(mockAtualizar).not.toHaveBeenCalled();
+  });
+
+  test('em revisão: explica que espera pela equipa (sem formulário)', async () => {
+    mockEstado = 'em_revisao';
+    await desenhar();
+    expect(screen.getByText(/está em revisão pela equipa/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Enviar a verificação' })).toBeNull();
+  });
+
+  test('recusada: mostra o motivo e deixa tirar as fotos de novo', async () => {
+    mockEstado = 'rejeitado';
+    mockMotivo = 'A foto do BI está desfocada.';
+    await desenhar();
+    expect(screen.getByText(/não foi aprovada: A foto do BI está desfocada\./)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Enviar a verificação' })).toBeTruthy();
   });
 
   test('sem rede: guarda para enviar depois (não tenta enviar)', async () => {
@@ -142,7 +174,7 @@ describe('Verificação simples', () => {
       fireEvent.press(screen.getByRole('button', { name: 'Enviar agora' }));
     });
     expect(mockEnviar).toHaveBeenCalledWith('user-1');
-    expect(screen.getByText(/já está verificada/)).toBeTruthy();
+    expect(screen.getByText(/está em revisão pela equipa/)).toBeTruthy();
   });
 
   test('pendente e o servidor recusa: mostra o erro', async () => {
