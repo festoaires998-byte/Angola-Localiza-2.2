@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { BUCKET, estadoPublico, validarPedido, validarRevisao } from '../../supabase/functions/citizen-verify/regras';
+import { BUCKET, contactoDoCidadao, eRevisaoPropria, estadoPublico, validarAbertura, validarPedido, validarRevisao } from '../../supabase/functions/citizen-verify/regras';
 import { lerEstadoVerificacao } from '@/api/verificacaoNucleo';
 import { estadoDoServidor, nomeNoBucket } from '@/domain/identidade/verificacaoSimples';
 
@@ -74,6 +74,82 @@ describe('citizen-verify v3: regras do pedido', () => {
     expect(validarRevisao({ user_id: UID, decision: 'reject' })).toMatchObject({ ok: false });
     expect(validarRevisao({ user_id: 'x', decision: 'approve' })).toMatchObject({ ok: false });
     expect(validarRevisao({ user_id: UID, decision: 'talvez' })).toMatchObject({ ok: false });
+  });
+});
+
+describe('citizen-verify v4: quem é o cidadão (para o administrador)', () => {
+  test('email e nome da conta, telefone de user_identity (ou da conta)', () => {
+    expect(
+      contactoDoCidadao({ email: 'ana@exemplo.ao', phone: '', user_metadata: { full_name: ' Ana Silva ' } }, '+244923000000'),
+    ).toEqual({ email: 'ana@exemplo.ao', name: 'Ana Silva', phone: '+244923000000' });
+    expect(contactoDoCidadao({ email: 'b@x.ao', phone: '+244911', user_metadata: { name: 'Bento' } }, null)).toEqual({
+      email: 'b@x.ao',
+      name: 'Bento',
+      phone: '+244911',
+    });
+    expect(contactoDoCidadao({ email: null, user_metadata: { nome: 'Carla' } }, undefined)).toMatchObject({ name: 'Carla' });
+    // Conta que já não existe, ou sem dados.
+    expect(contactoDoCidadao(null, null)).toEqual({ email: null, name: null, phone: null });
+    expect(contactoDoCidadao({ email: '  ', user_metadata: { full_name: 42 } }, '  ')).toEqual({ email: null, name: null, phone: null });
+  });
+
+  test('list_pending junta o contacto em paralelo, sem links de fotos e sem o próprio pedido do administrador', () => {
+    const fonte = ler('supabase/functions/citizen-verify/index.ts');
+    const lista = fonte.slice(fonte.indexOf('if (action === "list_pending") {'), fonte.indexOf('if (action === "view") {'));
+    expect(lista).toContain('await Promise.all((data ?? []).map(async (p) => {');
+    expect(lista).toContain('supabase.auth.admin.getUserById(p.user_id)');
+    expect(lista).toContain('...contactoDoCidadao(conta?.user ?? null, p.phone)');
+    expect(lista).toContain('.neq("user_id", callerId)');
+    expect(lista).not.toMatch(/createSignedUrl|for \(const/);
+    expect(fonte.indexOf('rpc("is_admin"')).toBeLessThan(fonte.indexOf('getUserById'));
+  });
+});
+
+describe('citizen-verify v4: segurança da revisão', () => {
+  const fonte = ler('supabase/functions/citizen-verify/index.ts');
+  const view = fonte.slice(fonte.indexOf('if (action === "view") {'), fonte.indexOf('const r = validarRevisao(body);'));
+  const review = fonte.slice(fonte.indexOf('const r = validarRevisao(body);'), fonte.indexOf('return resposta({ error: "acao desconhecida" }, 400);'));
+
+  test('regras: abrir precisa de um uuid; ninguém revê a própria verificação', () => {
+    expect(validarAbertura({ user_id: UID })).toEqual({ ok: true, userId: UID });
+    expect(validarAbertura({ user_id: 'x' })).toMatchObject({ ok: false });
+    expect(validarAbertura(null)).toMatchObject({ ok: false });
+    expect(eRevisaoPropria(UID, UID)).toBe(true);
+    expect(eRevisaoPropria(UID, UID.toUpperCase())).toBe(true);
+    expect(eRevisaoPropria(UID, '00000000-0000-4000-8000-000000000000')).toBe(false);
+  });
+
+  test('ponto 1: a própria verificação não se abre nem se decide', () => {
+    expect(view).toContain('if (eRevisaoPropria(callerId, a.userId)) return resposta(');
+    expect(review).toContain('if (eRevisaoPropria(callerId, r.userId)) return resposta(');
+    expect(review.indexOf('eRevisaoPropria')).toBeLessThan(review.indexOf('.update('));
+  });
+
+  test('ponto 2: a decisão só grava se ainda estiver PENDING_REVIEW, numa só operação (senão 409)', () => {
+    expect(review).toContain('.eq("user_id", r.userId).eq("citizen_id_status", "PENDING_REVIEW").select("user_id")');
+    expect(review).toContain('if (!mudadas || mudadas.length === 0) return resposta(');
+    expect(review).toMatch(/409\)/);
+    // Já não há "ler e depois gravar".
+    expect(review).not.toContain('.select("citizen_id_status")');
+  });
+
+  test('ponto 5: cada abertura das fotos fica registada ANTES de entregar os links; sem registo, sem fotos', () => {
+    const registo = view.indexOf('from("identity_artifact_views").insert({ citizen_user_id: a.userId, viewed_by: callerId })');
+    expect(registo).toBeGreaterThan(-1);
+    expect(view).toContain('if (erroVista) return resposta(');
+    expect(registo).toBeLessThan(view.indexOf('createSignedUrls'));
+  });
+
+  test('ponto 8: os links das 3 fotos saem num só pedido ao Storage', () => {
+    expect(view).toContain('supabase.storage.from(BUCKET).createSignedUrls(validos, 600)');
+    expect(fonte).not.toContain('createSignedUrl(');
+  });
+
+  test('a migração deixa registar vistas de cidadãos sem estragar as do staff', () => {
+    const sql = ler('supabase/migrations/20260924030000_auditoria_vistas_kyc_cidadao.sql');
+    expect(sql).toContain('alter column verification_id drop not null');
+    expect(sql).toContain('add column if not exists citizen_user_id uuid references auth.users (id)');
+    expect(sql).toContain('check (num_nonnulls(verification_id, citizen_user_id) = 1)');
   });
 });
 

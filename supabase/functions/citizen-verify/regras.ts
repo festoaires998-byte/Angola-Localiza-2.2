@@ -51,3 +51,42 @@ export function validarRevisao(body: unknown): { ok: true; userId: string; aprov
   if (b.decision === "reject" && !motivo) return { ok: false, erro: "para recusar e preciso um motivo (o cidadao ve-o)" };
   return { ok: true, userId: b.user_id, aprovar: b.decision === "approve", motivo };
 }
+
+/** Contexto do cidadão para o administrador (email, nome e telefone, se existirem). */
+export interface ContactoCidadao {
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+}
+
+const textoOuNull = (v: unknown, max = 120) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+
+/**
+ * Junta o que se sabe do cidadão: o email e o nome vêm da conta (auth.users,
+ * lida pela Edge Function com a service role) e o telefone de user_identity.
+ */
+export function contactoDoCidadao(
+  utilizador: { email?: string | null; phone?: string | null; user_metadata?: Record<string, unknown> | null } | null,
+  telefoneIdentidade: string | null | undefined,
+): ContactoCidadao {
+  const meta = utilizador?.user_metadata ?? {};
+  return {
+    email: textoOuNull(utilizador?.email, 254),
+    name: textoOuNull(meta.full_name) ?? textoOuNull(meta.name) ?? textoOuNull(meta.nome),
+    phone: textoOuNull(telefoneIdentidade, 30) ?? textoOuNull(utilizador?.phone, 30),
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valida o pedido de "view" (abrir as fotos de um cidadão). */
+export function validarAbertura(body: unknown): { ok: true; userId: string } | { ok: false; erro: string } {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (typeof b.user_id !== "string" || !UUID.test(b.user_id)) return { ok: false, erro: "user_id invalido" };
+  return { ok: true, userId: b.user_id };
+}
+
+/** Ninguém revê (nem abre as fotos de) a própria verificação, mesmo sendo administrador. */
+export function eRevisaoPropria(quemRevê: string, cidadao: string): boolean {
+  return quemRevê.toLowerCase() === cidadao.toLowerCase();
+}

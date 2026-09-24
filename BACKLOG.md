@@ -15,3 +15,34 @@
   os 4 estados (por verificar / em revisão / verificado / recusado com o motivo),
   como a app faz.
 - **Prioridade:** a seguir ao painel de revisão na app.
+
+## Decidido, por fazer
+
+### Nome obrigatório no registo da conta (a seguir)
+
+Hoje as contas só têm email, sem nome. O registo na app vai pedir o nome
+completo como campo obrigatório, e o nome passa a aparecer na revisão das
+verificações no separador Admin.
+
+### Retenção das fotos da verificação simples: 90 dias
+
+As fotos do BI (frente e verso) e as selfies no bucket `kyc-artifacts` são
+destruídas 90 dias depois da decisão (aprovação ou recusa). Fica só o
+registo da decisão (`user_identity`, `audit_logs`) e das consultas
+(`identity_artifact_views`).
+- **Proposta:** uma tarefa diária no servidor (pg_cron ou função agendada)
+  que apaga os ficheiros com `citizen_id_reviewed_at` com mais de 90 dias.
+
+### Infraestrutura (depois de ver o que o site antigo ainda usa)
+
+- Tirar o acesso sem sessão às funções SECURITY DEFINER (`is_admin`,
+  `is_id_verified`, `can_validate_field`, `nearby_addresses`…).
+- Bucket `kyc-artifacts`: aceitar só JPEG até 5 MB, cada utilizador só na
+  sua pasta (`<id>/…`), com hotfix do site.
+
+### Depois de validar o APK no terreno
+
+- Publicar as Edge Functions por um workflow manual (sem a service role key).
+- Guardar a estrutura completa da base de dados no repositório (migração inicial).
+- Testes das Edge Functions a correr de verdade, com uma base de dados falsa.
+- Relatório de erros da app, leve, para gastar poucos dados.
