@@ -49,7 +49,9 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 
 - Publicar as Edge Functions por um workflow manual (sem a service role key).
 - Guardar a estrutura completa da base de dados no repositório (migração inicial).
-- Testes das Edge Functions a correr de verdade, com uma base de dados falsa.
+- Testes das Edge Functions a correr de verdade, com uma base de dados falsa
+  (feito para a `deliveries` em `src/__tests__/deliveries.test.ts`; falta levar
+  o mesmo às outras funções).
 - Relatório de erros da app, leve, para gastar poucos dados.
 
 ### Site antigo: pedir o nome completo no registo
@@ -58,3 +60,27 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **O quê:** quem cria conta no site ainda fica sem nome. A app pede-o no
   primeiro acesso ("Como te chamas?"), mas o site devia pedi-lo no registo,
   com o mesmo campo (`options.data.full_name`).
+
+### Entregas: pendências encontradas na auditoria (Fase 2)
+
+- **Desde:** 24/09/2026 (deliveries v19, migração `20260924060000_seguranca_entregas`).
+- **Site antigo (hotfix):** enviar as fotos e as assinaturas das provas para o
+  bucket privado `delivery-proofs` (`<id>/…`), como a app. Até lá, a v19 ainda
+  aceita `field-photos` (público). Depois do hotfix: deixar de aceitar
+  `field-photos` nas provas e tirar as 2 fotos de provas antigas de lá.
+- **Site antigo: rastreio público quebrado.** O site chama
+  `deliveries?action=track` sem sessão, mas essa ação não existe (responde 401).
+  Decidir se o rastreio público volta (só código, estado e destino, sem sessão).
+- **`sync`: `create_address` e `update_address` gravam o payload tal como vem**
+  (com a service role), por isso uma pessoa pode criar ou mudar uma morada com
+  qualquer estado (ex.: `APPROVED`). Limitar às colunas permitidas ou passar
+  pela `field-service`.
+- **`signing-keys`:** a chave de um aparelho pode ser trocada sem registo
+  (upsert). Registar cada troca em `audit_logs` para a prova ter valor jurídico.
+- **`public-api`:** as organizações criam entregas com a chave da API, sem a
+  verificação de identidade (decisão A vale para cidadãos). Confirmar que é o
+  que se quer.
+- **PIN e entrega sem rede (decisão D):** se a prova só subir depois das 72 h,
+  o servidor responde `PIN_EXPIRED` e o remetente tem de gerar um PIN novo.
+- **Atribuição (decisão B):** o operador postal atribuir e o estafeta "puxar"
+  entregas elegíveis vão no PR do separador Entregas.

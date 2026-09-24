@@ -1,16 +1,25 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  BUCKET_PROVAS, FAILURE_REASONS, MAX_TENTATIVAS_PIN, TRANSITIONS, VALIDADE_PIN_HORAS,
+  contactoValido, diferencaNaMensagem, gerarPin, respostaPin, textoDoFicheiro, validarFicheirosProva,
+  type FicheiroProva, type ResultadoPin,
+} from "./regras.ts";
 
-// Angola Localiza - Deliveries Service (v17)
-// Novo: is_urgent (prioridade) guardada na criacao, e uma acao para a marcar
-// depois. Usada pela ordem sugerida para visitar entregas urgentes primeiro.
-
-const TRANSITIONS: Record<string, string[]> = {
-  CREATED: ["ASSIGNED", "CANCELLED"], ASSIGNED: ["PICKED_UP", "CANCELLED"], PICKED_UP: ["IN_TRANSIT", "CANCELLED"],
-  IN_TRANSIT: ["OUT_FOR_DELIVERY", "CANCELLED"], OUT_FOR_DELIVERY: ["DELIVERED", "FAILED"], FAILED: ["ASSIGNED", "CANCELLED"],
-  DELIVERED: [], CANCELLED: [],
-};
-const FAILURE_REASONS = ["morada_nao_encontrada", "destinatario_ausente", "codigo_incorreto", "recusa", "outro"];
+// Angola Localiza - Deliveries Service (v19)
+// v19 (segurança):
+// - criar entregas só com a identidade verificada (cidadão ou pessoal);
+// - o PIN deixa de ser lido diretamente da base de dados (só quem criou o vê:
+//   get_pin / regenerate_pin); sorteio forte e no máximo 5 tentativas erradas
+//   (função SQL verificar_pin_entrega);
+// - fechar a entrega exige PIN, foto e assinatura desenhada; os ficheiros da
+//   app vão para o bucket privado delivery-proofs (pasta de quem envia) e
+//   têm de existir; o site antigo ainda usa field-photos (transição);
+// - a mensagem assinada tem de bater certo com a prova (local, data e, na
+//   versão 2, o SHA-256 da foto e da assinatura desenhada);
+// - a mudança de estado só grava se o estado ainda for o lido (sem corridas);
+// - só se atribui a entrega a quem é estafeta (e nunca a quem a criou,
+//   porque quem cria vê o PIN).
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Content-Type": "application/json" };
 
 async function getZoneRates(supabase: ReturnType<typeof createClient>, zoneCode: string, organizationId?: string | null) {
@@ -33,21 +42,51 @@ async function isSuperAdmin(supabase: ReturnType<typeof createClient>, userId: s
   return (data ?? []).some((m) => m.role === "super_admin");
 }
 
-async function verificarAssinaturaProva(supabase: ReturnType<typeof createClient>, userId: string, deliveryId: string, proof: any): Promise<boolean | null> {
+async function sha256DoFicheiro(supabase: ReturnType<typeof createClient>, f: FicheiroProva | null): Promise<string | null> {
+  if (!f) return null;
+  const { data, error } = await supabase.storage.from(f.bucket).download(f.nome);
+  if (error || !data) throw new Error("ficheiro da prova nao encontrado");
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", await data.arrayBuffer()));
+  return Array.from(hash, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// null = prova sem assinatura; senão, se confere e porquê não.
+async function verificarAssinaturaProva(
+  supabase: ReturnType<typeof createClient>, userId: string, deliveryId: string, proof: any,
+  foto: FicheiroProva | null, assinatura: FicheiroProva | null,
+): Promise<{ verified: boolean; motivo: string | null } | null> {
   if (!proof?.crypto_signature || !proof?.crypto_payload || !proof?.crypto_device_id) return null;
   try {
     const { data: chave } = await supabase.from("signing_keys").select("public_key_jwk").eq("user_id", userId).eq("device_id", proof.crypto_device_id).maybeSingle();
-    if (!chave) return false;
-    const payloadObj = JSON.parse(proof.crypto_payload);
-    if (payloadObj.delivery_id !== deliveryId) return false;
+    if (!chave) return { verified: false, motivo: "aparelho sem chave registada" };
     const publicKey = await crypto.subtle.importKey("jwk", chave.public_key_jwk as JsonWebKey, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
     const sigBytes = Uint8Array.from(atob(proof.crypto_signature), (c) => c.charCodeAt(0));
     const dataBytes = new TextEncoder().encode(proof.crypto_payload);
-    return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, sigBytes, dataBytes);
+    const confere = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, sigBytes, dataBytes);
+    if (!confere) return { verified: false, motivo: "assinatura nao confere com a chave do aparelho" };
+    const temLocal = typeof proof.latitude === "number" && typeof proof.longitude === "number";
+    const motivo = diferencaNaMensagem(proof.crypto_payload, {
+      deliveryId,
+      latitude: temLocal ? proof.latitude : null,
+      longitude: temLocal ? proof.longitude : null,
+      fotoSha256: await sha256DoFicheiro(supabase, foto),
+      assinaturaSha256: await sha256DoFicheiro(supabase, assinatura),
+      agora: new Date(),
+    });
+    return { verified: motivo === null, motivo };
   } catch (e) {
-    return false;
+    return { verified: false, motivo: String(e instanceof Error ? e.message : e) };
   }
 }
+
+async function identidadeVerificada(supabase: ReturnType<typeof createClient>, userId: string) {
+  const { data: identity } = await supabase.from("user_identity").select("citizen_id_verified").eq("user_id", userId).maybeSingle();
+  if (identity?.citizen_id_verified === true) return true;
+  const { data: staff } = await supabase.rpc("is_id_verified", { check_user_id: userId });
+  return staff === true;
+}
+
+const pinNovo = () => gerarPin((n) => crypto.getRandomValues(new Uint8Array(n)));
 
 async function ajustarConfiancaPorEntrega(supabase: ReturnType<typeof createClient>, addressId: string, delta: number) {
   const { data: addr } = await supabase.from("addresses").select("confidence_score").eq("id", addressId).maybeSingle();
@@ -146,12 +185,11 @@ Deno.serve(async (req: Request) => {
     if (action === "create") {
       const { address_id, recipient_name, recipient_phone, instructions, origin_latitude, origin_longitude, origin_municipality_id, origin_province_id, origin_postal_code, origin_plus_code, zone_code, payer_organization_id, is_urgent } = body;
       if (!address_id || !recipient_name) return new Response(JSON.stringify({ error: "address_id e recipient_name sao obrigatorios" }), { status: 400, headers: cors });
-      if (recipient_phone) {
-        const digits = recipient_phone.replace(/\D/g, '');
-        const local = digits.startsWith('244') ? digits.slice(3) : digits;
-        if (local.length > 0 && local.length !== 9) {
-          return new Response(JSON.stringify({ error: "CONTACTO_INVALID: o contacto deve ter o formato +244 9xx xxx xxx" }), { status: 422, headers: cors });
-        }
+      if (!contactoValido(recipient_phone)) {
+        return new Response(JSON.stringify({ error: "CONTACTO_INVALID: o contacto deve ter o formato +244 9xx xxx xxx" }), { status: 422, headers: cors });
+      }
+      if (!(await identidadeVerificada(supabase, callerId))) {
+        return new Response(JSON.stringify({ error: "CITIZEN_ID_NOT_VERIFIED: verifica a tua identidade primeiro (Definições → Verificação simples)" }), { status: 403, headers: cors });
       }
 
       const { data: delivery, error } = await supabase.from("deliveries").insert({
@@ -184,15 +222,59 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify(delivery), { headers: cors });
     }
 
+    if (action === "get_pin" || action === "regenerate_pin") {
+      const { delivery_id } = body;
+      if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
+      const { data: delivery } = await supabase.from("deliveries").select("created_by, status, confirmation_pin, confirmation_pin_expires_at, pin_failed_attempts").eq("id", delivery_id).maybeSingle();
+      if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
+      if (delivery.created_by !== callerId) return new Response(JSON.stringify({ error: "so quem criou a entrega ve o PIN" }), { status: 403, headers: cors });
+      if (delivery.status === "DELIVERED" || delivery.status === "CANCELLED") return new Response(JSON.stringify({ error: "a entrega ja terminou" }), { status: 409, headers: cors });
+      if (action === "get_pin") {
+        return new Response(JSON.stringify({
+          pin: delivery.confirmation_pin, expires_at: delivery.confirmation_pin_expires_at,
+          bloqueado: (delivery.pin_failed_attempts ?? 0) >= MAX_TENTATIVAS_PIN,
+        }), { headers: cors });
+      }
+      const pin = pinNovo();
+      const expires_at = new Date(Date.now() + VALIDADE_PIN_HORAS * 3600 * 1000).toISOString();
+      const { error } = await supabase.from("deliveries").update({ confirmation_pin: pin, confirmation_pin_expires_at: expires_at, pin_failed_attempts: 0 }).eq("id", delivery_id);
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_pin_regenerated", entity_type: "delivery", entity_id: delivery_id, before: null, after: { expires_at } });
+      return new Response(JSON.stringify({ pin, expires_at, bloqueado: false }), { headers: cors });
+    }
+
+    if (action === "proof_files") {
+      const { delivery_id } = body;
+      if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
+      const { data: delivery } = await supabase.from("deliveries").select("created_by, assigned_driver").eq("id", delivery_id).maybeSingle();
+      if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
+      const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
+      if (delivery.created_by !== callerId && delivery.assigned_driver !== callerId && !isAdminRes) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
+      const { data: provas } = await supabase.from("delivery_proofs").select("id, proof_type, occurred_at, observation, photo_url, signature_url, crypto_verified, crypto_failure_reason").eq("delivery_id", delivery_id);
+      const link = async (valor: string | null) => {
+        if (!valor || !valor.startsWith(BUCKET_PROVAS + "/")) return valor;
+        const { data } = await supabase.storage.from(BUCKET_PROVAS).createSignedUrl(valor.slice(BUCKET_PROVAS.length + 1), 600);
+        return data?.signedUrl ?? null;
+      };
+      const resultado = [];
+      for (const p of provas ?? []) resultado.push({ ...p, photo_url: await link(p.photo_url), signature_url: await link(p.signature_url) });
+      return new Response(JSON.stringify({ proofs: resultado }), { headers: cors });
+    }
+
     if (action === "assign_driver") {
       const { delivery_id, driver_id } = body;
+      if (!delivery_id || !driver_id) return new Response(JSON.stringify({ error: "delivery_id e driver_id sao obrigatorios" }), { status: 400, headers: cors });
       const { data: delivery } = await supabase.from("deliveries").select("created_by, status").eq("id", delivery_id).single();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
       const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
       if (delivery.created_by !== callerId && !isAdminRes) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       if (delivery.status !== "CREATED") return new Response(JSON.stringify({ error: "so e possivel atribuir estafeta no estado CREATED" }), { status: 400, headers: cors });
-      const { error } = await supabase.from("deliveries").update({ assigned_driver: driver_id, status: "ASSIGNED", updated_at: new Date().toISOString() }).eq("id", delivery_id);
+      if (driver_id === delivery.created_by) return new Response(JSON.stringify({ error: "quem cria a entrega nao pode ser o estafeta dela" }), { status: 422, headers: cors });
+      const { data: papeis } = await supabase.from("organization_members").select("role").eq("user_id", driver_id);
+      if (!(papeis ?? []).some((m) => m.role === "estafeta")) return new Response(JSON.stringify({ error: "essa pessoa nao e estafeta" }), { status: 422, headers: cors });
+      const { data: mudou, error } = await supabase.from("deliveries").update({ assigned_driver: driver_id, status: "ASSIGNED", updated_at: new Date().toISOString() }).eq("id", delivery_id).eq("status", "CREATED").select("id");
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      if (!mudou?.length) return new Response(JSON.stringify({ error: "a entrega mudou de estado entretanto - atualiza e tenta de novo" }), { status: 409, headers: cors });
       await supabase.from("delivery_status_history").insert({ delivery_id, status: "ASSIGNED" });
       return new Response(JSON.stringify({ ok: true, status: "ASSIGNED" }), { headers: cors });
     }
@@ -201,7 +283,7 @@ Deno.serve(async (req: Request) => {
       const { delivery_id, new_status, proof, pin, reason, is_volumoso, is_espera_longa } = body;
       if (!delivery_id || !new_status) return new Response(JSON.stringify({ error: "delivery_id e new_status sao obrigatorios" }), { status: 400, headers: cors });
 
-      const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, confirmation_pin, confirmation_pin_expires_at, zone_code, payer_organization_id").eq("id", delivery_id).single();
+      const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, zone_code, payer_organization_id").eq("id", delivery_id).single();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
 
       const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
@@ -212,42 +294,55 @@ Deno.serve(async (req: Request) => {
       const allowed = TRANSITIONS[delivery.status] || [];
       if (!allowed.includes(new_status)) return new Response(JSON.stringify({ error: `transicao invalida: ${delivery.status} -> ${new_status}` }), { status: 400, headers: cors });
 
-      if (new_status === "PICKED_UP" && !proof?.photo_url) {
-        return new Response(JSON.stringify({ error: "e obrigatoria uma foto como prova de recolha" }), { status: 422, headers: cors });
+      if (new_status === "FAILED" && !FAILURE_REASONS.includes(reason)) return new Response(JSON.stringify({ error: "motivo da falha e obrigatorio" }), { status: 400, headers: cors });
+
+      const comProva = new_status === "DELIVERED" || new_status === "FAILED" || new_status === "PICKED_UP";
+      const ficheiros = validarFicheirosProva(new_status, comProva ? proof : null, callerId, supabaseUrl);
+      if (!ficheiros.ok) return new Response(JSON.stringify({ error: ficheiros.erro }), { status: ficheiros.status, headers: cors });
+      const aConfirmar = [ficheiros.foto, ficheiros.assinatura].filter((f): f is FicheiroProva => f !== null);
+      if (aConfirmar.length > 0) {
+        const { data: existem } = await supabase.rpc("ficheiros_da_prova", { nomes: aConfirmar.map((f) => f.nome), buckets: aConfirmar.map((f) => f.bucket), utilizador: callerId });
+        if (existem !== aConfirmar.length) return new Response(JSON.stringify({ error: "os ficheiros da prova nao existem ou nao foram enviados por ti" }), { status: 422, headers: cors });
       }
 
       if (new_status === "DELIVERED") {
-        if (new Date(delivery.confirmation_pin_expires_at) < new Date()) {
-          return new Response(JSON.stringify({ error: "PIN_EXPIRED: o PIN desta entrega expirou (72h) - pede ao remetente para gerar um novo" }), { status: 410, headers: cors });
-        }
-        if (!pin || String(pin) !== String(delivery.confirmation_pin)) {
-          return new Response(JSON.stringify({ error: "PIN de confirmacao incorreto" }), { status: 400, headers: cors });
-        }
+        const { data: resultadoPin } = await supabase.rpc("verificar_pin_entrega", { p_delivery_id: delivery_id, p_pin: pin == null ? null : String(pin) });
+        const falhaPin = respostaPin(resultadoPin as ResultadoPin | null);
+        if (falhaPin) return new Response(JSON.stringify({ error: falhaPin.erro }), { status: falhaPin.status, headers: cors });
       }
-      if (new_status === "FAILED" && !FAILURE_REASONS.includes(reason)) return new Response(JSON.stringify({ error: "motivo da falha e obrigatorio" }), { status: 400, headers: cors });
+
+      const assinatura = comProva && proof ? await verificarAssinaturaProva(supabase, callerId, delivery_id, proof, ficheiros.foto, ficheiros.assinatura) : null;
+      const cryptoVerified: boolean | null = assinatura ? assinatura.verified : null;
 
       const updatePayload: Record<string, unknown> = { status: new_status, updated_at: new Date().toISOString() };
       if (typeof is_volumoso === "boolean") updatePayload.is_volumoso = is_volumoso;
       if (typeof is_espera_longa === "boolean") updatePayload.is_espera_longa = is_espera_longa;
-      const { error: updateError } = await supabase.from("deliveries").update(updatePayload).eq("id", delivery_id);
+      const { data: mudou, error: updateError } = await supabase.from("deliveries").update(updatePayload).eq("id", delivery_id).eq("status", delivery.status).select("id");
       if (updateError) return new Response(JSON.stringify({ error: updateError.message }), { status: 400, headers: cors });
+      if (!mudou?.length) return new Response(JSON.stringify({ error: "a entrega mudou de estado entretanto - atualiza e tenta de novo" }), { status: 409, headers: cors });
       await supabase.from("delivery_status_history").insert({ delivery_id, status: new_status });
 
       let proofId: string | null = null;
-      let cryptoVerified: boolean | null = null;
-      if ((new_status === "DELIVERED" || new_status === "FAILED" || new_status === "PICKED_UP") && proof) {
+      if (comProva && proof) {
         const proofType = new_status === "PICKED_UP" ? "PICKUP" : new_status === "FAILED" ? "FAILED" : "POD";
-        cryptoVerified = await verificarAssinaturaProva(supabase, callerId, delivery_id, proof);
         const proofRow: Record<string, unknown> = {
           delivery_id, proof_type: proofType,
           observation: (new_status === "FAILED" ? `[${reason}] ` : "") + (proof.observation ?? ""),
-          photo_url: proof.photo_url ?? null, signature_url: proof.signature_url ?? null, created_by: callerId,
+          photo_url: ficheiros.foto ? textoDoFicheiro(ficheiros.foto, supabaseUrl) : null,
+          signature_url: ficheiros.assinatura ? textoDoFicheiro(ficheiros.assinatura, supabaseUrl) : null,
+          created_by: callerId,
           crypto_signature: proof.crypto_signature ?? null, crypto_payload: proof.crypto_payload ?? null,
           crypto_algorithm: proof.crypto_algorithm ?? null, crypto_device_id: proof.crypto_device_id ?? null,
-          crypto_verified: cryptoVerified,
+          crypto_verified: cryptoVerified, crypto_failure_reason: assinatura?.motivo ?? null,
         };
         if (typeof proof.latitude === "number" && typeof proof.longitude === "number") proofRow.location = `SRID=4326;POINT(${proof.longitude} ${proof.latitude})`;
-        const { data: proofData } = await supabase.from("delivery_proofs").insert(proofRow).select("id").single();
+        const { data: proofData, error: proofError } = await supabase.from("delivery_proofs").insert(proofRow).select("id").single();
+        if (proofError) {
+          // Sem prova não há mudança de estado: volta ao estado anterior.
+          await supabase.from("deliveries").update({ status: delivery.status }).eq("id", delivery_id).eq("status", new_status);
+          await supabase.from("delivery_status_history").insert({ delivery_id, status: delivery.status });
+          return new Response(JSON.stringify({ error: "nao foi possivel guardar a prova - tenta de novo" }), { status: 500, headers: cors });
+        }
         proofId = proofData?.id ?? null;
       }
 
@@ -279,11 +374,11 @@ Deno.serve(async (req: Request) => {
       }
 
       if (new_status === "DELIVERED") {
-        await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_delivered_with_pod", entity_type: "delivery", entity_id: delivery_id, before: { status: delivery.status }, after: { status: new_status, has_photo: !!proof?.photo_url, has_signature: !!proof?.signature_url, proof_id: proofId, crypto_verified: cryptoVerified } });
+        await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_delivered_with_pod", entity_type: "delivery", entity_id: delivery_id, before: { status: delivery.status }, after: { status: new_status, has_photo: !!ficheiros.foto, has_signature: !!ficheiros.assinatura, proof_id: proofId, crypto_verified: cryptoVerified, crypto_failure_reason: assinatura?.motivo ?? null } });
         if (delivery.address_id) await ajustarConfiancaPorEntrega(supabase, delivery.address_id, 2);
       }
       if (new_status === "PICKED_UP") {
-        await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_picked_up_with_proof", entity_type: "delivery", entity_id: delivery_id, before: null, after: { has_photo: !!proof?.photo_url, proof_id: proofId, crypto_verified: cryptoVerified } });
+        await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_picked_up_with_proof", entity_type: "delivery", entity_id: delivery_id, before: null, after: { has_photo: !!ficheiros.foto, proof_id: proofId, crypto_verified: cryptoVerified, crypto_failure_reason: assinatura?.motivo ?? null } });
       }
       if (new_status === "FAILED" && delivery.address_id) {
         const { data: addr } = await supabase.from("addresses").select("created_by").eq("id", delivery.address_id).single();
