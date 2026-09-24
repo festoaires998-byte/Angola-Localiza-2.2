@@ -45,7 +45,10 @@ e Conta (`definicoes`). Os nomes das rotas não mudaram.
 O super_admin vê todos. Staff (quem tem cargos) só vê mais do que mapa e
 definicoes depois de ter o KYC em `ID_VERIFIED` **e** a sessão em AAL2 (código MFA).
 
-## Admin (`admin.tsx`)
+## Admin (`admin/`)
+
+`admin/index.tsx` (lista) e `admin/[id].tsx` (detalhe, num ecrã próprio do Stack: o botão Voltar regressa à lista tal como estava). Aprovar pede confirmação num alerta do sistema (`Alert.alert`). A lista e o detalhe partilham o estado em `src/state/revisaoKyc.ts`.
+
 
 Revisão das verificações simples dos cidadãos (citizen-verify `list_pending` e
 `review`):
