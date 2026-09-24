@@ -83,20 +83,26 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **Atribuição (decisão B):** o operador postal atribuir e o estafeta "puxar"
   entregas elegíveis vão no PR do separador Entregas.
 
-### Pesquisa: pendências (PR #42)
+### Pesquisa e privacidade (PR #43)
 
-- **Funções antigas `search` e `resolve-address` (usadas pelo site):** leem com
-  a service role e **não respeitam a privacidade**. A `search` responde até
-  sem sessão e devolve moradas **por validar e privadas** (código postal,
-  coordenadas e referência) a quem souber pesquisar; a `resolve-address`
-  devolve moradas aprovadas mesmo quando são "Privadas". A app já usa a nova
-  `pesquisa` (segura). **Proposta:** o site passar a usar a `pesquisa` e depois
-  desligar a `search` (ou corrigi-la com as mesmas regras). Decisão do dono.
-- **Acentos:** a pesquisa por texto usa `ilike` (não liga a maiúsculas, mas
-  "missao" não encontra "Missão"). Solução: a extensão `unaccent` numa função SQL.
-- **Favorito do Mapa sem província/município:** o "Guardar como
-  favorito" cria a morada sem `province_id`/`municipality_id` (o site procurava
-  pelo nome). O validador completa na validação.
+- ~~Funções antigas `search` e `resolve-address` sem privacidade~~: desativadas
+  (410); o site passa a usar a `pesquisa` (PR no repositório do site).
+- ~~Acentos na pesquisa~~: resolvido (`unaccent`, migração `20260924080000`).
+- **Leitura direta da tabela `addresses`:** a regra da base de dados deixa
+  qualquer pessoa (até sem sessão, com a chave pública) ler todas as moradas
+  aprovadas, **incluindo as "Privadas"** (coordenadas e referência). A app e o
+  site dependem desta leitura (favoritos, entregas, destino por código).
+  **Proposta:** trocar a regra para "aprovadas e não privadas, ou próprias, ou
+  de um favorito/entrega da pessoa". Mudança no Supabase: só com o pedido do dono.
+- **`public-api` (`/v1/address/search`):** lê `addresses` e `streets` para as
+  organizações (com a chave da API). Confirmar que respeita a privacidade.
+- **Segredos no código (encontrados na auditoria):** a `identity-kyc` tem o
+  "pepper" do KYC escrito no código; a `phone-verify` tem a chave pública
+  escrita no código (devia vir do ambiente, como na `sync`). Passar para os
+  segredos das Edge Functions.
+- **Favorito do Mapa sem província/município:** o "Guardar como favorito" cria
+  a morada sem `province_id`/`municipality_id` (o site procurava pelo nome). O
+  validador completa na validação.
 
 ### Enviar: a seguir
 

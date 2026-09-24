@@ -7,13 +7,16 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import {
   MAX_RESULTADOS,
+  cartaoPublico,
   interpretar,
+  interpretarCodigo,
   juntarResultados,
   padraoContem,
   podeVer,
+  podeVerPublico,
   resultadoLugar,
 } from '../../supabase/functions/pesquisa/regras';
-import { carregarFuncao, criarSupabaseFalso, pedir, type SupabaseFalso } from '@/testes/supabaseFalso';
+import { carregarFuncao, criarSupabaseFalso, ilikeParaRegex, pedir, URL_SUPABASE_FALSO, type SupabaseFalso } from '@/testes/supabaseFalso';
 
 jest.mock('jsr:@supabase/functions-js/edge-runtime.d.ts', () => ({}), { virtual: true });
 jest.mock(
@@ -54,7 +57,7 @@ function morada(id: string, extra: Record<string, unknown>) {
 }
 
 const MORADAS = [
-  morada('m1', { postal_code: 'AO-HUA-MNFQR6JW-41', plus_code: '6GXCQ6FM+2V', street_id: RUA_MISSAO, house_number: '12', reference: 'Portão azul', neighborhood_id: BAIRRO }),
+  morada('m1', { postal_code: 'AO-HUA-MNFQR6JW-41', plus_code: '6GXCQ6FM+2V', street_id: RUA_MISSAO, house_number: '12', reference: 'Portão azul', neighborhood_id: BAIRRO, quadra_id: 'q1' }),
   morada('m2', { postal_code: 'AO-HUA-MNFQR6JX-17', status: 'PROPOSED', reference: 'Portão verde' }),
   morada('m3', { postal_code: 'AO-HUA-MNFQR6JY-22', visibility_level: 'PRIVATE', reference: 'Casa privada' }),
   morada('m4', { postal_code: 'AO-HUA-MNFQR6JZ-35', visibility_level: 'PRIVATE', created_by: ANA, reference: 'Casa privada da Ana' }),
@@ -62,6 +65,21 @@ const MORADAS = [
 ];
 
 let falso: SupabaseFalso;
+
+/** Como a função SQL sem_acentos (unaccent) + ilike. */
+const semAcentos = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const bate = (valor: unknown, padrao: string) =>
+  typeof valor === 'string' && new RegExp(`^${ilikeParaRegex(semAcentos(padrao))}$`, 'is').test(semAcentos(valor));
+
+/** As funções SQL da migração 20260924080000_pesquisa_sem_acentos. */
+const RPC = {
+  pesquisa_ruas: (a: { p_padrao: string; p_limite: number }, t: Record<string, any[]>) =>
+    (t.streets ?? []).filter((r) => bate(r.name, a.p_padrao)).slice(0, a.p_limite),
+  pesquisa_bairros: (a: { p_padrao: string; p_limite: number }, t: Record<string, any[]>) =>
+    (t.neighborhoods ?? []).filter((r) => bate(r.name, a.p_padrao)).slice(0, a.p_limite),
+  pesquisa_moradas_por_referencia: (a: { p_padrao: string; p_estados: string[]; p_limite: number }, t: Record<string, any[]>) =>
+    (t.addresses ?? []).filter((m) => a.p_estados.includes(m.status) && bate(m.reference, a.p_padrao)).slice(0, a.p_limite),
+};
 
 function preparar() {
   falso = criarSupabaseFalso({
@@ -73,7 +91,9 @@ function preparar() {
         { id: RUA_SEM_MORADAS, name: 'Rua da Missão Nova', neighborhood_id: null, origin_lat: -12.8, origin_lng: 15.8 },
       ],
       neighborhoods: [{ id: BAIRRO, name: 'Bairro Académico' }],
+      quadras: [{ id: 'q1', code: 'Q-12' }],
     },
+    rpc: RPC,
   });
   (globalThis as any).__supabaseFalso = falso;
 }
@@ -209,5 +229,82 @@ describe('Edge Function pesquisa', () => {
   test('não guarda o histórico de pesquisa', async () => {
     await pesquisar('missão');
     expect(falso.tabelas().search_history).toBeUndefined();
+  });
+});
+
+describe('pesquisa sem acentos (v2)', () => {
+  test('"missao", "ACADEMICO" e "portao" encontram "Missão", "Académico" e "Portão"', async () => {
+    expect((await pesquisar('missao')).json.resultados.map((x: { id: string }) => x.id)).toEqual([RUA_MISSAO, RUA_SEM_MORADAS]);
+    expect((await pesquisar('ACADEMICO')).json.resultados.map((x: { id: string }) => x.id)).toEqual([BAIRRO]);
+    expect((await pesquisar('portao')).json.resultados.map((x: { id: string }) => x.id)).toEqual(['m1']);
+    expect((await pesquisar('rua da missao, 12')).json.resultados.map((x: { id: string }) => x.id)).toEqual(['m1']);
+  });
+
+  test('as funções SQL recebem o padrão já escapado e só os estados públicos', async () => {
+    await pesquisar('100% Loja');
+    const chamadas = falso.rpcsChamadas;
+    expect(chamadas.find((c) => c.nome === 'pesquisa_ruas')?.args).toEqual({ p_padrao: '%100\\% Loja%', p_limite: MAX_RESULTADOS });
+    expect(chamadas.find((c) => c.nome === 'pesquisa_moradas_por_referencia')?.args).toEqual({
+      p_padrao: '%100\\% Loja%',
+      p_estados: ['APPROVED', 'OFFICIAL', 'PUBLISHED'],
+      p_limite: MAX_RESULTADOS * 3,
+    });
+  });
+});
+
+describe('cartão público (action=cartao, sem sessão)', () => {
+  const cartao = async (query: unknown) => {
+    const res = await handler(
+      new Request(`${URL_SUPABASE_FALSO}/functions/v1/pesquisa?action=cartao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      }),
+    );
+    return { status: res.status, json: await res.json() };
+  };
+
+  test('regras: só códigos completos; só aprovadas e não privadas', () => {
+    expect(interpretarCodigo(' ao-hua-mnfqr6jw-41 ')).toEqual({ tipo: 'codigo_postal', valor: 'AO-HUA-MNFQR6JW-41' });
+    expect(interpretarCodigo('6gxcq6fm+2v')).toEqual({ tipo: 'plus_code', valor: '6GXCQ6FM+2V' });
+    expect(interpretarCodigo('Q6FM+2V')).toBeNull();
+    expect(interpretarCodigo('Rua da Missão')).toBeNull();
+    expect(podeVerPublico({ status: 'APPROVED', visibility_level: 'LIMITED' })).toBe(true);
+    expect(podeVerPublico({ status: 'APPROVED', visibility_level: 'PRIVATE' })).toBe(false);
+    expect(podeVerPublico({ status: 'PROPOSED', visibility_level: 'PUBLIC' })).toBe(false);
+    expect(Object.keys(cartaoPublico(MORADAS[0] as any, 'Rua', 'Q'))).toEqual(['postal_code', 'plus_code', 'house_number', 'reference', 'rua', 'quadra']);
+  });
+
+  test('pelo código postal: mostra a morada, sem posição exata nem quem criou', async () => {
+    const r = await cartao('AO-HUA-MNFQR6JW-41');
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({
+      found: true,
+      address: {
+        postal_code: 'AO-HUA-MNFQR6JW-41',
+        plus_code: '6GXCQ6FM+2V',
+        house_number: '12',
+        reference: 'Portão azul',
+        rua: 'Rua da Missão',
+        quadra: 'Q-12',
+      },
+    });
+    expect(JSON.stringify(r.json)).not.toMatch(/latitude|created_by|923000000|status/);
+  });
+
+  test('pelo Plus Code completo', async () => {
+    expect((await cartao('6GXCQ6FM+2V')).json.found).toBe(true);
+  });
+
+  test('moradas privadas ou por validar não aparecem', async () => {
+    expect((await cartao('AO-HUA-MNFQR6JY-22')).json).toEqual({ found: false }); // privada
+    expect((await cartao('AO-HUA-MNFQR6JZ-35')).json).toEqual({ found: false }); // privada (de quem for)
+    expect((await cartao('AO-HUA-MNFQR6JX-17')).json).toEqual({ found: false }); // por validar
+  });
+
+  test('texto livre ou código incompleto: 400 (nada de pesquisas abertas sem sessão)', async () => {
+    expect((await cartao('missão')).status).toBe(400);
+    expect((await cartao('Q6FM+2V')).status).toBe(400);
+    expect((await cartao(null)).status).toBe(400);
   });
 });
