@@ -1,9 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-import { BUCKET, contactoDoCidadao, eRevisaoPropria, estadoPublico, validarAbertura, validarPedido, validarRevisao } from "./regras.ts";
+import { BUCKET, contactoDoCidadao, eRevisaoPropria, estadoPublico, pastasDeQuemPede, validarAbertura, validarPedido, validarRevisao } from "./regras.ts";
 
-// Angola Localiza - Citizen Verify Service (v4)
+// Angola Localiza - Citizen Verify Service (v5)
 // Verificacao simples do cidadao comum (para poder registar casas/lojas/escolas):
 // BI frente + BI verso + selfie (por camara, com marca de agua aplicada no cliente),
 // no bucket PRIVADO kyc-artifacts.
@@ -23,6 +23,8 @@ import { BUCKET, contactoDoCidadao, eRevisaoPropria, estadoPublico, validarAbert
 //   - ninguem abre nem decide a propria verificacao;
 //   - review so grava se o pedido ainda estiver PENDING_REVIEW (numa so
 //     operacao): dois administradores ao mesmo tempo -> o segundo recebe 409.
+// v5: aceita fotos dentro da pasta de quem pede ("<uuid>/<ficheiro>", como a
+//   app passa a enviar); a raiz continua aceite para o site antigo.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +61,7 @@ Deno.serve(async (req: Request) => {
     if (action === "submit") {
       const v = validarPedido(body);
       if (!v.ok) return resposta({ error: v.erro }, 400);
+      if (!pastasDeQuemPede(v.nomes, callerId)) return resposta({ error: "as fotos tem de estar na tua pasta" }, 403);
 
       const { data: atual } = await supabase.from("user_identity")
         .select("citizen_id_verified, citizen_id_status").eq("user_id", callerId).maybeSingle();

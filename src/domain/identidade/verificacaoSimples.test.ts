@@ -23,7 +23,8 @@ describe('verificação simples: regras', () => {
   });
 
   test('nome no bucket privado', () => {
-    expect(nomeNoBucket('u1', 'verso', 42)).toBe('cidadao-u1-verso-42.jpg');
+    // Na pasta da pessoa: o bucket só a deixa escrever em "<o seu id>/…".
+    expect(nomeNoBucket('u1', 'verso', 42)).toBe('u1/cidadao-verso-42.jpg');
   });
 });
 
