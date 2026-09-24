@@ -18,13 +18,29 @@ e só mostram os separadores de `separadores`.
 
 ## Mapa (`mapa.tsx`)
 
-Mapa (MapLibre) com a posição, o **Plus Code** de 11 caracteres, a **precisão
-do GPS**, o **Código Postal Digital** (provisório sem rede, confirmado com
-rede) e a **província e o município**. O mapa do Huambo é descarregado uma vez
-e depois funciona sem rede; mostra sempre `© OpenStreetMap`. Ver
-`src/services/mapas` e `src/services/location`.
+Igual ao Mapa do site (`index.html` do repositório antigo), por esta ordem:
 
-A pesquisa, a partilha e o QR ficam para o PR seguinte.
+1. **Pesquisa única** ("Pesquisar código, Plus Code, rua, bairro..."). Plus
+   Codes, coordenadas e links de mapas resolvem-se no telemóvel (sem rede); o
+   resto vai à Edge Function `pesquisa` (só moradas aprovadas; as privadas só
+   para quem as criou).
+2. **Obter localização** e **Ler QR** (câmara; um link de mapas vai para o
+   ponto, outro link só abre se a pessoa quiser).
+3. Cartão com o **Código Postal Digital** (provisório sem rede, confirmado com
+   rede), o **Plus Code** de 11 caracteres, a **divisão administrativa**, a
+   **precisão do GPS** e as **coordenadas**.
+4. **QR Code** (abre no Google Maps) com **Guardar** (imagem, pela janela de
+   partilha) e **Partilhar** (texto com os códigos e o link).
+5. **Registar esta casa, loja, escola...** (só com a verificação simples).
+6. **Mapa** (MapLibre) com o alternador **Mapa/Satélite** e **Ecrã inteiro**.
+   O mapa do Huambo é descarregado uma vez e funciona sem rede (`© OpenStreetMap`);
+   o satélite só com rede e depois de a pessoa aceitar o aviso de dados móveis.
+7. **Privacidade**, **Categoria** e **Guardar como favorito** (só com a
+   verificação simples). Funciona sem rede: a morada (por validar) e o favorito
+   ficam no telemóvel e vão para o servidor quando houver rede.
+8. **Mapa para usar sem rede** (descarregar/atualizar).
+
+Ver `src/components/mapa`, `src/services/mapas` e `src/services/location`.
 
 ## Acesso
 

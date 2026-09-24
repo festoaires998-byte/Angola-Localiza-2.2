@@ -58,3 +58,28 @@ export function criarEstilo(origem: OrigemMapa): StyleSpecification {
     layers: camadas as StyleSpecification['layers'],
   };
 }
+
+/** Texto obrigatório das imagens de satélite (Esri World Imagery, as mesmas do site). */
+export const ATRIBUICAO_SATELITE = 'Imagens: Esri, Maxar, Earthstar Geographics';
+
+/** Imagens de satélite: só com rede (gastam dados móveis; não ficam no telemóvel). */
+export const TILES_SATELITE =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+/** Estilo MapLibre da vista "Satélite" (sem nomes, como no site). */
+export function criarEstiloSatelite(): StyleSpecification {
+  return {
+    version: 8,
+    name: 'Angola Localiza · Satélite',
+    sources: {
+      satelite: {
+        type: 'raster',
+        tiles: [TILES_SATELITE],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: ATRIBUICAO_SATELITE,
+      },
+    },
+    layers: [{ id: 'satelite', type: 'raster', source: 'satelite' }],
+  };
+}

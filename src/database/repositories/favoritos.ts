@@ -17,8 +17,11 @@ export function eCategoriaFavorito(valor: unknown): valor is CategoriaFavorito {
   return typeof valor === 'string' && (CATEGORIAS_FAVORITO as readonly string[]).includes(valor);
 }
 
-/** Alteração feita no telemóvel que ainda não chegou ao servidor. */
-export type PendenteFavorito = 'atualizar' | 'remover';
+/**
+ * Alteração feita no telemóvel que ainda não chegou ao servidor:
+ * 'criar' = favorito novo (e a morada dele) guardado no Mapa, ainda só no telemóvel.
+ */
+export type PendenteFavorito = 'criar' | 'atualizar' | 'remover';
 
 export interface Favorito {
   /** O mesmo id do servidor (public.favorites.id). */
@@ -97,18 +100,24 @@ export function criarRepositorioFavoritos(db: BaseDados, relogio: Relogio = relo
     async alterar(id: string, mudancas: { nome: string; categoria: CategoriaFavorito }): Promise<void> {
       await db.run(
         `UPDATE favoritos SET nome = ?, categoria = ?, atualizado_em = ?,
-            pendente = CASE WHEN pendente = 'remover' THEN 'remover' ELSE 'atualizar' END
+            pendente = CASE WHEN pendente IN ('remover', 'criar') THEN pendente ELSE 'atualizar' END
           WHERE id = ?`,
         [mudancas.nome, mudancas.categoria, paraIso(relogio()), id],
       );
     },
 
-    /** Tira dos favoritos no telemóvel (deixa de aparecer) e marca para enviar. */
+    /**
+     * Tira dos favoritos no telemóvel (deixa de aparecer) e marca para enviar.
+     * Um favorito que ainda não chegou ao servidor ('criar') apaga-se logo.
+     */
     async marcarRemover(id: string): Promise<void> {
-      await db.run(`UPDATE favoritos SET pendente = 'remover', atualizado_em = ? WHERE id = ?`, [
-        paraIso(relogio()),
-        id,
-      ]);
+      await db.transacao(async (tx) => {
+        await tx.run(`DELETE FROM favoritos WHERE id = ? AND pendente = 'criar'`, [id]);
+        await tx.run(`UPDATE favoritos SET pendente = 'remover', atualizado_em = ? WHERE id = ?`, [
+          paraIso(relogio()),
+          id,
+        ]);
+      });
     },
 
     /** O servidor já tem esta alteração. */

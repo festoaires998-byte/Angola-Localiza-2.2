@@ -158,6 +158,9 @@ export default function DetalheMorada() {
         {item.favorito.pendente === 'atualizar' && !mudou ? (
           <Texto suave>Alteração guardada neste telemóvel, à espera de rede.</Texto>
         ) : null}
+        {item.favorito.pendente === 'criar' ? (
+          <Texto suave>Guardada no Mapa sem rede: ainda só está neste telemóvel. Vai para o servidor quando houver rede.</Texto>
+        ) : null}
         {mensagem ? <Caixa tipo={mensagem.tipo}>{mensagem.texto}</Caixa> : null}
         <Botao titulo="Guardar alterações" onPress={() => void guardar()} desativado={!mudou} aCarregar={aGuardar} />
       </Cartao>

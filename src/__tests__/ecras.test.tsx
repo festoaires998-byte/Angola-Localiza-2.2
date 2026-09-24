@@ -70,6 +70,13 @@ jest.mock('@/services/mapas/mapaOffline', () => jest.requireActual<typeof import
 jest.mock('@/hooks/usePosicao', () => ({ usePosicao: () => ({ estado: 'a_procurar', ultima: null, tentarDeNovo: () => undefined }) }));
 jest.mock('@/hooks/useInfoLocal', () => ({ useInfoLocal: () => null }));
 jest.mock('react-native-qrcode-svg', () => () => null);
+// O Mapa pergunta pela verificação simples (base de dados do telemóvel).
+jest.mock('@/services/moradas/registoApp', () => ({ servicoRegisto: { verificacao: async () => 'verificado' } }));
+jest.mock('@/api/pesquisa', () => ({ pesquisarNoServidor: async () => [] }));
+jest.mock('@/services/moradas/moradasApp', () => ({
+  servicoMoradas: { guardarDoMapa: async () => ({}), enviarPendentes: async () => ({ enviados: 0, erro: null }) },
+  mudancasMoradas: { avisar: () => undefined, ouvir: () => () => undefined },
+}));
 
 // ─── Ajudas ────────────────────────────────────────────────────────────────
 

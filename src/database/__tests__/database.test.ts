@@ -785,7 +785,7 @@ describe('favoritos do utilizador (migração 007)', () => {
     expect(await favoritos.listarDoUtilizador('user-1')).toEqual([]);
   });
 
-  test('pendente só aceita "atualizar" ou "remover"', async () => {
+  test('pendente só aceita "criar", "atualizar" ou "remover"', async () => {
     const db = await baseMigrada();
     await expect(
       db.run(
@@ -956,11 +956,51 @@ describe('preferências (migração 008)', () => {
   test('guarda e lê pequenos valores; uma base na versão 7 migra', async () => {
     const { db: antiga } = await criarBaseDadosSqlJs();
     await aplicarMigracoes(antiga, MIGRACOES.slice(0, 7));
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(8);
+    await expect(aplicarMigracoes(antiga, MIGRACOES.slice(0, 8))).resolves.toBe(8);
     const pref = criarRepositorioPreferencias(antiga);
     expect(await pref.obter('cidadao_verificado:u1')).toBeNull();
     await pref.guardar('cidadao_verificado:u1', '1');
     await pref.guardar('cidadao_verificado:u1', '0');
     expect(await pref.obter('cidadao_verificado:u1')).toBe('0');
+  });
+});
+
+describe('favoritos criados sem rede (migração 009)', () => {
+  test('uma base na versão 8 migra sem perder favoritos e passa a aceitar "criar"', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 8));
+    await antiga.run(
+      `INSERT INTO favoritos (id, morada_id, nome, categoria, atualizado_em, user_id, pendente, criado_em)
+       VALUES ('fav-1', 'm1', 'Casa da avó', 'familia', '2026-09-01T10:00:00.000Z', 'user-1', 'atualizar', '2026-08-01T10:00:00.000Z')`,
+    );
+    await expect(
+      antiga.run(
+        `INSERT INTO favoritos (id, morada_id, nome, categoria, atualizado_em, user_id, pendente)
+         VALUES ('fav-2', 'm2', '', 'outro', '2026-09-01T10:00:00.000Z', 'user-1', 'criar')`,
+      ),
+    ).rejects.toThrow(/CHECK/);
+
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(9);
+    const favoritos = criarRepositorioFavoritos(antiga);
+    expect(await favoritos.obter('fav-1')).toEqual({
+      id: 'fav-1',
+      morada_id: 'm1',
+      nome: 'Casa da avó',
+      categoria: 'familia',
+      atualizado_em: '2026-09-01T10:00:00.000Z',
+      user_id: 'user-1',
+      pendente: 'atualizar',
+      criado_em: '2026-08-01T10:00:00.000Z',
+    });
+    await antiga.run(
+      `INSERT INTO favoritos (id, morada_id, nome, categoria, atualizado_em, user_id, pendente)
+       VALUES ('fav-2', 'm2', '', 'outro', '2026-09-01T10:00:00.000Z', 'user-1', 'criar')`,
+    );
+    expect((await favoritos.listarPendentes('user-1')).map((f) => f.id).sort()).toEqual(['fav-1', 'fav-2']);
+    // Os índices voltam a existir.
+    const indices = await antiga.getAll<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'favoritos' AND name LIKE 'idx_%' ORDER BY name`,
+    );
+    expect(indices.map((i) => i.name)).toEqual(['idx_favoritos_categoria', 'idx_favoritos_morada', 'idx_favoritos_utilizador']);
   });
 });
