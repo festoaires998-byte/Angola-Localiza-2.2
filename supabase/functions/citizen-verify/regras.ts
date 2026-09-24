@@ -11,8 +11,26 @@ export interface PedidoVerificacao {
   selfie_url: string;
 }
 
-/** Nome de um ficheiro na raiz do bucket (sem "/", sem ".."), como a app e o site o enviam. */
-const NOME_VALIDO = /^[A-Za-z0-9._-]{5,200}$/;
+/**
+ * Nome de um ficheiro no bucket: na raiz (o site antigo, até ao hotfix) ou
+ * dentro da pasta de um utilizador ("<uuid>/<ficheiro>", a app desde a v5).
+ * Nunca ".." nem mais de uma pasta.
+ */
+const NOME_VALIDO = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/)?[A-Za-z0-9._-]{5,200}$/i;
+
+/** A pasta do nome (o uuid antes de "/"), ou null se o ficheiro está na raiz. */
+export function pastaDoNome(nome: string): string | null {
+  const i = nome.indexOf("/");
+  return i === -1 ? null : nome.slice(0, i).toLowerCase();
+}
+
+/** Cada foto numa pasta tem de estar na pasta de quem pede (a raiz ainda é aceite, pelo site antigo). */
+export function pastasDeQuemPede(nomes: string[], quemPede: string): boolean {
+  return nomes.every((n) => {
+    const pasta = pastaDoNome(n);
+    return pasta === null || pasta === quemPede.toLowerCase();
+  });
+}
 
 /** Valida o pedido de submit: 3 nomes de ficheiros diferentes, válidos. */
 export function validarPedido(body: unknown): { ok: true; pedido: PedidoVerificacao; nomes: string[] } | { ok: false; erro: string } {

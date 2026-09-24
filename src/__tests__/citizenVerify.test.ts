@@ -2,7 +2,17 @@ import { describe, expect, test } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { BUCKET, contactoDoCidadao, eRevisaoPropria, estadoPublico, validarAbertura, validarPedido, validarRevisao } from '../../supabase/functions/citizen-verify/regras';
+import {
+  BUCKET,
+  contactoDoCidadao,
+  eRevisaoPropria,
+  estadoPublico,
+  pastaDoNome,
+  pastasDeQuemPede,
+  validarAbertura,
+  validarPedido,
+  validarRevisao,
+} from '../../supabase/functions/citizen-verify/regras';
 import { lerEstadoVerificacao } from '@/api/verificacaoNucleo';
 import { estadoDoServidor, nomeNoBucket } from '@/domain/identidade/verificacaoSimples';
 
@@ -211,5 +221,82 @@ describe('app: ler as respostas da citizen-verify', () => {
     });
     expect(lerEstadoVerificacao({ citizen_id_verified: false, citizen_id_status: 'PENDING_REVIEW' })).toEqual({ estado: 'em_revisao', motivo: null });
     expect(() => lerEstadoVerificacao({ error: 'sessao invalida' })).toThrow('sessao invalida');
+  });
+});
+
+describe('citizen-verify v5: fotos na pasta de cada utilizador', () => {
+  const OUTRO = '00000000-0000-4000-8000-000000000000';
+
+  test('a app envia para "<id>/cidadao-…" e o servidor aceita esses nomes', () => {
+    expect(nomeNoBucket(UID, 'frente', 1)).toBe(`${UID}/cidadao-frente-1.jpg`);
+    const r = validarPedido({
+      id_photo_front_url: nomeNoBucket(UID, 'frente', 1),
+      id_photo_back_url: nomeNoBucket(UID, 'verso', 1),
+      selfie_url: nomeNoBucket(UID, 'selfie', 1),
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  test('só uma pasta, com nome de utilizador (uuid); nada de "..", subpastas ou pastas inventadas', () => {
+    for (const mau of [`${UID}/a/b.jpg`, `${UID}/../x.jpg`, 'fotos/cidadao-1.jpg', `/${UID}.jpg`, `${UID}/`]) {
+      expect(validarPedido({ id_photo_front_url: mau, id_photo_back_url: 'b-123.jpg', selfie_url: 'c-123.jpg' })).toMatchObject({ ok: false });
+    }
+  });
+
+  test('cada foto numa pasta tem de estar na pasta de quem pede; a raiz ainda é aceite (site antigo)', () => {
+    expect(pastaDoNome(`${UID}/x.jpg`)).toBe(UID);
+    expect(pastaDoNome('cidadao-verso-1.jpg')).toBeNull();
+    expect(pastasDeQuemPede([`${UID}/a.jpg`, `${UID}/b.jpg`, 'c-raiz.jpg'], UID)).toBe(true);
+    expect(pastasDeQuemPede([`${UID.toUpperCase()}/a.jpg`], UID)).toBe(true);
+    expect(pastasDeQuemPede([`${OUTRO}/a.jpg`, `${UID}/b.jpg`], UID)).toBe(false);
+  });
+
+  test('a função recusa (403) fotos na pasta de outra pessoa, antes de ver o Storage', () => {
+    const fonte = ler('supabase/functions/citizen-verify/index.ts');
+    const submit = fonte.slice(fonte.indexOf('if (action === "submit") {'), fonte.indexOf('if (action === "list_pending" ||'));
+    expect(submit).toContain('if (!pastasDeQuemPede(v.nomes, callerId)) return resposta({ error: "as fotos tem de estar na tua pasta" }, 403);');
+    expect(submit.indexOf('pastasDeQuemPede')).toBeLessThan(submit.indexOf('kyc_artefactos_do_utilizador'));
+  });
+});
+
+describe('segurança da base de dados (passos A, B e C)', () => {
+  const ab = ler('supabase/migrations/20260924040000_seguranca_funcoes_e_limites_kyc.sql');
+  const c = ler('supabase/migrations/20260924050000_kyc_pasta_por_utilizador.sql');
+
+  test('A: is_admin continua a poder ser usada nas regras (sem revoke), mas só responde sobre a própria pessoa ou ao servidor', () => {
+    expect(ab).toContain('create or replace function public.is_admin(check_user_id uuid)');
+    expect(ab).toContain('check_user_id = auth.uid()');
+    expect(ab).toContain("coalesce(auth.jwt() ->> 'role', '') = 'service_role'");
+    expect(ab).not.toMatch(/revoke execute on function public\.is_admin/);
+  });
+
+  test('A: as outras 7 funções só para o servidor (service_role)', () => {
+    const funcoes = [
+      'is_id_verified(uuid)',
+      'can_validate_field(uuid)',
+      'can_manage_address(uuid, uuid)',
+      'nearby_addresses(double precision, double precision, integer)',
+      'nearby_for_duplicates(double precision, double precision, integer)',
+      'get_next_house_number_for_street(uuid)',
+      'save_address_version()',
+    ];
+    for (const f of funcoes) {
+      expect(ab).toContain(`revoke execute on function public.${f} from public, anon, authenticated;`);
+      expect(ab).toContain(`grant execute on function public.${f} to service_role;`);
+    }
+  });
+
+  test('B: kyc-artifacts até 10 MB e só JPEG, PNG e video/webm', () => {
+    expect(ab).toContain('file_size_limit = 10485760');
+    expect(10485760).toBe(10 * 1024 * 1024);
+    expect(ab).toContain("allowed_mime_types = array['image/jpeg', 'image/png', 'video/webm']");
+    expect(ab).toContain("where id = 'kyc-artifacts'");
+  });
+
+  test('C: cada pessoa só envia para a sua pasta; a raiz fica aceite (temporário, site antigo)', () => {
+    expect(c).toContain('drop policy if exists "Autenticado envia os próprios artefactos KYC" on storage.objects;');
+    expect(c).toContain("(storage.foldername(name))[1] = (select auth.uid())::text");
+    expect(c).toContain("or position('/' in name) = 0");
+    expect(c).toMatch(/for insert\s+to authenticated/);
   });
 });

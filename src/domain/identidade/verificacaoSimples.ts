@@ -62,9 +62,12 @@ export function linhasMarcaVerificacao(data: Date, desafio?: Desafio): [string, 
   return ['Angola Localiza — verificação', desafio ? `${dataHora(data)} · Gesto: ${desafio}` : dataHora(data)];
 }
 
-/** Nome do ficheiro no bucket privado kyc-artifacts (um por pessoa, passo e hora). */
+/**
+ * Nome do ficheiro no bucket privado kyc-artifacts: dentro da pasta da pessoa
+ * ("<id>/…"; o servidor só a deixa escrever na própria pasta), um por passo e hora.
+ */
 export function nomeNoBucket(userId: string, passo: 'frente' | 'verso' | 'selfie', agora: number): string {
-  return `cidadao-${userId}-${passo}-${agora}.jpg`;
+  return `${userId}/cidadao-${passo}-${agora}.jpg`;
 }
 
 /**

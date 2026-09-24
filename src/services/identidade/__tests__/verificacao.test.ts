@@ -63,14 +63,14 @@ describe('verificação simples: envio próprio (funciona sem rede)', () => {
 
     expect(await t.servico.enviarPendente(EU)).toEqual({ resultado: 'em_revisao' });
     expect([...t.bucket.keys()].sort()).toEqual([
-      `cidadao-${EU}-frente-1790000000000.jpg`,
-      `cidadao-${EU}-selfie-1790000000000.jpg`,
-      `cidadao-${EU}-verso-1790000000000.jpg`,
+      `${EU}/cidadao-frente-1790000000000.jpg`,
+      `${EU}/cidadao-selfie-1790000000000.jpg`,
+      `${EU}/cidadao-verso-1790000000000.jpg`,
     ]);
     expect(t.deps.submeter).toHaveBeenCalledWith({
-      id_photo_front_url: `cidadao-${EU}-frente-1790000000000.jpg`,
-      id_photo_back_url: `cidadao-${EU}-verso-1790000000000.jpg`,
-      selfie_url: `cidadao-${EU}-selfie-1790000000000.jpg`,
+      id_photo_front_url: `${EU}/cidadao-frente-1790000000000.jpg`,
+      id_photo_back_url: `${EU}/cidadao-verso-1790000000000.jpg`,
+      selfie_url: `${EU}/cidadao-selfie-1790000000000.jpg`,
     });
     // Enviar NÃO aprova: fica à espera de um administrador.
     expect(await t.servico.estado(EU)).toBe('em_revisao');

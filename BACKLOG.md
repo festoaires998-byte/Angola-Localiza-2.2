@@ -27,12 +27,23 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **Proposta:** uma tarefa diária no servidor (pg_cron ou função agendada)
   que apaga os ficheiros com `citizen_id_reviewed_at` com mais de 90 dias.
 
-### Infraestrutura (depois de ver o que o site antigo ainda usa)
+### Fechar a raiz do bucket kyc-artifacts (passo D)
 
-- Tirar o acesso sem sessão às funções SECURITY DEFINER (`is_admin`,
-  `is_id_verified`, `can_validate_field`, `nearby_addresses`…).
-- Bucket `kyc-artifacts`: aceitar só JPEG até 5 MB, cada utilizador só na
-  sua pasta (`<id>/…`), com hotfix do site.
+- **Desde:** 24/09/2026 (migração `20260924050000_kyc_pasta_por_utilizador`).
+- **O quê:** a app já envia as fotos para a pasta de cada pessoa
+  (`<id>/…`). A regra do bucket ainda aceita a raiz, porque o site antigo
+  envia para lá as fotos do cidadão e o KYC do pessoal (fotos e vídeo).
+- **Depois do hotfix do site** (enviar para `<id>/…`): tirar da regra a
+  condição `or position('/' in name) = 0`.
+
+### Infraestrutura: SMTP próprio no Supabase
+
+- **Desde:** 24/09/2026.
+- **O quê:** o painel do Supabase só deixa ligar a proteção contra
+  palavras-passe roubadas ("Leaked password protection") depois de
+  configurar um servidor de email próprio (SMTP customizado).
+- **Prioridade:** baixa; não bloqueia a operação atual. Depois do SMTP,
+  ligar a proteção em Authentication → Passwords.
 
 ### Depois de validar o APK no terreno
 
