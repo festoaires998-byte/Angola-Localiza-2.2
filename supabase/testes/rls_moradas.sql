@@ -1,4 +1,5 @@
--- Testes de acesso da migração 20260924090000_moradas_privadas_rls.
+-- Testes de acesso das migrações 20260924090000_moradas_privadas_rls e
+-- 20260924090100_moradas_ligadas_fora_da_api.
 -- Correr no SQL do Supabase: aplica a migração, cria dados de teste, entra como
 -- cada pessoa, regista o que ela consegue ler e DESFAZ TUDO no fim (rollback).
 begin;
@@ -89,6 +90,21 @@ create policy "Favorito só de morada visível (mudar)"
   for update
   with check (exists (select 1 from public.addresses a where a.id = favorites.address_id));
 
+
+-- A função moradas_ligadas_a_mim() (usada pela regra de leitura de addresses)
+-- passa para o esquema "privado", que a API (PostgREST) não expõe: deixa de
+-- se poder chamar por /rest/v1/rpc/moradas_ligadas_a_mim. Não havia fuga (só
+-- devolve os ids ligados a quem pergunta), mas o aviso do Supabase fica
+-- resolvido. A regra continua a funcionar: guarda a função pelo seu id interno.
+
+create schema if not exists privado;
+revoke all on schema privado from public;
+grant usage on schema privado to anon, authenticated, service_role;
+
+-- (Só no teste: se as migrações já estiverem aplicadas, tira a versão antiga
+-- do esquema privado; a regra já aponta para a nova. O rollback repõe tudo.)
+drop function if exists privado.moradas_ligadas_a_mim();
+alter function public.moradas_ligadas_a_mim() set schema privado;
 
 create temp table resultados (caso text, esperado boolean, obtido boolean) on commit drop;
 grant all on resultados to anon, authenticated;

@@ -27,3 +27,6 @@ função que precisa delas (e só com o pedido do dono).
   aos administradores, todas. Só se põe nos favoritos uma morada que já se pode
   ler. Os testes de acesso estão em `supabase/testes/rls_moradas.sql` (correm no
   SQL do Supabase dentro de uma transação desfeita: não gravam nada).
+- `20260924090100_moradas_ligadas_fora_da_api.sql`: a função
+  `moradas_ligadas_a_mim()` (usada pela regra acima) passa para o esquema
+  `privado`, que a API não expõe.

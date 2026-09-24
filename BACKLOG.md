@@ -90,6 +90,11 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - ~~Acentos na pesquisa~~: resolvido (`unaccent`, migração `20260924080000`).
 - ~~Leitura direta da tabela `addresses` mostrava moradas privadas~~:
   corrigido na migração `20260924090000_moradas_privadas_rls` e na deliveries v20.
+- **Avisos do relatório de segurança do Supabase (antigos):** `is_admin`
+  pode ser chamada pela API (só diz se um id é administrador); a extensão
+  PostGIS está no esquema `public` (e com ela `spatial_ref_sys` sem RLS e as
+  funções `st_estimatedextent`); a tabela `identity_artifact_views` tem RLS sem
+  regras (ninguém lê pela API: está bem assim, mas documentar).
 - **`public-api` (`/v1/address/search`):** lê `addresses` e `streets` para as
   organizações (com a chave da API). Confirmar que respeita a privacidade.
 - **Segredos no código (encontrados na auditoria):** a `identity-kyc` tem o
