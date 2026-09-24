@@ -6,6 +6,8 @@ import { criarLoja, type Loja } from './loja';
 export interface UtilizadorSessao {
   id: string;
   email: string | null;
+  /** Nome completo da conta (user_metadata.full_name); null se ainda não tem. */
+  nome?: string | null;
 }
 
 export interface NivelSessao {

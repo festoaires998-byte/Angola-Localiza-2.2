@@ -48,8 +48,12 @@ jest.mock('@/hooks/useFilaSync', () => ({
 }));
 
 const mockSair = jest.fn(async () => undefined);
+const mockGuardarNome = jest.fn(async (_nome: string) => undefined);
+const mockCriarConta = jest.fn(async (_e: string, _p: string, _n: string, _r?: string) => ({ userId: 'u-9', precisaConfirmar: true }));
 jest.mock('@/api/auth', () => ({
   sair: () => mockSair(),
+  guardarNome: (nome: string) => mockGuardarNome(nome),
+  criarConta: (e: string, p: string, n: string, r?: string) => mockCriarConta(e, p, n, r),
   // Nunca responde: os ecrãs de MFA ficam em "a preparar" (não é isso que se testa aqui).
   listarFatores: () => new Promise(() => undefined),
   removerFatoresPorVerificar: jest.fn(),
@@ -72,7 +76,7 @@ jest.mock('react-native-qrcode-svg', () => () => null);
 const { sessao } = jest.requireMock<{ sessao: { loja: { definir(e: EstadoSessao): void } } }>('@/state/sessao');
 const { estadoInicial } = jest.requireActual<typeof import('@/state/criarSessao')>('@/state/criarSessao');
 
-function comSessao(cargos: string[], estadoKyc: string | null, nivel: NivelSessao): void {
+function comSessao(cargos: string[], estadoKyc: string | null, nivel: NivelSessao, nome: string | null = 'Ana Silva'): void {
   const perfil: PerfilLocal = {
     user_id: 'u-1',
     email: 'ana@exemplo.ao',
@@ -82,7 +86,7 @@ function comSessao(cargos: string[], estadoKyc: string | null, nivel: NivelSessa
   };
   sessao.loja.definir({
     carregado: true,
-    utilizador: { id: 'u-1', email: 'ana@exemplo.ao' },
+    utilizador: { id: 'u-1', email: 'ana@exemplo.ao', nome },
     perfil,
     perfilLido: true,
     perfilConfirmadoAgora: true,
@@ -110,6 +114,8 @@ beforeEach(() => {
   mockContarPendentes.mockReset();
   mockContarPendentes.mockResolvedValue(0);
   mockSair.mockClear();
+  mockGuardarNome.mockClear();
+  mockCriarConta.mockClear();
   mockMarcarAvisoVisto.mockClear();
   mockFila = {};
 });
@@ -263,5 +269,61 @@ describe('Definições → Sair', () => {
     expect(screen.getAllByRole('button', { name: 'Já vi' })).toHaveLength(1);
     fireEvent.press(screen.getByRole('button', { name: 'Já vi' }));
     expect(mockMarcarAvisoVisto).toHaveBeenCalledWith('op-a');
+  });
+});
+
+describe('nome completo obrigatório', () => {
+  test('conta antiga sem nome: a app pede o nome antes de abrir o resto (nem por link)', async () => {
+    comSessao([], null, AAL1_SEM_FATOR, null);
+    const r = renderRouter('./src/app', { initialUrl: '/mapa' });
+    await waitFor(() => expect(r.getPathname()).toBe('/o-teu-nome'));
+    expect(screen.getByText('Como te chamas?')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mapa' })).toBeNull();
+  });
+
+  test('guardar: valida o nome (nome e apelido) e só então o grava na conta', async () => {
+    comSessao([], null, AAL1_SEM_FATOR, null);
+    const r = renderRouter('./src/app', { initialUrl: '/' });
+    await waitFor(() => expect(r.getPathname()).toBe('/o-teu-nome'));
+    fireEvent.changeText(screen.getByLabelText('Nome completo'), 'Ana');
+    fireEvent.press(screen.getByRole('button', { name: 'Guardar e continuar' }));
+    expect(await screen.findByText('Escreve o nome e o apelido (ex.: Ana Silva).')).toBeTruthy();
+    expect(mockGuardarNome).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByLabelText('Nome completo'), '  Ana   Maria Silva ');
+    fireEvent.press(screen.getByRole('button', { name: 'Guardar e continuar' }));
+    await waitFor(() => expect(mockGuardarNome).toHaveBeenCalledWith('  Ana   Maria Silva '));
+  });
+
+  test('depois de guardar (a sessão passa a ter nome), segue para o mapa', async () => {
+    comSessao([], null, AAL1_SEM_FATOR, null);
+    const r = renderRouter('./src/app', { initialUrl: '/' });
+    await waitFor(() => expect(r.getPathname()).toBe('/o-teu-nome'));
+    comSessao([], null, AAL1_SEM_FATOR, 'Ana Silva');
+    await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
+  });
+
+  test('o código MFA vem primeiro; o nome a seguir', async () => {
+    comSessao(['tecnico_campo'], 'ID_VERIFIED', AAL1_COM_FATOR, null);
+    const r = renderRouter('./src/app', { initialUrl: '/' });
+    await waitFor(() => expect(r.getPathname()).toBe('/codigo-mfa'));
+  });
+
+  test('criar conta: o nome completo é obrigatório e vai para a conta', async () => {
+    sessao.loja.definir({ ...estadoInicial(), carregado: true });
+    const r = renderRouter('./src/app', { initialUrl: '/criar-conta' });
+    await waitFor(() => expect(r.getPathname()).toBe('/criar-conta'));
+    fireEvent.changeText(screen.getByLabelText('Email'), 'ana@exemplo.ao');
+    fireEvent.changeText(screen.getByLabelText('Palavra-passe (mínimo 6 caracteres)'), 'segredo1');
+    fireEvent.changeText(screen.getByLabelText('Repete a palavra-passe'), 'segredo1');
+    fireEvent.press(screen.getByRole('button', { name: 'Criar conta' }));
+    expect(await screen.findByText('Escreve o teu nome completo.')).toBeTruthy();
+    expect(mockCriarConta).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByLabelText('Nome completo'), 'Ana Silva');
+    fireEvent.press(screen.getByRole('button', { name: 'Criar conta' }));
+    await waitFor(() =>
+      expect(mockCriarConta).toHaveBeenCalledWith('ana@exemplo.ao', 'segredo1', 'Ana Silva', expect.stringContaining('email-confirmado')),
+    );
   });
 });

@@ -105,6 +105,15 @@ describe('citizen-verify v4: quem é o cidadão (para o administrador)', () => {
   });
 });
 
+describe('o nome da conta chega ao painel Admin', () => {
+  test('a app grava o nome em user_metadata.full_name, o campo que a citizen-verify lê', () => {
+    const auth = ler('src/api/auth.ts');
+    // Criar conta e contas antigas ("O teu nome") usam o mesmo campo.
+    expect(auth.match(/data: \{ full_name: normalizarNome\(nome\) \}/g)).toHaveLength(2);
+    expect(contactoDoCidadao({ email: 'ana@exemplo.ao', user_metadata: { full_name: 'Ana Maria Silva' } }, null).name).toBe('Ana Maria Silva');
+  });
+});
+
 describe('citizen-verify v4: segurança da revisão', () => {
   const fonte = ler('supabase/functions/citizen-verify/index.ts');
   const view = fonte.slice(fonte.indexOf('if (action === "view") {'), fonte.indexOf('const r = validarRevisao(body);'));
