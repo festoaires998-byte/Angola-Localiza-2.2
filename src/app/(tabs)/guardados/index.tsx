@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Categorias } from '@/components/Categorias';
 import { dataHora, NOMES_CATEGORIAS, nomeEstadoMorada, plural } from '@/components/nomes';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
+import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { useMoradas } from '@/hooks/useMoradas';
 import { useOnline } from '@/hooks/useOnline';
@@ -59,6 +59,7 @@ export default function Moradas() {
         ListHeaderComponent={
           <View style={estilos.cabecalho}>
             <Titulo>As minhas moradas</Titulo>
+            <Botao titulo="Registar uma morada nova" onPress={() => router.push('/guardados/registar')} />
             {online === false ? (
               <Caixa tipo="info">
                 {moradas.atualizadoEm
@@ -78,7 +79,7 @@ export default function Moradas() {
             <View style={estilos.vazio}>
               <Texto>{moradas.aAtualizar ? 'A procurar as tuas moradas…' : 'Ainda não tens moradas guardadas.'}</Texto>
               <Texto suave>
-                Para já, as moradas guardam-se no site. Registar uma morada nova na app chega na próxima atualização.
+                Regista a tua casa (ou outro local) com o botão acima. Fica "Proposta" até ser aprovada; depois aparece aqui.
               </Texto>
             </View>
           ) : (

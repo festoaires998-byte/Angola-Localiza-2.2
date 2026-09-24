@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
 import { dataHora, megas, textoPrecisao } from '@/components/nomes';
-import { distanciaAoLimiteCelula } from '@/domain/enderecamento/codigoPostal';
+import { situacaoLimite } from '@/domain/enderecamento/registoMorada';
 import { encode } from '@/domain/enderecamento/plusCode';
 import { useCapturaGps, type CapturaGps } from '@/hooks/useCapturaGps';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
@@ -84,9 +84,6 @@ function CartaoMapaOffline({ estado, online }: { estado: EstadoMapaOffline; onli
   );
 }
 
-/** Abaixo desta distância ao limite da célula (ou da precisão do GPS, se for maior) mostra-se o aviso. */
-const LIMITE_AVISO_M = 5;
-
 function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGps; comSinal: boolean; info: InfoLocal | null; online: boolean | null }) {
   const captura = medida.captura;
   if (!captura) {
@@ -106,8 +103,9 @@ function CartaoOndeEstou({ medida, comSinal, info, online }: { medida: CapturaGp
   }
   const precisao = textoPrecisao(captura.precisao);
   // Junto ao limite de duas células, o erro do GPS pode fazer o código trocar com o da vizinha.
-  const aoLimite = distanciaAoLimiteCelula(captura.latitude, captura.longitude);
-  const junto = !captura.fraca && aoLimite < Math.max(LIMITE_AVISO_M, captura.precisao);
+  const limite = situacaoLimite(captura.latitude, captura.longitude, captura.precisao);
+  const aoLimite = limite.distanciaM;
+  const junto = !captura.fraca && limite.junto;
   const cp = info?.codigoPostal;
   const local = info?.local;
   return (

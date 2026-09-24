@@ -12,6 +12,7 @@ import {
   criarRepositorioFilaSaida,
   criarRepositorioMoradas,
   criarRepositorioPerfilLocal,
+  criarRepositorioPreferencias,
   criarRepositorioProvasEvidencia,
   criarRepositorioZonasGeocodificadas,
   idDoMarcador,
@@ -91,6 +92,7 @@ describe('migrações', () => {
       'levantamentos',
       'moradas',
       'perfil_local',
+      'preferencias',
       'provas_evidencia',
       'referencias',
       'zona_offline',
@@ -746,7 +748,7 @@ describe('favoritos do utilizador (migração 007)', () => {
       `INSERT INTO favoritos (id, morada_id, nome, categoria, atualizado_em)
        VALUES ('fav-velho', 'm1', 'Casa', 'casa', '2026-09-01T10:00:00.000Z')`,
     );
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(7);
+    await expect(aplicarMigracoes(antiga, MIGRACOES.slice(0, 7))).resolves.toBe(7);
     const favoritos = criarRepositorioFavoritos(antiga);
     expect(await favoritos.obter('fav-velho')).toMatchObject({ user_id: null, pendente: null, criado_em: null });
     expect(await favoritos.listarDoUtilizador('user-1')).toEqual([]);
@@ -916,5 +918,18 @@ describe('perfil_local', () => {
         `INSERT INTO perfil_local (user_id, cargos_json, confirmado_em) VALUES ('u', '{}', 'x')`,
       ),
     ).rejects.toThrow(/CHECK/);
+  });
+});
+
+describe('preferências (migração 008)', () => {
+  test('guarda e lê pequenos valores; uma base na versão 7 migra', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 7));
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(8);
+    const pref = criarRepositorioPreferencias(antiga);
+    expect(await pref.obter('cidadao_verificado:u1')).toBeNull();
+    await pref.guardar('cidadao_verificado:u1', '1');
+    await pref.guardar('cidadao_verificado:u1', '0');
+    expect(await pref.obter('cidadao_verificado:u1')).toBe('0');
   });
 });

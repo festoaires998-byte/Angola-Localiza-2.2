@@ -102,3 +102,21 @@ Mapa avisa: "Estás junto ao limite entre duas células do código postal".
 Uma morada registada guarda o seu código e não muda; o registo de moradas vai
 mostrar o mesmo aviso antes de guardar.
 
+## Registar uma morada (`registoMorada.ts`)
+
+O código postal de uma morada nova é calculado pelo **servidor** quando a
+morada é aprovada (Edge Function `field-service`, a partir das coordenadas
+enviadas). Por isso as regras são cumpridas no telemóvel, antes de enviar:
+
+- **Precisão melhor que ±10 m** (captura não "fraca"); senão não deixa enviar
+  nem tirar a foto.
+- **Junto ao limite de uma célula** (menos de 5 m, ou menos que a precisão):
+  a app nunca deixa o código "à sorte". Pede para medir no centro da entrada
+  (botão "Medir de novo") **ou** mostra as duas células (os dois códigos) e a
+  pessoa escolhe. Com a escolha, a posição enviada fica **1 m dentro** da célula
+  escolhida (`pontoNaCelula`; anda no máximo a distância ao limite + 1 m) e o
+  servidor dá o código dessa célula.
+- `faltaParaEnviar` lista o que falta (tipo de local, rua, referência, foto,
+  confirmar morada duplicada perto); `montarPedidoRegisto` monta o pedido do
+  `field-service?action=submit`, que vai pela fila (`field_submit`).
+
