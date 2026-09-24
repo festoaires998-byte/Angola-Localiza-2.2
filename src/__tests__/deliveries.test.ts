@@ -15,6 +15,7 @@ import {
   diferencaNaMensagem,
   ficheiroDaProva,
   gerarPin,
+  podeUsarComoDestino,
   respostaPin,
   validarFicheirosProva,
 } from '../../supabase/functions/deliveries/regras';
@@ -42,6 +43,10 @@ const ADMIN = 'aaaaaaaa-0000-4000-8000-000000000003';
 const OUTRO = 'aaaaaaaa-0000-4000-8000-000000000004';
 const SUPER = 'aaaaaaaa-0000-4000-8000-000000000005';
 const MORADA = 'bbbbbbbb-0000-4000-8000-000000000001';
+const PRIVADA_DE_OUTRO = 'bbbbbbbb-0000-4000-8000-000000000002';
+const PRIVADA_MINHA = 'bbbbbbbb-0000-4000-8000-000000000003';
+const PRIVADA_NOS_FAVORITOS = 'bbbbbbbb-0000-4000-8000-000000000004';
+const POR_VALIDAR_DE_OUTRO = 'bbbbbbbb-0000-4000-8000-000000000005';
 const ENTREGA = 'cccccccc-0000-4000-8000-000000000001';
 
 const TOKENS: Record<string, string> = { remetente: REMETENTE, estafeta: ESTAFETA, admin: ADMIN, outro: OUTRO, super: SUPER };
@@ -83,7 +88,14 @@ function cenario(entrega: Record<string, unknown> = {}) {
         { user_id: OUTRO, status: null, citizen_id_verified: false },
         { user_id: ESTAFETA, status: 'ID_VERIFIED', citizen_id_verified: false },
       ],
-      addresses: [{ id: MORADA, created_by: OUTRO, confidence_score: 50, flagged_for_review: false }],
+      addresses: [
+        { id: MORADA, status: 'APPROVED', visibility_level: 'PUBLIC', created_by: OUTRO, confidence_score: 50, flagged_for_review: false },
+        { id: PRIVADA_DE_OUTRO, status: 'APPROVED', visibility_level: 'PRIVATE', created_by: OUTRO },
+        { id: PRIVADA_MINHA, status: 'APPROVED', visibility_level: 'PRIVATE', created_by: REMETENTE },
+        { id: PRIVADA_NOS_FAVORITOS, status: 'APPROVED', visibility_level: 'PRIVATE', created_by: OUTRO },
+        { id: POR_VALIDAR_DE_OUTRO, status: 'PROPOSED', visibility_level: 'PUBLIC', created_by: OUTRO },
+      ],
+      favorites: [{ id: 'fav-1', user_id: REMETENTE, address_id: PRIVADA_NOS_FAVORITOS }],
       deliveries: [
         {
           id: ENTREGA,
@@ -176,6 +188,37 @@ describe('deliveries: criar', () => {
     // Pessoal com a identidade verificada (ID_VERIFIED) pode.
     expect((await pedir(handler, 'create', { address_id: MORADA, recipient_name: 'Ana' }, 'estafeta')).status).toBe(200);
     expect(linhas(s, 'deliveries')).toHaveLength(2);
+  });
+
+  test('v20: o destino tem de ser uma morada que quem cria pode ver', async () => {
+    const s = cenario();
+    const criar = (address_id: string, quem = 'remetente') => pedir(handler, 'create', { address_id, recipient_name: 'Ana' }, quem);
+
+    // Privada de outra pessoa, por validar de outra pessoa, ou inexistente: recusado, sem devolver a morada.
+    for (const id of [PRIVADA_DE_OUTRO, POR_VALIDAR_DE_OUTRO, 'bbbbbbbb-0000-4000-8000-00000000ffff']) {
+      const r = await criar(id);
+      expect(r.status).toBe(403);
+      expect(r.json.error).toMatch(/^DESTINO_NAO_PERMITIDO/);
+      expect(JSON.stringify(r.json)).not.toMatch(/latitude|reference/);
+    }
+    expect(linhas(s, 'deliveries')).toHaveLength(1);
+
+    // Pública, privada minha, ou privada que já está nos meus favoritos: aceite.
+    expect((await criar(MORADA)).status).toBe(200);
+    expect((await criar(PRIVADA_MINHA)).status).toBe(200);
+    expect((await criar(PRIVADA_NOS_FAVORITOS)).status).toBe(200);
+    expect(linhas(s, 'deliveries')).toHaveLength(4);
+  });
+
+  test('v20: regra do destino (pura)', () => {
+    const privada = { status: 'APPROVED', visibility_level: 'PRIVATE', created_by: OUTRO };
+    expect(podeUsarComoDestino(null, REMETENTE, true, true)).toBe(false);
+    expect(podeUsarComoDestino({ status: 'OFFICIAL', visibility_level: 'LIMITED', created_by: OUTRO }, REMETENTE, false, false)).toBe(true);
+    expect(podeUsarComoDestino(privada, REMETENTE, false, false)).toBe(false);
+    expect(podeUsarComoDestino({ ...privada, created_by: REMETENTE }, REMETENTE, false, false)).toBe(true);
+    expect(podeUsarComoDestino(privada, REMETENTE, true, false)).toBe(true);
+    expect(podeUsarComoDestino(privada, REMETENTE, false, true)).toBe(true);
+    expect(podeUsarComoDestino({ status: 'PROPOSED', visibility_level: 'PUBLIC', created_by: OUTRO }, REMETENTE, false, false)).toBe(false);
   });
 
   test('cria a entrega em nome de quem pede, com histórico, cobrança da zona e registo; devolve o PIN a quem criou', async () => {

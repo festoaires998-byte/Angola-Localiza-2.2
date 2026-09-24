@@ -2,11 +2,15 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   BUCKET_PROVAS, FAILURE_REASONS, MAX_TENTATIVAS_PIN, TRANSITIONS, VALIDADE_PIN_HORAS,
-  contactoValido, diferencaNaMensagem, gerarPin, respostaPin, textoDoFicheiro, validarFicheirosProva,
+  contactoValido, diferencaNaMensagem, gerarPin, podeUsarComoDestino, respostaPin, textoDoFicheiro, validarFicheirosProva,
   type FicheiroProva, type ResultadoPin,
 } from "./regras.ts";
 
-// Angola Localiza - Deliveries Service (v19)
+// Angola Localiza - Deliveries Service (v20)
+// v20 (privacidade das moradas): o destino tem de ser uma morada que quem
+// cria a entrega já pode ver (aprovada e não privada, própria, nos favoritos,
+// ou administrador). Sem isto, criar uma entrega devolvia as coordenadas de
+// uma morada privada de outra pessoa.
 // v19 (segurança):
 // - criar entregas só com a identidade verificada (cidadão ou pessoal);
 // - o PIN deixa de ser lido diretamente da base de dados (só quem criou o vê:
@@ -35,6 +39,18 @@ async function getZoneRates(supabase: ReturnType<typeof createClient>, zoneCode:
     }
   }
   return rates;
+}
+
+/** O destino pedido é uma morada que quem cria a entrega pode ver? */
+async function destinoPermitido(supabase: ReturnType<typeof createClient>, userId: string, addressId: string): Promise<boolean> {
+  const { data: morada } = await supabase.from("addresses").select("status, visibility_level, created_by").eq("id", addressId).maybeSingle();
+  if (!morada) return false;
+  if (podeUsarComoDestino(morada, userId, false, false)) return true;
+  const [favorito, admin] = await Promise.all([
+    supabase.from("favorites").select("id").eq("user_id", userId).eq("address_id", addressId).limit(1),
+    supabase.rpc("is_admin", { check_user_id: userId }),
+  ]);
+  return podeUsarComoDestino(morada, userId, (favorito.data ?? []).length > 0, admin.data === true);
 }
 
 async function isSuperAdmin(supabase: ReturnType<typeof createClient>, userId: string) {
@@ -190,6 +206,9 @@ Deno.serve(async (req: Request) => {
       }
       if (!(await identidadeVerificada(supabase, callerId))) {
         return new Response(JSON.stringify({ error: "CITIZEN_ID_NOT_VERIFIED: verifica a tua identidade primeiro (Definições → Verificação simples)" }), { status: 403, headers: cors });
+      }
+      if (!(await destinoPermitido(supabase, callerId, String(address_id)))) {
+        return new Response(JSON.stringify({ error: "DESTINO_NAO_PERMITIDO: esta morada e privada ou nao existe" }), { status: 403, headers: cors });
       }
 
       const { data: delivery, error } = await supabase.from("deliveries").insert({

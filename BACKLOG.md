@@ -88,12 +88,8 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - ~~Funções antigas `search` e `resolve-address` sem privacidade~~: desativadas
   (410); o site passa a usar a `pesquisa` (PR no repositório do site).
 - ~~Acentos na pesquisa~~: resolvido (`unaccent`, migração `20260924080000`).
-- **Leitura direta da tabela `addresses`:** a regra da base de dados deixa
-  qualquer pessoa (até sem sessão, com a chave pública) ler todas as moradas
-  aprovadas, **incluindo as "Privadas"** (coordenadas e referência). A app e o
-  site dependem desta leitura (favoritos, entregas, destino por código).
-  **Proposta:** trocar a regra para "aprovadas e não privadas, ou próprias, ou
-  de um favorito/entrega da pessoa". Mudança no Supabase: só com o pedido do dono.
+- ~~Leitura direta da tabela `addresses` mostrava moradas privadas~~:
+  corrigido na migração `20260924090000_moradas_privadas_rls` e na deliveries v20.
 - **`public-api` (`/v1/address/search`):** lê `addresses` e `streets` para as
   organizações (com a chave da API). Confirmar que respeita a privacidade.
 - **Segredos no código (encontrados na auditoria):** a `identity-kyc` tem o
