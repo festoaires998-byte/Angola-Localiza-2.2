@@ -25,7 +25,7 @@ A função `sync` em produção (versão 6) devolve em `status`:
 | --- | --- | --- |
 | `SYNCED` | Gravada (ou já tinha sido antes, mesmo `operation_id`). | `concluida` |
 | `CONFLICT` | `update_address` de uma morada já validada que mudou entretanto. | `concluida` (a regra do site: tudo o que não é `FAILED`) — ver o aviso abaixo |
-| `FAILED` | Erro ao gravar ou `operation_type` desconhecido (vem com `error`). | volta a `pendente`, +1 tentativa |
+| `FAILED` | Erro ao gravar ou `operation_type` desconhecido (vem com `error`). | volta a `pendente`, +1 tentativa; **erros que não se resolvem a tentar de novo** (PIN errado, bloqueado ou expirado, prova incompleta, etapa errada, regras das moradas…, ver `erroSemVolta` em `filaSaida.ts`) passam logo a `falhou_definitivo` e aparecem ao utilizador. Reenviar um PIN errado gastava as 5 tentativas e bloqueava a entrega. |
 | (não veio) | — | volta a `pendente`, +1 tentativa |
 
 Fora de `results`: **401** (sessão inválida), 400 (`operations` vazio) e 500.
@@ -74,7 +74,9 @@ Fora de `results`: **401** (sessão inválida), 400 (`operations` vazio) e 500.
      `falhou_definitivo` com o erro "A foto foi alterada ou danificada depois de ser tirada".
      O ficheiro local **não é apagado** (é evidência) e a operação aparece em
      `operacoesComProblema` no `useFilaSync()`;
-   - envia para o Storage (`<bucket do registo>/offline-<id>.jpg`, ou `.png` se for `image/png`);
+   - envia para o Storage (`<bucket do registo>/offline-<id>.jpg`, ou `.png` se for `image/png`); no bucket
+     privado `delivery-proofs` vai para a pasta de quem envia (`delivery-proofs/<userId>/offline-<id>.jpg`),
+     como a `deliveries` v19 exige;
      a resposta **409** (já existe: a app fechou a meio de um envio anterior) conta como sucesso;
    - marca o ficheiro como enviado e **grava logo o payload com o URL real** na fila, antes do POST;
    - o URL fica `SUPABASE_URL/storage/v1/object/public/<bucket>/<nome>`.

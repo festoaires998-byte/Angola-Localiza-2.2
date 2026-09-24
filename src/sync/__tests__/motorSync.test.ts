@@ -229,7 +229,7 @@ describe('fotos', () => {
     const r = await t.motor.sincronizar();
 
     const urlF1 = `${URL}/storage/v1/object/public/address-photos/offline-f1.jpg`;
-    const urlF2 = `${URL}/storage/v1/object/public/delivery-proofs/offline-f2.png`;
+    const urlF2 = `${URL}/storage/v1/object/public/delivery-proofs/u-ana/offline-f2.png`;
     const esperado = {
       delivery_id: 'd1',
       photo_facade_url: urlF1,
@@ -238,7 +238,7 @@ describe('fotos', () => {
     // Cada ficheiro sobe uma vez, com o nome e o tipo certos.
     expect(t.pedidosStorage().map((p) => [p.url, p.cabecalhos['Content-Type']])).toEqual([
       [`${URL}/storage/v1/object/address-photos/offline-f1.jpg`, 'image/jpeg'],
-      [`${URL}/storage/v1/object/delivery-proofs/offline-f2.png`, 'image/png'],
+      [`${URL}/storage/v1/object/delivery-proofs/u-ana/offline-f2.png`, 'image/png'],
     ]);
     expect(t.pedidosStorage()[0].cabecalhos.Authorization).toBe('Bearer token-ana');
     expect(payloadNaFilaDuranteOPost).toEqual(esperado);
@@ -810,7 +810,7 @@ describe('chave do aparelho e provas de entrega', () => {
     await t.motor.sincronizar();
 
     const guardada = (await t.evidencias.obter(op.operation_id))!.payload as { proof: Record<string, unknown> };
-    expect(guardada.proof.photo_url).toBe(`${URL}/storage/v1/object/public/delivery-proofs/offline-f1.jpg`);
+    expect(guardada.proof.photo_url).toBe(`${URL}/storage/v1/object/public/delivery-proofs/u-ana/offline-f1.jpg`);
     expect(guardada.proof.crypto_signature).toBe(payload.proof.crypto_signature);
   });
 });

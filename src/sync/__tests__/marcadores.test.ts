@@ -37,3 +37,11 @@ describe('marcadores offline', () => {
     );
   });
 });
+
+describe('nomeNoStorage: provas de entrega na pasta de quem envia', () => {
+  test('delivery-proofs → "<userId>/offline-<id>"; os outros buckets ficam na raiz', () => {
+    expect(nomeNoStorage({ id: 'x1', content_type: 'image/png', bucket: 'delivery-proofs' }, 'u-1')).toBe('u-1/offline-x1.png');
+    expect(nomeNoStorage({ id: 'x1', content_type: 'image/jpeg', bucket: 'field-photos' }, 'u-1')).toBe('offline-x1.jpg');
+    expect(() => nomeNoStorage({ id: 'x1', content_type: 'image/png', bucket: 'delivery-proofs' })).toThrow();
+  });
+});

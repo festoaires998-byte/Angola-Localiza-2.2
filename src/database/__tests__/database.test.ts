@@ -10,6 +10,7 @@ import {
   criarRepositorioFavoritos,
   criarRepositorioFicheirosPendentes,
   criarRepositorioFilaSaida,
+  erroSemVolta,
   criarRepositorioMoradas,
   criarRepositorioPerfilLocal,
   criarRepositorioPreferencias,
@@ -280,6 +281,36 @@ describe('fila de saída', () => {
     expect((await fila.obter('op-3'))?.ultimo_erro).toMatch(/não veio/);
     expect(await fila.obter('op-4')).toMatchObject({ estado: 'concluida' });
     expect(await fila.contarPendentes()).toBe(2);
+  });
+
+  test('erros que não se resolvem a tentar outra vez (ex.: PIN errado) falham logo de vez', async () => {
+    await fila.adicionar(U, 'delivery_proof', { n: 1 }); // op-1: PIN errado
+    await fila.adicionar(U, 'delivery_proof', { n: 2 }); // op-2: sem rede no servidor
+    await fila.marcarAEnviar(U, ['op-1', 'op-2']);
+    await fila.aplicarResultadosSync(U, [
+      { operation_id: 'op-1', status: 'FAILED', error: 'PIN de confirmacao incorreto (restam 4 tentativas)' },
+      { operation_id: 'op-2', status: 'FAILED', error: 'fetch failed' },
+    ]);
+    // Voltar a enviar o mesmo PIN errado gastava as 5 tentativas e bloqueava a entrega.
+    expect(await fila.obter('op-1')).toMatchObject({ estado: 'falhou_definitivo', tentativas: 1 });
+    expect(await fila.obter('op-2')).toMatchObject({ estado: 'pendente', tentativas: 1 });
+  });
+
+  test('erroSemVolta: PIN, prova incompleta, etapa errada e regras de moradas', () => {
+    for (const e of [
+      'PIN de confirmacao incorreto (restam 2 tentativas)',
+      'PIN_LOCKED: demasiadas tentativas',
+      'PIN_EXPIRED: o PIN desta entrega expirou',
+      'POD_INCOMPLETA: falta a foto da entrega',
+      'transicao invalida: DELIVERED -> FAILED',
+      'uma morada nova fica sempre por validar (PROPOSED)',
+      'CITIZEN_ID_NOT_VERIFIED: verifica',
+    ]) {
+      expect(erroSemVolta(e)).toBe(true);
+    }
+    for (const e of ['fetch failed', 'Sem ligação ao servidor.', 'a entrega mudou de estado entretanto - atualiza e tenta de novo']) {
+      expect(erroSemVolta(e)).toBe(false);
+    }
   });
 
   test('as que falharam só voltam a estar prontas depois da espera', async () => {

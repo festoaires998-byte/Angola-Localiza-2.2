@@ -17,6 +17,7 @@ const envio = (id: string, extra: Partial<Envio> = {}): Envio => ({
   instrucoes: null,
   urgente: false,
   criadoPor: EU,
+  estafeta: null,
   atualizadoEm: '2026-09-24T10:00:00.000Z',
   morada: { codigoPostal: 'AO-HUA-23456789-42', plusCode: null, referencia: null },
   ...extra,

@@ -93,8 +93,9 @@ describe('envio: respostas do servidor', () => {
       instrucoes: null,
       urgente: true,
       criadoPor: 'u1',
+      estafeta: null,
       atualizadoEm: '2026-09-24T10:00:00Z',
-      morada: { codigoPostal: 'AO-HUA-23456789-42', plusCode: '6GXV+2C', referencia: 'Casa azul' },
+      morada: { codigoPostal: 'AO-HUA-23456789-42', plusCode: '6GXV+2C', referencia: 'Casa azul', latitude: null, longitude: null },
     });
     expect(() => lerEnvio({ status: 'CREATED' })).toThrow('Resposta do servidor sem a entrega.');
   });
