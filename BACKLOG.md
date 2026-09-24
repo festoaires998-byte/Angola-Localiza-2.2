@@ -71,10 +71,8 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **Site antigo: rastreio público quebrado.** O site chama
   `deliveries?action=track` sem sessão, mas essa ação não existe (responde 401).
   Decidir se o rastreio público volta (só código, estado e destino, sem sessão).
-- **`sync`: `create_address` e `update_address` gravam o payload tal como vem**
-  (com a service role), por isso uma pessoa pode criar ou mudar uma morada com
-  qualquer estado (ex.: `APPROVED`). Limitar às colunas permitidas ou passar
-  pela `field-service`.
+- ~~`sync`: `create_address` e `update_address` gravam o payload tal como vem.~~
+  Corrigido na sync v8 e na migração `20260924070000_moradas_so_por_validar`.
 - **`signing-keys`:** a chave de um aparelho pode ser trocada sem registo
   (upsert). Registar cada troca em `audit_logs` para a prova ter valor jurídico.
 - **`public-api`:** as organizações criam entregas com a chave da API, sem a
