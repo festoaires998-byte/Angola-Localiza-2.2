@@ -13,10 +13,25 @@ interface Props {
   /** Recebe a foto da câmara e devolve quando a foto final estiver pronta (ou falha com a mensagem). */
   aoFotografar(uriCamara: string): Promise<void>;
   aoApagar(): void;
+  /** Câmara de trás (fachada, BI) ou da frente (selfie). */
+  camara?: 'back' | 'front';
+  /** Nome da foto para o leitor de ecrã. */
+  rotuloFoto?: string;
+  /** Mostrar a foto pronta (false quando é um passo intermédio, ex.: a 1.ª selfie). */
+  mostrarFoto?: boolean;
 }
 
-/** Foto da fachada tirada na hora, pela câmara (nunca da galeria, como no site). */
-export function CamaraFachada({ foto, podeFotografar, motivoSemCamara, aoFotografar, aoApagar }: Props) {
+/** Foto tirada na hora, pela câmara (nunca da galeria, como no site): fachada, BI ou selfie. */
+export function CamaraFachada({
+  foto,
+  podeFotografar,
+  motivoSemCamara,
+  aoFotografar,
+  aoApagar,
+  camara: lado = 'back',
+  rotuloFoto = 'Foto da fachada',
+  mostrarFoto = true,
+}: Props) {
   const [permissao, pedirPermissao] = useCameraPermissions();
   const [aberta, setAberta] = useState(false);
   const [aTirar, setATirar] = useState(false);
@@ -26,7 +41,9 @@ export function CamaraFachada({ foto, podeFotografar, motivoSemCamara, aoFotogra
   if (foto) {
     return (
       <View style={estilos.bloco}>
-        <Image source={{ uri: foto }} style={estilos.foto} accessibilityLabel="Foto da fachada" resizeMode="cover" />
+        {mostrarFoto ? (
+          <Image source={{ uri: foto }} style={estilos.foto} accessibilityLabel={rotuloFoto} resizeMode="contain" />
+        ) : null}
         <Botao titulo="Tirar outra foto" variante="secundario" onPress={aoApagar} />
       </View>
     );
@@ -68,7 +85,7 @@ export function CamaraFachada({ foto, podeFotografar, motivoSemCamara, aoFotogra
 
   return (
     <View style={estilos.bloco}>
-      <CameraView ref={camara} style={estilos.camara} facing="back" testID="camara-fachada" />
+      <CameraView ref={camara} style={estilos.camara} facing={lado} />
       <Botao titulo="Tirar foto" onPress={() => void tirar()} aCarregar={aTirar} />
       <Botao titulo="Cancelar" variante="secundario" onPress={() => setAberta(false)} desativado={aTirar} />
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}

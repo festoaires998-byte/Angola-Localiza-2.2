@@ -151,9 +151,17 @@ export default function RegistarMorada() {
   return (
     <ScrollView contentContainerStyle={estilos.conteudo} keyboardShouldPersistTaps="handled">
       {bloqueado ? (
-        <Caixa tipo="erro">
-          Para registar uma morada tens de fazer primeiro a verificação simples da identidade. Por agora faz-se no site
-          (Definições → Verificação simples).
+        <View style={estilos.bloco}>
+          <Caixa tipo="erro">
+            Para registar uma morada tens de fazer primeiro a verificação simples da identidade (fotos do BI e uma
+            selfie). Leva 2 minutos.
+          </Caixa>
+          <Botao titulo="Fazer a verificação simples" onPress={() => router.push('/definicoes/verificacao')} />
+        </View>
+      ) : null}
+      {verificacao === 'pendente' ? (
+        <Caixa tipo="info">
+          A tua verificação simples está guardada neste telemóvel e é enviada quando houver rede, antes deste registo.
         </Caixa>
       ) : null}
       {verificacao === 'desconhecido' ? (

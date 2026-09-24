@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 
 import { supabase } from '@/api/supabase';
+import { enviarVerificacaoDaSessao } from '@/services/identidade/verificacaoApp';
 import { estaOnline, subscrever as subscreverRede } from '@/services/rede/conectividade';
 
 import { eventosSync, type Emissor } from './eventos';
@@ -49,7 +50,11 @@ export function ligarGatilhos(f: FontesGatilhos): () => void {
 }
 
 const fontesDaApp: FontesGatilhos = {
-  sincronizar: () => sincronizar(),
+  // Primeiro a verificação simples pendente (os registos de moradas na fila precisam dela no servidor).
+  sincronizar: () =>
+    enviarVerificacaoDaSessao()
+      .catch(() => null)
+      .then(() => sincronizar()),
   estaOnline,
   ouvirRede: subscreverRede,
   ouvirPrimeiroPlano(ativa) {

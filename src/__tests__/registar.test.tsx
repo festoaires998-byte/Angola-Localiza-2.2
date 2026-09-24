@@ -5,7 +5,8 @@ import { limitesCelula } from '@/domain/enderecamento/codigoPostal';
 import { codigosDasDuasCelulas } from '@/domain/enderecamento/registoMorada';
 
 const mockBack = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack, push: jest.fn() }) }));
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack, push: mockPush }) }));
 
 const mockTirar = jest.fn(async () => ({ uri: 'file:///cache/camara.jpg' }));
 jest.mock('expo-camera', () => {
@@ -171,12 +172,22 @@ describe('Registar morada', () => {
     ).toBe(true);
   });
 
-  test('cidadão sem a verificação simples: explica e não deixa enviar', async () => {
+  test('cidadão sem a verificação simples: explica, abre a verificação na app e não deixa enviar', async () => {
     mockVerificacao = 'por_verificar';
     await desenhar();
     expect(screen.getByText(/tens de fazer primeiro a verificação simples/)).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'Fazer a verificação simples' }));
+    expect(mockPush).toHaveBeenCalledWith('/definicoes/verificacao');
     await preencherEFotografar();
     expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
+  });
+
+  test('verificação pendente (guardada no telemóvel): avisa e deixa enviar', async () => {
+    mockVerificacao = 'pendente';
+    await desenhar();
+    expect(screen.getByText(/verificação simples está guardada neste telemóvel/)).toBeTruthy();
+    await preencherEFotografar();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(false);
   });
 
   test('sem rede: escreve a rua à mão e o registo fica guardado para enviar depois', async () => {
