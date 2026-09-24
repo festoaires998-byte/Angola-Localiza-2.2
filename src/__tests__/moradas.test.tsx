@@ -31,6 +31,7 @@ jest.mock('@/hooks/useMoradas', () => ({
     erro: null,
     atualizadoEm: null,
     pendentes: 0,
+    registos: [],
     atualizar: mockAtualizar,
     alterar: mockAlterar,
     remover: mockRemover,
@@ -151,6 +152,50 @@ describe('Moradas: lista', () => {
     mockEstado = { itens: [item('f1', { pendente: 'atualizar' })] };
     desenhar(Lista);
     expect(screen.getByText('À espera de rede')).toBeTruthy();
+  });
+});
+
+describe('Moradas: os meus registos', () => {
+  const registo = (id: string, estado: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    estado,
+    tipo: 'Casa',
+    referencia: 'Portão Castanho, ao lado da igreja',
+    bairro: 'Bairro São Luís',
+    enviadoEm: '2026-09-24T12:25:05.000Z',
+    validadoEm: null,
+    moradaId: null,
+    codigoPostal: null,
+    numeroPorta: null,
+    ...extra,
+  });
+
+  test('sem registos, a secção não aparece', () => {
+    desenhar(Lista);
+    expect(screen.queryByText('Os meus registos')).toBeNull();
+  });
+
+  test('mostra cada registo e em que ponto está (à espera de rede, de validação, aprovado, recusado)', () => {
+    mockEstado.registos = [
+      registo('op-1', 'a_espera_rede'),
+      registo('r1', 'por_validar'),
+      registo('r2', 'aprovado', { moradaId: 'm2', codigoPostal: 'AO-HUA-23456789-42', numeroPorta: '12' }),
+      registo('r3', 'rejeitado'),
+    ];
+    desenhar(Lista);
+    expect(screen.getByText('Os meus registos')).toBeTruthy();
+    expect(screen.getAllByText('Casa: Portão Castanho, ao lado da igreja')).toHaveLength(4);
+    expect(screen.getByText('À espera de rede para ser enviado')).toBeTruthy();
+    expect(screen.getByText('À espera de validação')).toBeTruthy();
+    expect(screen.getByText('Aprovado · AO-HUA-23456789-42 · nº 12')).toBeTruthy();
+    expect(screen.getByText('Não foi aceite pela validação')).toBeTruthy();
+    expect(screen.getByText(/entra sozinha na lista abaixo/)).toBeTruthy();
+  });
+
+  test('sem moradas guardadas, explica que a aprovada aparece sozinha', () => {
+    mockEstado = { itens: [], registos: [registo('r1', 'por_validar')] };
+    desenhar(Lista);
+    expect(screen.getByText(/quando for aprovada,\s+aparece aqui sozinha/)).toBeTruthy();
   });
 });
 

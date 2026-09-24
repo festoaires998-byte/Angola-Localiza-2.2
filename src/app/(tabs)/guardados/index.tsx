@@ -6,8 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Categorias } from '@/components/Categorias';
 import { dataHora, NOMES_CATEGORIAS, nomeEstadoMorada, plural } from '@/components/nomes';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
+import { Botao, Caixa, EcraCarregamento, Subtitulo, Texto, Titulo } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
+import { nomeEstadoRegisto, type Registo } from '@/domain/enderecamento/meusRegistos';
 import { useMoradas } from '@/hooks/useMoradas';
 import { useOnline } from '@/hooks/useOnline';
 import { tituloMorada, type ItemMorada } from '@/services/moradas/moradas';
@@ -34,6 +35,30 @@ function ItemLista({ item, aoAbrir }: { item: ItemMorada; aoAbrir(): void }) {
         {item.favorito.pendente ? <Text style={[estilos.etiqueta, estilos.etiquetaPendente]}>À espera de rede</Text> : null}
       </View>
     </Pressable>
+  );
+}
+
+const COR_ESTADO: Record<Registo['estado'], 'aviso' | 'info' | 'sucesso' | 'erro'> = {
+  a_espera_rede: 'aviso',
+  por_validar: 'info',
+  aprovado: 'sucesso',
+  rejeitado: 'erro',
+  duplicado: 'erro',
+};
+
+/** Um registo (morada registada pela pessoa) e em que ponto está. */
+function ItemRegisto({ registo }: { registo: Registo }) {
+  const estado = nomeEstadoRegisto(registo);
+  const titulo = registo.referencia || registo.tipo || 'Morada registada';
+  return (
+    <View style={estilos.registo} accessible accessibilityLabel={`${titulo}. ${estado}`}>
+      <Text style={estilos.tituloRegisto} numberOfLines={2}>
+        {registo.tipo && registo.referencia ? `${registo.tipo}: ${registo.referencia}` : titulo}
+      </Text>
+      {registo.bairro ? <Text style={estilos.detalhe}>{registo.bairro}</Text> : null}
+      <Text style={[estilos.etiqueta, estilos[`estado_${COR_ESTADO[registo.estado]}`]]}>{estado}</Text>
+      {registo.enviadoEm ? <Text style={estilos.detalhe}>{`Registada a ${dataHora(registo.enviadoEm)}`}</Text> : null}
+    </View>
   );
 }
 
@@ -71,6 +96,16 @@ export default function Moradas() {
             {moradas.pendentes > 0 ? (
               <Texto suave>{`${plural(moradas.pendentes, 'alteração', 'alterações')} à espera de rede para ir para o servidor.`}</Texto>
             ) : null}
+            {moradas.registos.length > 0 ? (
+              <View style={estilos.registos}>
+                <Subtitulo>Os meus registos</Subtitulo>
+                <Texto suave>As moradas que registaste. Quando uma é aprovada, entra sozinha na lista abaixo.</Texto>
+                {moradas.registos.map((r) => (
+                  <ItemRegisto key={r.id} registo={r} />
+                ))}
+                <Subtitulo>Moradas guardadas</Subtitulo>
+              </View>
+            ) : null}
             {!vazia ? <Categorias comTodas valor={categoria} aoEscolher={setCategoria} /> : null}
           </View>
         }
@@ -79,7 +114,8 @@ export default function Moradas() {
             <View style={estilos.vazio}>
               <Texto>{moradas.aAtualizar ? 'A procurar as tuas moradas…' : 'Ainda não tens moradas guardadas.'}</Texto>
               <Texto suave>
-                Regista a tua casa (ou outro local) com o botão acima. Fica "Proposta" até ser aprovada; depois aparece aqui.
+                Regista a tua casa (ou outro local) com o botão acima. Fica à espera de validação; quando for aprovada,
+                aparece aqui sozinha.
               </Texto>
             </View>
           ) : (
@@ -129,4 +165,18 @@ const estilos = StyleSheet.create({
   },
   etiquetaEstado: { backgroundColor: CORES.fundoSuave, color: CORES.textoSuave },
   etiquetaPendente: { backgroundColor: CORES.avisoFundo, color: CORES.avisoTexto },
+  registos: { gap: 8 },
+  registo: {
+    borderWidth: 1,
+    borderColor: CORES.borda,
+    borderRadius: TAMANHOS.raio,
+    padding: 14,
+    gap: 4,
+    backgroundColor: CORES.fundoSuave,
+  },
+  tituloRegisto: { fontSize: TAMANHOS.texto, fontWeight: '700', color: CORES.texto },
+  estado_aviso: { alignSelf: 'flex-start', backgroundColor: CORES.avisoFundo, color: CORES.avisoTexto },
+  estado_info: { alignSelf: 'flex-start', backgroundColor: CORES.infoFundo, color: CORES.primaria },
+  estado_sucesso: { alignSelf: 'flex-start', backgroundColor: '#E6F4EA', color: CORES.sucesso },
+  estado_erro: { alignSelf: 'flex-start', backgroundColor: CORES.erroFundo, color: CORES.perigo },
 });
