@@ -71,6 +71,7 @@ function envioGuardado(linha: Entrega): Envio | null {
     instrucoes: d.instrucoes ?? null,
     urgente: d.urgente === true,
     criadoPor: d.criadoPor ?? null,
+    estafeta: d.estafeta ?? null,
     atualizadoEm: d.atualizadoEm ?? linha.atualizado_em,
     morada: d.morada ?? null,
   };

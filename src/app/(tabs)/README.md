@@ -62,6 +62,27 @@ Com rede o pedido vai logo à `deliveries` (a resposta traz o PIN); sem rede
 vai para a fila (`create_delivery`) e sai sozinho quando a rede voltar. Ver
 `src/services/entregas/envios.ts`.
 
+## Entregas do estafeta (`minhas-entregas/`)
+
+Stack, com o estado partilhado em `src/state/estafeta.ts` (lido por
+`useEntregasEstafeta`, que volta a ler quando a fila muda):
+- `index.tsx`: as entregas atribuídas ao estafeta (as por fazer primeiro), com o
+  estado, "Urgente", "À espera de rede" e "Recusada pelo servidor". Quem não é
+  estafeta vê uma explicação;
+- `[id].tsx`: destino, "Ligar a…", "Abrir o destino no mapa", o passo seguinte
+  (a recolha exige uma foto com marca de água), as ações à espera de rede e as
+  recusadas (ex.: PIN errado, em palavras simples);
+- `prova.tsx`: prova de entrega (decisão C): foto com marca de água, assinatura
+  de quem recebe com o dedo (`src/components/AssinaturaDedo.tsx`, gravada em PNG)
+  e o PIN. A lista "Falta:" bloqueia o botão. A prova é assinada pela chave do
+  aparelho (SHA-256 da foto e da assinatura, local e hora) e vai pela fila;
+- `falha.tsx`: "Não foi possível entregar", com o motivo e foto opcional.
+
+Tudo funciona sem rede (decisão D): as ações vão pela fila (`delivery_proof`),
+pela ordem em que foram feitas, e o PIN só é conferido quando a prova chega ao
+servidor. Um PIN errado não é reenviado sozinho (gastava as 5 tentativas): fica
+recusado e o estafeta faz a prova de novo. Ver `src/services/entregas/estafeta.ts`.
+
 ## Admin (`admin/`)
 
 `admin/index.tsx` (lista) e `admin/[id].tsx` (detalhe, num ecrã próprio do Stack: o botão Voltar regressa à lista tal como estava). Aprovar pede confirmação num alerta do sistema (`Alert.alert`). A lista e o detalhe partilham o estado em `src/state/revisaoKyc.ts`.

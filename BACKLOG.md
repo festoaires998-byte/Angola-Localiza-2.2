@@ -91,3 +91,15 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **Pedido repetido:** se a ligação cair depois de o servidor criar a entrega
   mas antes da resposta chegar, a app põe o pedido na fila e ele pode ficar
   criado duas vezes. Solução: uma chave de pedido (idempotência) na `deliveries`.
+
+### Entregas do estafeta: a seguir
+
+- **Decisão B (atribuição):** o operador postal atribuir entregas aos estafetas
+  da organização e o estafeta "puxar" entregas elegíveis precisam de ações novas
+  na `deliveries` (mudança no Supabase, com o pedido do dono). Hoje o estafeta
+  vê as que já lhe foram atribuídas (pelo site ou por quem criou).
+- **Destino no mapa:** o estafeta só lê a posição de moradas publicadas/aprovadas
+  (regras da tabela addresses). Para moradas ainda por validar, falta dar a
+  posição do destino ao estafeta atribuído (ex.: pela `deliveries`).
+- **Mapa dentro da app:** "Abrir o destino no mapa" usa a app de mapas do
+  telemóvel; falta mostrar o destino no mapa offline da app.

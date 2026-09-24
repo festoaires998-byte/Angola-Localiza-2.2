@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 
 /** Colunas que quem criou pode ler diretamente (as mesmas que o site pede). */
 const COLUNAS =
-  'id, tracking_code, status, recipient_name, recipient_phone, instructions, is_urgent, created_by, created_at, updated_at, addresses(postal_code, plus_code, reference)';
+  'id, tracking_code, status, recipient_name, recipient_phone, instructions, is_urgent, created_by, assigned_driver, created_at, updated_at, addresses(postal_code, plus_code, reference, latitude, longitude)';
 
 /** Cria a entrega. A resposta traz o PIN, que só se mostra (não se guarda). */
 export async function criarEnvio(pedido: PedidoEnvio): Promise<{ envio: Envio; pin: PinEnvio | null }> {
@@ -46,4 +46,16 @@ export async function gerarPinNovo(deliveryId: string): Promise<PinEnvio> {
 
 export async function cancelarEnvio(deliveryId: string): Promise<void> {
   await chamarFuncao('deliveries', 'update_status', { body: { delivery_id: deliveryId, new_status: 'CANCELLED' } });
+}
+
+/** As entregas atribuídas ao estafeta (separador Entregas), das mais recentes para as mais antigas. */
+export async function listarAtribuidas(userId: string): Promise<Envio[]> {
+  const { data, error } = await supabase
+    .from('deliveries')
+    .select(COLUNAS)
+    .eq('assigned_driver', userId)
+    .order('updated_at', { ascending: false })
+    .limit(100);
+  if (error) throw new Error(`Não foi possível ler as entregas (${error.message}).`);
+  return (data ?? []).map(lerEnvio);
 }

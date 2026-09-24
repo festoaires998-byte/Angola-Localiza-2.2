@@ -245,7 +245,7 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
     bytes: Uint8Array,
     sessao: SessaoSync,
   ): Promise<'ok' | 'sessao' | string> {
-    const nome = nomeNoStorage(ficheiro);
+    const nome = nomeNoStorage(ficheiro, sessao.userId);
     const r = await pedir(
       `/storage/v1/object/${ficheiro.bucket}/${nome}`,
       {
@@ -306,7 +306,7 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
         falha = { erro: `Foto ${id}: ${r}`, mensagem: MENSAGENS.foto };
         break;
       }
-      const url = urlPublico(deps.config.url, ficheiro.bucket, nomeNoStorage(ficheiro));
+      const url = urlPublico(deps.config.url, ficheiro.bucket, nomeNoStorage(ficheiro, sessao.userId));
       await deps.ficheiros.marcarEnviado(id, url);
       urls.set(id, url);
     }

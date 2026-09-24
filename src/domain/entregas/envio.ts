@@ -116,9 +116,17 @@ export interface Envio {
   instrucoes: string | null;
   urgente: boolean;
   criadoPor: string | null;
+  /** Estafeta atribuído (assigned_driver), ou null. */
+  estafeta: string | null;
   atualizadoEm: string | null;
-  /** Morada de destino (códigos e referência). */
-  morada: { codigoPostal: string | null; plusCode: string | null; referencia: string | null } | null;
+  /** Morada de destino (códigos, referência e posição, se o servidor a deu). */
+  morada: {
+    codigoPostal: string | null;
+    plusCode: string | null;
+    referencia: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
 }
 
 /** O PIN de confirmação (só quem criou o vê; nunca fica guardado no telemóvel). */
@@ -131,6 +139,10 @@ export interface PinEnvio {
 
 function texto(v: unknown): string | null {
   return typeof v === 'string' && v.trim() ? v.trim() : null;
+}
+
+function numero(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
 /** Uma linha de deliveries (da função ou da leitura direta) → Envio. */
@@ -148,9 +160,16 @@ export function lerEnvio(linha: unknown): Envio {
     instrucoes: texto(l.instructions),
     urgente: l.is_urgent === true,
     criadoPor: texto(l.created_by),
+    estafeta: texto(l.assigned_driver),
     atualizadoEm: texto(l.updated_at) ?? texto(l.created_at),
     morada: m
-      ? { codigoPostal: texto(m.postal_code), plusCode: texto(m.plus_code), referencia: texto(m.reference) }
+      ? {
+          codigoPostal: texto(m.postal_code),
+          plusCode: texto(m.plus_code),
+          referencia: texto(m.reference),
+          latitude: numero(m.latitude),
+          longitude: numero(m.longitude),
+        }
       : null,
   };
 }

@@ -65,6 +65,31 @@ interface LinhaFila extends Omit<OperacaoFila, 'payload'> {
 }
 
 /** Espera antes de tentar de novo: 30 s, 1 min, 2 min, ... até 1 hora. */
+/**
+ * Erros do servidor que não se resolvem a tentar outra vez: a operação passa
+ * logo a "falhou_definitivo" (e aparece ao utilizador), em vez de voltar à fila.
+ * Importante no PIN: cada envio com o PIN errado gasta uma das 5 tentativas.
+ */
+const ERROS_SEM_VOLTA = [
+  /PIN de confirmacao incorreto/,
+  /^PIN_(LOCKED|EXPIRED)/,
+  /^POD_INCOMPLETA/,
+  /transicao invalida/,
+  /ficheiro da prova invalido/,
+  /tem de estar na tua pasta/,
+  /nao existem ou nao foram enviados/,
+  /^nao autorizado/,
+  /^CITIZEN_ID_NOT_VERIFIED/,
+  /^CONTACTO_INVALID/,
+  /so muda na validacao/,
+  /fica sempre por validar/,
+  /pertence a outra pessoa/,
+];
+
+export function erroSemVolta(erro: string): boolean {
+  return ERROS_SEM_VOLTA.some((r) => r.test(erro));
+}
+
 export function esperaAposFalha(tentativas: number): number {
   const segundos = 30 * 2 ** Math.max(0, tentativas - 1);
   return Math.min(segundos, 3600) * 1000;
@@ -314,7 +339,7 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
           const erro = resultado
             ? resultado.error ?? resultado.message ?? 'FAILED'
             : 'A operação não veio na resposta do servidor.';
-          const desiste = novasTentativas >= maxTentativas;
+          const desiste = novasTentativas >= maxTentativas || (!!resultado && erroSemVolta(erro));
           const proxima = new Date(agora().getTime() + esperaAposFalha(novasTentativas));
           await tx.run(
             `UPDATE fila_saida

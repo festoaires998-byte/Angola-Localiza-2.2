@@ -53,10 +53,22 @@ export function trocarMarcadores(payload: unknown, urls: ReadonlyMap<string, str
   return novo;
 }
 
-/** Nome do ficheiro no Storage: "offline-<id>.jpg", ou ".png" se for image/png. */
-export function nomeNoStorage(ficheiro: Pick<FicheiroPendente, 'id' | 'content_type'>): string {
+/** Buckets privados em que cada pessoa só pode enviar para a sua pasta ("<id>/…"). */
+export const BUCKETS_COM_PASTA: readonly string[] = ['delivery-proofs'];
+
+/**
+ * Nome do ficheiro no Storage: "offline-<id>.jpg", ou ".png" se for image/png.
+ * Nos buckets privados (provas de entrega) vai para a pasta de quem envia:
+ * "<userId>/offline-<id>.jpg" (a deliveries v19 só aceita ficheiros na pasta de quem envia).
+ */
+export function nomeNoStorage(ficheiro: Pick<FicheiroPendente, 'id' | 'content_type'> & { bucket?: string }, userId?: string): string {
   const extensao = ficheiro.content_type.toLowerCase() === 'image/png' ? 'png' : 'jpg';
-  return `offline-${ficheiro.id}.${extensao}`;
+  const nome = `offline-${ficheiro.id}.${extensao}`;
+  if (ficheiro.bucket && BUCKETS_COM_PASTA.includes(ficheiro.bucket)) {
+    if (!userId) throw new Error(`Falta o utilizador para enviar para ${ficheiro.bucket}.`);
+    return `${userId}/${nome}`;
+  }
+  return nome;
 }
 
 /** SUPABASE_URL/storage/v1/object/public/<bucket>/<nome> */
