@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { abrirFotosKyc, decidirPedidoKyc, lerFotoKyc, listarPedidosKyc } from '@/api/revisaoKyc';
+import { abrirFotosKyc, decidirPedidoKyc, lerFotoKyc } from '@/api/revisaoKyc';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
+import { Botao, Caixa, Campo, Cartao, Subtitulo, Texto } from '@/components/ui';
 import {
   dataEnvio,
   detalhesDoPedido,
   erroMotivo,
-  idCurto,
   MOTIVOS_RAPIDOS,
   nomeDoPedido,
   podeReverKyc,
@@ -17,114 +17,52 @@ import {
 } from '@/domain/identidade/revisaoKyc';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
-
-type Aviso = { tipo: 'sucesso' | 'info' | 'erro'; texto: string };
+import { marcarDecidido, useRevisaoKyc } from '@/state/revisaoKyc';
 
 /**
- * Admin: revisão das verificações simples dos cidadãos (BI frente, BI verso e
- * selfies). Só com rede. As fotos são privadas: só se pedem ao abrir um
- * pedido (o servidor regista quem as viu), chegam por links temporários
- * (10 min) e ficam só na memória deste ecrã.
+ * Admin: detalhe de uma verificação por rever (ecrã próprio, por cima da
+ * lista). As fotos são privadas: só se pedem ao abrir (o servidor regista
+ * quem as viu), chegam por links temporários (10 min) e ficam só na memória
+ * deste ecrã. Aprovar pede confirmação num alerta do sistema; recusar pede o
+ * motivo. Depois da decisão, volta à lista.
  */
-export default function Admin() {
+export default function DetalheVerificacao() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const online = useOnline();
-  const cargos = useSessao().perfil?.cargos ?? [];
-  const revisor = podeReverKyc(cargos);
+  const revisor = podeReverKyc(useSessao().perfil?.cargos ?? []);
+  const { pedidos } = useRevisaoKyc();
+  const pedido = pedidos?.find((p) => p.userId === id) ?? null;
 
-  const [pedidos, setPedidos] = useState<PedidoKyc[] | null>(null);
-  const [aCarregar, setACarregar] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<Aviso | null>(null);
-  const [aberto, setAberto] = useState<string | null>(null);
-
-  const carregar = useCallback(async (): Promise<PedidoKyc[] | null> => {
-    setACarregar(true);
-    setErro(null);
-    try {
-      const lista = await listarPedidosKyc();
-      setPedidos(lista);
-      return lista;
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e));
-      return null;
-    } finally {
-      setACarregar(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (revisor && online) void carregar();
-  }, [revisor, online, carregar]);
-
-  const abrir = (userId: string) => {
-    setAviso(null);
-    setAberto(userId);
-  };
-
-  const decidido = (userId: string, aprovado: boolean) => {
-    const p = pedidos?.find((x) => x.userId === userId);
-    const quem = p ? nomeDoPedido(p) : idCurto(userId);
-    setPedidos((l) => (l ?? []).filter((p) => p.userId !== userId));
-    setAberto(null);
-    setAviso(
-      aprovado
-        ? { tipo: 'sucesso', texto: `Verificação de ${quem} aprovada ✅ O cidadão já pode registar moradas.` }
-        : { tipo: 'info', texto: `Verificação de ${quem} recusada. O cidadão recebe o motivo.` },
-    );
-  };
-
-  const pedido = pedidos?.find((p) => p.userId === aberto) ?? null;
-
-  return (
-    <Ecra>
-      <Titulo>Admin</Titulo>
-      <Subtitulo>Verificações por rever</Subtitulo>
-
-      {!revisor ? (
-        <Caixa tipo="info">Só os administradores podem aprovar ou recusar verificações de identidade.</Caixa>
-      ) : online === false ? (
-        <Caixa tipo="aviso">Sem rede. A revisão das verificações precisa de rede (as fotos não ficam neste telemóvel).</Caixa>
-      ) : pedido ? (
-        <RevisaoPedido
-          key={pedido.userId}
-          pedido={pedido}
-          aoVoltar={() => setAberto(null)}
-          aoDecidir={(aprovado) => decidido(pedido.userId, aprovado)}
-        />
-      ) : (
-        <>
-          {aviso ? <Caixa tipo={aviso.tipo}>{aviso.texto}</Caixa> : null}
-          {erro ? <Caixa tipo="erro">{`Não foi possível ler os pedidos: ${erro}`}</Caixa> : null}
-          {pedidos === null && aCarregar ? <Texto>A procurar pedidos…</Texto> : null}
-          {pedidos !== null && pedidos.length === 0 ? <Texto>Não há verificações por rever. 👍</Texto> : null}
-          {(pedidos ?? []).map((p) => (
-            <Cartao key={p.userId}>
-              <Text style={estilos.nomePedido}>{nomeDoPedido(p)}</Text>
-              {detalhesDoPedido(p).map((l) => (
-                <Texto key={l} suave>
-                  {l}
-                </Texto>
-              ))}
-              <Texto suave>{`Enviado a ${dataEnvio(p.enviadoEm)}`}</Texto>
-              <Botao titulo={`Rever ${nomeDoPedido(p)}`} onPress={() => abrir(p.userId)} desativado={aCarregar} />
-            </Cartao>
-          ))}
-          <Botao titulo="Atualizar" variante="secundario" onPress={() => void carregar()} aCarregar={aCarregar} />
-        </>
-      )}
-    </Ecra>
+  const conteudo = !revisor ? (
+    <Caixa tipo="info">Só os administradores podem aprovar ou recusar verificações de identidade.</Caixa>
+  ) : online === false ? (
+    <Caixa tipo="aviso">Sem rede. A revisão das verificações precisa de rede (as fotos não ficam neste telemóvel).</Caixa>
+  ) : !pedido ? (
+    <>
+      <Caixa tipo="info">Este pedido já não está na lista (foi decidido ou a lista mudou).</Caixa>
+      <Botao titulo="Voltar à lista" onPress={() => router.back()} />
+    </>
+  ) : (
+    <RevisaoPedido
+      key={pedido.userId}
+      pedido={pedido}
+      aoDecidir={(aprovado) => {
+        const quem = nomeDoPedido(pedido);
+        marcarDecidido(
+          pedido.userId,
+          aprovado
+            ? { tipo: 'sucesso', texto: `Verificação de ${quem} aprovada ✅ O cidadão já pode registar moradas.` }
+            : { tipo: 'info', texto: `Verificação de ${quem} recusada. O cidadão recebe o motivo.` },
+        );
+        router.back();
+      }}
+    />
   );
+  return <ScrollView contentContainerStyle={estilos.conteudo}>{conteudo}</ScrollView>;
 }
 
-function RevisaoPedido({
-  pedido,
-  aoVoltar,
-  aoDecidir,
-}: {
-  pedido: PedidoKyc;
-  aoVoltar(): void;
-  aoDecidir(aprovado: boolean): void;
-}) {
+function RevisaoPedido({ pedido, aoDecidir }: { pedido: PedidoKyc; aoDecidir(aprovado: boolean): void }) {
   const [fotos, setFotos] = useState<FotosKyc | null>(null);
   const [erroFotos, setErroFotos] = useState<string | null>(null);
   const [pedidoFotos, setPedidoFotos] = useState(0);
@@ -143,11 +81,23 @@ function RevisaoPedido({
   }, [pedido.userId, pedidoFotos]);
   const linksNovos = () => setPedidoFotos((n) => n + 1);
 
-  const [modo, setModo] = useState<'ver' | 'confirmar' | 'recusar'>('ver');
+  const [modo, setModo] = useState<'ver' | 'recusar'>('ver');
   const [motivo, setMotivo] = useState('');
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const problemaMotivo = erroMotivo(motivo);
+
+  // Aprovar deixa a pessoa registar moradas: pede confirmação num alerta do sistema.
+  const confirmarAprovacao = () =>
+    Alert.alert(
+      'Aprovar a verificação?',
+      `${nomeDoPedido(pedido)} passa a poder registar moradas. Confirmas que o BI é legível e que as selfies são desta pessoa?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Aprovar', onPress: () => void decidir(true) },
+      ],
+      { cancelable: true },
+    );
 
   const decidir = async (aprovar: boolean) => {
     setAEnviar(true);
@@ -193,16 +143,8 @@ function RevisaoPedido({
 
       {modo === 'ver' ? (
         <>
-          <Botao titulo="Aprovar" onPress={() => setModo('confirmar')} />
-          <Botao titulo="Recusar" variante="secundario" onPress={() => setModo('recusar')} />
-        </>
-      ) : null}
-
-      {modo === 'confirmar' ? (
-        <>
-          <Caixa tipo="aviso">Aprovar deixa este cidadão registar moradas. Confirmas que as fotos estão certas?</Caixa>
-          <Botao titulo="Sim, aprovar" onPress={() => void decidir(true)} aCarregar={aEnviar} />
-          <Botao titulo="Cancelar" variante="secundario" onPress={() => setModo('ver')} desativado={aEnviar} />
+          <Botao titulo="Aprovar" onPress={confirmarAprovacao} aCarregar={aEnviar} />
+          <Botao titulo="Recusar" variante="secundario" onPress={() => setModo('recusar')} desativado={aEnviar} />
         </>
       ) : null}
 
@@ -232,8 +174,6 @@ function RevisaoPedido({
           <Botao titulo="Cancelar" variante="secundario" onPress={() => setModo('ver')} desativado={aEnviar} />
         </>
       ) : null}
-
-      <Botao titulo="Voltar à lista" variante="secundario" onPress={aoVoltar} desativado={aEnviar} />
     </View>
   );
 }
@@ -278,6 +218,7 @@ function FotoPrivada({ titulo, url, aoExpirar }: { titulo: string; url: string |
 }
 
 const estilos = StyleSheet.create({
+  conteudo: { padding: TAMANHOS.margem, gap: 12 },
   bloco: { gap: 12 },
   nomePedido: { fontSize: TAMANHOS.subtitulo, fontWeight: '800', color: CORES.texto },
   foto: { width: '100%', height: 260, backgroundColor: '#000' },

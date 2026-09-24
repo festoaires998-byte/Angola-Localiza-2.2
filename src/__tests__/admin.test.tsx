@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { router } from 'expo-router';
+import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { Alert } from 'react-native';
 
 import type { FotosKyc, PedidoKyc } from '@/domain/identidade/revisaoKyc';
 
@@ -35,11 +37,24 @@ jest.mock('@/hooks/useOnline', () => ({ useOnline: () => mockOnline }));
 let mockCargos: string[] = ['admin_municipal'];
 jest.mock('@/hooks/useSessao', () => ({ useSessao: () => ({ perfil: { cargos: mockCargos } }) }));
 
-const Admin = (require('@/app/(tabs)/admin') as { default: () => React.JSX.Element }).default;
+type Ecra = { default: () => React.JSX.Element };
+const Layout = (require('@/app/(tabs)/admin/_layout') as Ecra).default;
+const Lista = (require('@/app/(tabs)/admin/index') as Ecra).default;
+const Detalhe = (require('@/app/(tabs)/admin/[id]') as Ecra).default;
+const { lojaRevisaoKyc } = require('@/state/revisaoKyc') as typeof import('@/state/revisaoKyc');
 
+let r: ReturnType<typeof renderRouter>;
+/** O separador Admin com o Stack verdadeiro: lista em /admin, detalhe em /admin/<id>. */
 async function desenhar() {
-  render(<Admin />);
+  r = renderRouter({ 'admin/_layout': Layout, 'admin/index': Lista, 'admin/[id]': Detalhe }, { initialUrl: '/admin' });
   await act(async () => {});
+}
+/** Aprova carregando em "Aprovar" e depois no botão do alerta do sistema. */
+async function aprovarNoAlerta(alerta: jest.SpiedFunction<typeof Alert.alert>, botao = 'Aprovar') {
+  const botoes = alerta.mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
+  await act(async () => {
+    botoes.find((b) => b.text === botao)?.onPress?.();
+  });
 }
 async function carregar(nome: string) {
   await act(async () => {
@@ -54,6 +69,7 @@ beforeEach(() => {
   ];
   mockOnline = true;
   mockCargos = ['admin_municipal'];
+  lojaRevisaoKyc.definir({ pedidos: null, aviso: null });
   [mockListar, mockDecidir, mockLerFoto, mockAbrirFotos].forEach((f) => f.mockClear());
 });
 
@@ -103,7 +119,24 @@ describe('Admin: verificações por rever', () => {
     expect(screen.getByText('Não foi possível ler os pedidos: apenas administradores')).toBeTruthy();
   });
 
-  test('rever: mostra as 3 fotos (descarregadas para a memória) e aprova com confirmação', async () => {
+  test('rever abre um ecrã próprio (/admin/<id>); Voltar regressa à lista tal como estava', async () => {
+    await desenhar();
+    await carregar('Rever Ana Silva');
+    expect(r.getPathname()).toBe('/admin/aaaaaaaa-1111-4111-8111-111111111111');
+    expect(screen.getByText('Ana Silva')).toBeTruthy();
+    expect(screen.queryByText('bento@exemplo.ao')).toBeNull();
+    await act(async () => {
+      router.back();
+    });
+    await waitFor(() => expect(r.getPathname()).toBe('/admin'));
+    // A lista não foi pedida outra vez: é a mesma, com os dois pedidos.
+    expect(mockListar).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Ana Silva')).toBeTruthy();
+    expect(screen.getByText('bento@exemplo.ao')).toBeTruthy();
+  });
+
+  test('rever: mostra as 3 fotos (descarregadas para a memória) e aprova com o alerta do sistema', async () => {
+    const alerta = jest.spyOn(Alert, 'alert');
     await desenhar();
     await carregar('Rever Ana Silva');
     expect(mockLerFoto).toHaveBeenCalledTimes(3);
@@ -112,13 +145,22 @@ describe('Admin: verificações por rever', () => {
     expect(screen.getByLabelText('Foto: Selfies (normal e com o gesto)')).toBeTruthy();
 
     await carregar('Aprovar');
-    expect(mockDecidir).not.toHaveBeenCalled(); // precisa de confirmar
-    await carregar('Sim, aprovar');
+    // Pede confirmação num alerta do sistema (não aprova logo).
+    expect(alerta).toHaveBeenCalledWith('Aprovar a verificação?', expect.stringContaining('Ana Silva'), expect.any(Array), { cancelable: true });
+    expect(mockDecidir).not.toHaveBeenCalled();
+    // "Cancelar" não faz nada.
+    await aprovarNoAlerta(alerta, 'Cancelar');
+    expect(mockDecidir).not.toHaveBeenCalled();
+
+    await carregar('Aprovar');
+    await aprovarNoAlerta(alerta);
     expect(mockDecidir).toHaveBeenCalledWith('aaaaaaaa-1111-4111-8111-111111111111', { aprovar: true });
+    // Volta à lista, com o aviso, e o pedido sai dela.
+    await waitFor(() => expect(r.getPathname()).toBe('/admin'));
     expect(screen.getByText(/Verificação de Ana Silva aprovada ✅/)).toBeTruthy();
-    // Sai da lista.
     expect(screen.queryByText('Ana Silva')).toBeNull();
     expect(screen.getByText('bento@exemplo.ao')).toBeTruthy();
+    alerta.mockRestore();
   });
 
   test('recusar exige motivo; um motivo rápido preenche-o', async () => {
@@ -139,18 +181,30 @@ describe('Admin: verificações por rever', () => {
       aprovar: false,
       motivo: 'A foto do BI está desfocada ou ilegível.',
     });
+    await waitFor(() => expect(r.getPathname()).toBe('/admin'));
     expect(screen.getByText(/Verificação de bento@exemplo.ao recusada/)).toBeTruthy();
   });
 
   test('se o servidor recusar a decisão, mostra o erro e fica no pedido', async () => {
     mockDecidir.mockRejectedValueOnce(new Error('este pedido nao esta por rever'));
+    const alerta = jest.spyOn(Alert, 'alert');
     await desenhar();
     await carregar('Rever Ana Silva');
     await carregar('Aprovar');
-    await carregar('Sim, aprovar');
+    await aprovarNoAlerta(alerta);
     expect(screen.getByText('Não foi possível guardar a decisão: este pedido nao esta por rever')).toBeTruthy();
-    expect(screen.getByText('Ana Silva')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Sim, aprovar' })).toBeTruthy();
+    expect(r.getPathname()).toBe('/admin/aaaaaaaa-1111-4111-8111-111111111111');
+    expect(screen.getByRole('button', { name: 'Aprovar' })).toBeTruthy();
+    alerta.mockRestore();
+  });
+
+  test('abrir por link um pedido que já não está na lista: explica e deixa voltar', async () => {
+    r = renderRouter({ 'admin/_layout': Layout, 'admin/index': Lista, 'admin/[id]': Detalhe }, {
+      initialUrl: '/admin/99999999-9999-4999-8999-999999999999',
+    });
+    await act(async () => {});
+    expect(screen.getByText(/Este pedido já não está na lista/)).toBeTruthy();
+    expect(mockAbrirFotos).not.toHaveBeenCalled();
   });
 
   test('as fotos só se pedem ao abrir um pedido (a abertura fica registada no servidor), não na lista', async () => {
