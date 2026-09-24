@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { DESAFIOS, escolherDesafio, linhasMarcaVerificacao, nomeNoBucket, passoSeguinte } from './verificacaoSimples';
+import { DESAFIOS, EMOJI_DESAFIO, escolherDesafio, linhasMarcaVerificacao, nomeNoBucket, passoSeguinte } from './verificacaoSimples';
 
 describe('verificação simples: regras', () => {
   test('o gesto é escolhido ao acaso entre os da lista', () => {
@@ -24,5 +24,21 @@ describe('verificação simples: regras', () => {
 
   test('nome no bucket privado', () => {
     expect(nomeNoBucket('u1', 'verso', 42)).toBe('cidadao-u1-verso-42.jpg');
+  });
+});
+
+describe('emoji de cada gesto', () => {
+  test('todos os gestos têm um emoji, e emojis diferentes', () => {
+    for (const d of DESAFIOS) expect(EMOJI_DESAFIO[d]).toMatch(/\p{Extended_Pictographic}/u);
+    expect(new Set(DESAFIOS.map((d) => EMOJI_DESAFIO[d])).size).toBe(DESAFIOS.length);
+  });
+
+  test('o emoji bate com o gesto', () => {
+    expect(EMOJI_DESAFIO['Põe a mão aberta ao lado da cara']).toBe('✋');
+    expect(EMOJI_DESAFIO['Sorri com a boca aberta']).toBe('😁');
+    expect(EMOJI_DESAFIO['Fecha um olho']).toBe('😉');
+    expect(EMOJI_DESAFIO['Põe o polegar para cima ao lado da cara']).toBe('👍');
+    expect(EMOJI_DESAFIO['Olha para a tua esquerda']).toContain('⬅️');
+    expect(EMOJI_DESAFIO['Olha para a tua direita']).toContain('➡️');
   });
 });

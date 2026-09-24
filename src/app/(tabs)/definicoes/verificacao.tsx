@@ -5,7 +5,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
-import { escolherDesafio, linhasMarcaVerificacao } from '@/domain/identidade/verificacaoSimples';
+import { EMOJI_DESAFIO, escolherDesafio, linhasMarcaVerificacao } from '@/domain/identidade/verificacaoSimples';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import type { FotoComMarca } from '@/services/imagem/fotoComMarca';
@@ -186,6 +186,10 @@ export default function VerificacaoSimples() {
 
       <Cartao>
         <Subtitulo>4. Selfie com um gesto</Subtitulo>
+        {/* O emoji mostra o gesto de relance; o texto diz o mesmo (e é o que os leitores de ecrã leem). */}
+        <Text style={estilos.emojiDesafio} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="emoji-desafio">
+          {EMOJI_DESAFIO[desafio]}
+        </Text>
         <Text style={estilos.desafio} accessibilityRole="header">{`Agora: ${desafio.toLowerCase()}.`}</Text>
         <Texto suave>Isto mostra que és mesmo tu, agora (e não uma foto de outra pessoa).</Texto>
         <CamaraFachada
@@ -222,4 +226,5 @@ function textoEnviado(r: 'verificado' | 'em_revisao'): Resultado {
 const estilos = StyleSheet.create({
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   desafio: { fontSize: TAMANHOS.subtitulo, fontWeight: '800', color: CORES.primaria },
+  emojiDesafio: { fontSize: 72, lineHeight: 88, textAlign: 'center' },
 });

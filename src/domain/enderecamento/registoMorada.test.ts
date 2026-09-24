@@ -10,6 +10,8 @@ import {
   pontoAEnviar,
   pontoNaCelula,
   situacaoLimite,
+  TIPO_OUTRO_MAX,
+  tipoAEnviar,
   type DadosRegisto,
 } from './registoMorada';
 
@@ -30,6 +32,7 @@ function dados(extra: Partial<DadosRegisto> = {}): DadosRegisto {
     captura: captura(CENTRO),
     escolhaCelula: null,
     tipo: 'Casa',
+    tipoOutro: '',
     ruaId: 'rua-1',
     ruaNome: '',
     bairro: 'Académico',
@@ -119,6 +122,23 @@ describe('o que falta para enviar', () => {
       dados({ tipo: null, ruaId: null, ruaNome: '  ', bairro: ' ', referencia: 'x', foto: null, haDuplicado: true }),
     );
     expect(f).toHaveLength(6);
+  });
+
+  test('"Outro" exige a descrição do tipo; com ela, é a descrição que vai para o servidor', () => {
+    const falta = 'Descrever o tipo de local (ex.: Padaria, Oficina).';
+    expect(faltaParaEnviar(dados({ tipo: 'Outro', tipoOutro: '' }))).toEqual([falta]);
+    expect(faltaParaEnviar(dados({ tipo: 'Outro', tipoOutro: '  a ' }))).toEqual([falta]);
+    expect(() => montarPedidoRegisto(dados({ tipo: 'Outro', tipoOutro: ' ' }), 'd')).toThrow(falta);
+    const p = montarPedidoRegisto(dados({ tipo: 'Outro', tipoOutro: '  Padaria   do  Zé ' }), 'd');
+    expect(p.place_kind).toBe('Padaria do Zé');
+    // A descrição só conta com "Outro": com outro tipo vai o tipo da lista.
+    expect(montarPedidoRegisto(dados({ tipo: 'Loja', tipoOutro: 'Padaria' }), 'd').place_kind).toBe('Loja');
+  });
+
+  test('tipoAEnviar: tira [ ] (o servidor põe o tipo entre parênteses retos) e corta no máximo', () => {
+    expect(tipoAEnviar('Outro', '[Oficina]')).toBe('Oficina');
+    expect(tipoAEnviar('Outro', 'x'.repeat(60))).toHaveLength(TIPO_OUTRO_MAX);
+    expect(tipoAEnviar('Escola', 'ignorado')).toBe('Escola');
   });
 
   test('bairro obrigatório: sem ele o botão não ativa, com a frase certa', () => {

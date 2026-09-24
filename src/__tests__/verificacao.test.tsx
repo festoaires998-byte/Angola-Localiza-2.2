@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import { DESAFIOS } from '@/domain/identidade/verificacaoSimples';
+import { DESAFIOS, EMOJI_DESAFIO } from '@/domain/identidade/verificacaoSimples';
 
 const mockBack = jest.fn();
 jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack, push: jest.fn() }) }));
@@ -103,6 +103,8 @@ describe('Verificação simples', () => {
     await desenhar();
     const gesto = DESAFIOS.find((d) => screen.queryByText(`Agora: ${d.toLowerCase()}.`));
     expect(gesto).toBeDefined();
+    // O emoji do gesto aparece em grande, junto da instrução.
+    expect(screen.getByTestId('emoji-desafio', { includeHiddenElements: true }).props.children).toBe(EMOJI_DESAFIO[gesto!]);
 
     await fotografar(); // frente
     expect(mockUma).toHaveBeenLastCalledWith('file:///cache/camara-1.jpg', ['Angola Localiza — verificação', expect.any(String)], 'bi-frente');
