@@ -255,17 +255,84 @@ describe('Registar morada', () => {
     await act(async () => {
       fireEvent.press(screen.getByRole('button', { name: 'Tirar foto' }));
     });
-    expect(screen.getByText('• Escolher o bairro ou escrever o nome dele.')).toBeTruthy();
+    expect(screen.getByText('• Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".')).toBeTruthy();
     expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
 
     fireEvent.press(screen.getByRole('radio', { name: 'Bairro: Outro bairro (escrever à mão)' }));
     fireEvent.changeText(screen.getByLabelText('Nome do bairro'), 'Bairro Novo');
-    expect(screen.queryByText('• Escolher o bairro ou escrever o nome dele.')).toBeNull();
+    expect(screen.queryByText('• Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".')).toBeNull();
     expect(botaoEnviar().props.accessibilityState.disabled).toBe(false);
     await act(async () => {
       fireEvent.press(botaoEnviar());
     });
     expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ bairro: 'Bairro Novo' }));
+  });
+
+  test('rua e bairro sem nome (zona sem ruas nem bairros conhecidos): a caixa esconde e limpa o campo e desbloqueia o envio', async () => {
+    mockRuas = { ...mockRuas, ruas: [], bairros: [] };
+    await desenhar();
+    fireEvent.changeText(screen.getByLabelText('Nome da rua'), 'Nome inventado');
+    fireEvent.changeText(screen.getByLabelText('Nome do bairro'), 'Bairro inventado');
+
+    fireEvent.press(screen.getByRole('checkbox', { name: 'Esta rua não tem nome' }));
+    fireEvent.press(screen.getByRole('checkbox', { name: 'Este bairro não tem nome' }));
+    expect(screen.getByRole('checkbox', { name: 'Esta rua não tem nome' }).props.accessibilityState.checked).toBe(true);
+    expect(screen.queryByLabelText('Nome da rua')).toBeNull();
+    expect(screen.queryByLabelText('Nome do bairro')).toBeNull();
+    expect(screen.getByText(/Fica registada como "Rua S\/Nº" desta quadra/)).toBeTruthy();
+
+    // A referência passa a ser a pista principal: 3 letras já não chegam.
+    fireEvent.changeText(screen.getByLabelText('Referência (para ajudar a encontrar)'), 'Azul');
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Abrir a câmara' }));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Tirar foto' }));
+    });
+    expect(screen.queryByText(/Escolher a rua, escrever o nome dela/)).toBeNull();
+    expect(screen.queryByText(/Escolher o bairro, escrever o nome dele/)).toBeNull();
+    expect(screen.getByText(/a referência guia quem procura: escreve pelo menos 10 letras/)).toBeTruthy();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
+
+    fireEvent.changeText(screen.getByLabelText('Referência (para ajudar a encontrar)'), 'Portão azul, ao lado da igreja');
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(false);
+    await act(async () => {
+      fireEvent.press(botaoEnviar());
+    });
+    expect(mockEnviar).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ ruaId: null, ruaNome: '', ruaSemNome: true, bairro: '', bairroSemNome: true }),
+    );
+  });
+
+  test('desmarcar "não tem nome" volta a mostrar o campo, vazio (o texto antigo não volta)', async () => {
+    mockRuas = { ...mockRuas, ruas: [] };
+    await desenhar();
+    fireEvent.changeText(screen.getByLabelText('Nome da rua'), 'Nome inventado');
+    fireEvent.press(screen.getByRole('checkbox', { name: 'Esta rua não tem nome' }));
+    fireEvent.press(screen.getByRole('checkbox', { name: 'Esta rua não tem nome' }));
+    expect(screen.getByLabelText('Nome da rua').props.value).toBe('');
+  });
+
+  test('com ruas na lista, "não tem nome" só aparece em "A rua não está na lista"; escolher da lista ignora-o', async () => {
+    await desenhar();
+    expect(screen.queryByRole('checkbox', { name: 'Esta rua não tem nome' })).toBeNull();
+    fireEvent.press(screen.getByRole('radio', { name: 'Rua: A rua não está na lista' }));
+    fireEvent.press(screen.getByRole('checkbox', { name: 'Esta rua não tem nome' }));
+    fireEvent.press(screen.getByRole('radio', { name: 'Rua: Rua da Missão' }));
+    expect(screen.queryByRole('checkbox', { name: 'Esta rua não tem nome' })).toBeNull();
+    fireEvent.press(screen.getByRole('radio', { name: 'Bairro: Académico' }));
+    fireEvent.changeText(screen.getByLabelText('Referência (para ajudar a encontrar)'), 'Portão azul');
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Abrir a câmara' }));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Tirar foto' }));
+    });
+    await act(async () => {
+      fireEvent.press(botaoEnviar());
+    });
+    expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ ruaId: 'r1', ruaSemNome: false }));
   });
 
   test('junto ao limite: a medição a melhorar (mexe uns cm) não apaga a célula escolhida', async () => {
