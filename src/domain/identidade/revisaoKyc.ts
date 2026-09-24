@@ -22,14 +22,18 @@ export interface PedidoKyc {
   email: string | null;
   nome: string | null;
   telefone: string | null;
-  /** Links temporários (10 minutos) para as fotos privadas. null se a foto falta. */
+}
+
+/**
+ * Links temporários (10 minutos) para as 3 fotos privadas de um pedido
+ * (citizen-verify?action=view; cada abertura fica registada no servidor).
+ * null se a foto falta.
+ */
+export interface FotosKyc {
   frente: string | null;
   verso: string | null;
   selfie: string | null;
 }
-
-/** Os links assinados duram 10 minutos no servidor; a app pede outros um pouco antes. */
-export const VALIDADE_LINKS_MS = 9 * 60 * 1000;
 
 const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
 
@@ -47,10 +51,14 @@ export function lerPedidosKyc(r: unknown): PedidoKyc[] {
       email: texto(p.email),
       nome: texto(p.name),
       telefone: texto(p.phone),
-      frente: texto(p.front_url),
-      verso: texto(p.back_url),
-      selfie: texto(p.selfie_url),
     }));
+}
+
+/** Lê a resposta de view. */
+export function lerFotosKyc(r: unknown): FotosKyc {
+  const o = (r ?? {}) as Record<string, unknown>;
+  if (o.error) throw new Error(String(o.error));
+  return { frente: texto(o.front_url), verso: texto(o.back_url), selfie: texto(o.selfie_url) };
 }
 
 /** Motivos mais comuns (um toque preenche o motivo; pode-se escrever outro). */

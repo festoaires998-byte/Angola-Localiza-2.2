@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { dataEnvio, detalhesDoPedido, erroMotivo, idCurto, lerPedidosKyc, MOTIVOS_RAPIDOS, nomeDoPedido, podeReverKyc } from './revisaoKyc';
+import { dataEnvio, detalhesDoPedido, erroMotivo, idCurto, lerFotosKyc, lerPedidosKyc, MOTIVOS_RAPIDOS, nomeDoPedido, podeReverKyc } from './revisaoKyc';
 
 describe('revisão das verificações (regras)', () => {
   test('só os cargos que o servidor aceita (is_admin) podem rever; o auditor não', () => {
@@ -37,14 +37,20 @@ describe('revisão das verificações (regras)', () => {
         email: 'ana@exemplo.ao',
         nome: 'Ana Silva',
         telefone: '+244923000000',
-        frente: 'https://x/f',
-        verso: 'https://x/v',
-        selfie: 'https://x/s',
       },
-      { userId: 'u2', enviadoEm: null, email: null, nome: null, telefone: null, frente: null, verso: null, selfie: 'https://x/s2' },
+      { userId: 'u2', enviadoEm: null, email: null, nome: null, telefone: null },
     ]);
     expect(lerPedidosKyc({})).toEqual([]);
     expect(() => lerPedidosKyc({ error: 'apenas administradores' })).toThrow('apenas administradores');
+  });
+
+  test('lê a resposta de view (links das 3 fotos; em falta → null)', () => {
+    expect(lerFotosKyc({ front_url: 'https://x/f', back_url: '', selfie_url: 'https://x/s', expires_in: 600 })).toEqual({
+      frente: 'https://x/f',
+      verso: null,
+      selfie: 'https://x/s',
+    });
+    expect(() => lerFotosKyc({ error: 'nao podes abrir a tua propria verificacao' })).toThrow('propria');
   });
 
   test('recusar exige um motivo com 5 a 300 letras', () => {

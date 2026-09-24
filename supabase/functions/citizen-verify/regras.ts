@@ -76,3 +76,17 @@ export function contactoDoCidadao(
     phone: textoOuNull(telefoneIdentidade, 30) ?? textoOuNull(utilizador?.phone, 30),
   };
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valida o pedido de "view" (abrir as fotos de um cidadão). */
+export function validarAbertura(body: unknown): { ok: true; userId: string } | { ok: false; erro: string } {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (typeof b.user_id !== "string" || !UUID.test(b.user_id)) return { ok: false, erro: "user_id invalido" };
+  return { ok: true, userId: b.user_id };
+}
+
+/** Ninguém revê (nem abre as fotos de) a própria verificação, mesmo sendo administrador. */
+export function eRevisaoPropria(quemRevê: string, cidadao: string): boolean {
+  return quemRevê.toLowerCase() === cidadao.toLowerCase();
+}

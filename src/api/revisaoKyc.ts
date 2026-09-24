@@ -1,11 +1,19 @@
-import { lerPedidosKyc, type PedidoKyc } from '@/domain/identidade/revisaoKyc';
+import { lerFotosKyc, lerPedidosKyc, type FotosKyc, type PedidoKyc } from '@/domain/identidade/revisaoKyc';
 import { paraBase64 } from '@/services/crypto/base64';
 
 import { chamarFuncao } from './edge/chamarFuncao';
 
-/** citizen-verify?action=list_pending: verificações por rever, com links temporários para as fotos. */
+/** citizen-verify?action=list_pending: verificações por rever (quem é e quando enviou; sem fotos). */
 export async function listarPedidosKyc(): Promise<PedidoKyc[]> {
   return lerPedidosKyc(await chamarFuncao<unknown>('citizen-verify', 'list_pending', { tempoMaximo: 30_000 }));
+}
+
+/**
+ * citizen-verify?action=view: links de 10 minutos para as 3 fotos de um pedido.
+ * O servidor regista quem abriu e quando (Lei n.º 22/11).
+ */
+export async function abrirFotosKyc(userId: string): Promise<FotosKyc> {
+  return lerFotosKyc(await chamarFuncao<unknown>('citizen-verify', 'view', { body: { user_id: userId }, tempoMaximo: 20_000 }));
 }
 
 /** citizen-verify?action=review: aprova, ou recusa com motivo (o cidadão vê o motivo e recebe um aviso). */

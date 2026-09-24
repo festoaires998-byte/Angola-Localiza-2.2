@@ -5,7 +5,7 @@ jest.mock('./edge/chamarFuncao', () => ({
   chamarFuncao: (nome: string, acao: string, o?: { body?: unknown }) => mockChamar(nome, acao, o),
 }));
 
-import { decidirPedidoKyc, lerFotoKyc, listarPedidosKyc } from './revisaoKyc';
+import { abrirFotosKyc, decidirPedidoKyc, lerFotoKyc, listarPedidosKyc } from './revisaoKyc';
 
 const fetchOriginal = global.fetch;
 afterEach(() => {
@@ -17,9 +17,13 @@ describe('api da revisão das verificações', () => {
   test('list_pending e review na citizen-verify, com o corpo que o servidor espera', async () => {
     mockChamar.mockResolvedValueOnce({ pending: [{ user_id: 'u1', front_url: 'https://x/f' }] });
     expect(await listarPedidosKyc()).toEqual([
-      { userId: 'u1', enviadoEm: null, email: null, nome: null, telefone: null, frente: 'https://x/f', verso: null, selfie: null },
+      { userId: 'u1', enviadoEm: null, email: null, nome: null, telefone: null },
     ]);
     expect(mockChamar).toHaveBeenLastCalledWith('citizen-verify', 'list_pending', expect.anything());
+
+    mockChamar.mockResolvedValueOnce({ front_url: 'https://x/f', back_url: 'https://x/v', selfie_url: null });
+    expect(await abrirFotosKyc('u1')).toEqual({ frente: 'https://x/f', verso: 'https://x/v', selfie: null });
+    expect(mockChamar).toHaveBeenLastCalledWith('citizen-verify', 'view', expect.objectContaining({ body: { user_id: 'u1' } }));
 
     await decidirPedidoKyc('u1', { aprovar: true });
     expect(mockChamar).toHaveBeenLastCalledWith('citizen-verify', 'review', expect.objectContaining({ body: { user_id: 'u1', decision: 'approve' } }));

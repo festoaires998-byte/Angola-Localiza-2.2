@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-import type { PedidoKyc } from '@/domain/identidade/revisaoKyc';
+import type { FotosKyc, PedidoKyc } from '@/domain/identidade/revisaoKyc';
 
 const pedido = (userId: string, extra: Partial<PedidoKyc> = {}): PedidoKyc => ({
   userId,
@@ -9,6 +9,9 @@ const pedido = (userId: string, extra: Partial<PedidoKyc> = {}): PedidoKyc => ({
   email: null,
   nome: null,
   telefone: null,
+  ...extra,
+});
+const fotos = (userId: string, extra: Partial<FotosKyc> = {}): FotosKyc => ({
   frente: `https://arquivo/${userId}/frente?token=t`,
   verso: `https://arquivo/${userId}/verso?token=t`,
   selfie: `https://arquivo/${userId}/selfie?token=t`,
@@ -18,10 +21,12 @@ const pedido = (userId: string, extra: Partial<PedidoKyc> = {}): PedidoKyc => ({
 let mockPedidos: PedidoKyc[] = [];
 const mockListar = jest.fn(async () => mockPedidos);
 const mockDecidir = jest.fn(async (_u: string, _d: unknown) => undefined);
+const mockAbrirFotos = jest.fn(async (u: string): Promise<FotosKyc> => fotos(u));
 const mockLerFoto = jest.fn(async (url: string) => `data:image/jpeg;base64,${url.length}`);
 jest.mock('@/api/revisaoKyc', () => ({
   listarPedidosKyc: () => mockListar(),
   decidirPedidoKyc: (u: string, d: unknown) => mockDecidir(u, d),
+  abrirFotosKyc: (u: string) => mockAbrirFotos(u),
   lerFotoKyc: (url: string) => mockLerFoto(url),
 }));
 
@@ -49,7 +54,7 @@ beforeEach(() => {
   ];
   mockOnline = true;
   mockCargos = ['admin_municipal'];
-  [mockListar, mockDecidir, mockLerFoto].forEach((f) => f.mockClear());
+  [mockListar, mockDecidir, mockLerFoto, mockAbrirFotos].forEach((f) => f.mockClear());
 });
 
 describe('Admin: verificações por rever', () => {
@@ -148,25 +153,35 @@ describe('Admin: verificações por rever', () => {
     expect(screen.getByRole('button', { name: 'Sim, aprovar' })).toBeTruthy();
   });
 
-  test('foto em falta ou que não abre: avisa e deixa pedir links novos', async () => {
-    mockPedidos = [pedido('aaaaaaaa-1111-4111-8111-111111111111', { nome: 'Ana Silva', verso: null })];
+  test('as fotos só se pedem ao abrir um pedido (a abertura fica registada no servidor), não na lista', async () => {
+    await desenhar();
+    expect(mockAbrirFotos).not.toHaveBeenCalled();
+    await carregar('Rever Ana Silva');
+    expect(mockAbrirFotos).toHaveBeenCalledTimes(1);
+    expect(mockAbrirFotos).toHaveBeenCalledWith('aaaaaaaa-1111-4111-8111-111111111111');
+  });
+
+  test('foto em falta ou que não abre: avisa e pede links novos (nova abertura)', async () => {
+    const id = 'aaaaaaaa-1111-4111-8111-111111111111';
+    mockPedidos = [pedido(id, { nome: 'Ana Silva' })];
+    mockAbrirFotos.mockResolvedValueOnce(fotos(id, { verso: null }));
     mockLerFoto.mockRejectedValueOnce(new Error('O link da foto expirou.'));
     await desenhar();
     await carregar('Rever Ana Silva');
     expect(screen.getByText('Esta foto não está no arquivo.')).toBeTruthy();
     expect(screen.getByText('A foto não abriu: O link da foto expirou.')).toBeTruthy();
     await carregar('Pedir links novos');
-    expect(mockListar).toHaveBeenCalledTimes(2);
+    expect(mockAbrirFotos).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Foto: BI — frente')).toBeTruthy();
   });
 
-  test('links com mais de 9 minutos: pede a lista de novo antes de abrir', async () => {
-    const agora = jest.spyOn(Date, 'now');
-    agora.mockReturnValue(1_000_000);
+  test('o servidor não entrega as fotos (ex.: já decidido por outro administrador): mostra o erro e deixa tentar de novo', async () => {
+    mockAbrirFotos.mockRejectedValueOnce(new Error('este pedido nao esta por rever'));
     await desenhar();
-    agora.mockReturnValue(1_000_000 + 10 * 60 * 1000);
     await carregar('Rever Ana Silva');
-    expect(mockListar).toHaveBeenCalledTimes(2);
-    expect(screen.getByLabelText('Foto: BI — frente')).toBeTruthy();
-    agora.mockRestore();
+    expect(screen.getByText('Não foi possível abrir as fotos: este pedido nao esta por rever')).toBeTruthy();
+    await carregar('Tentar de novo');
+    expect(mockAbrirFotos).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Foto: BI — verso')).toBeTruthy();
   });
 });

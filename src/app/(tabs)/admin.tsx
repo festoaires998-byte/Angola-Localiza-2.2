@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { decidirPedidoKyc, lerFotoKyc, listarPedidosKyc } from '@/api/revisaoKyc';
+import { abrirFotosKyc, decidirPedidoKyc, lerFotoKyc, listarPedidosKyc } from '@/api/revisaoKyc';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
 import {
@@ -12,7 +12,7 @@ import {
   MOTIVOS_RAPIDOS,
   nomeDoPedido,
   podeReverKyc,
-  VALIDADE_LINKS_MS,
+  type FotosKyc,
   type PedidoKyc,
 } from '@/domain/identidade/revisaoKyc';
 import { useOnline } from '@/hooks/useOnline';
@@ -22,7 +22,8 @@ type Aviso = { tipo: 'sucesso' | 'info' | 'erro'; texto: string };
 
 /**
  * Admin: revisão das verificações simples dos cidadãos (BI frente, BI verso e
- * selfies). Só com rede. As fotos são privadas: chegam por links temporários
+ * selfies). Só com rede. As fotos são privadas: só se pedem ao abrir um
+ * pedido (o servidor regista quem as viu), chegam por links temporários
  * (10 min) e ficam só na memória deste ecrã.
  */
 export default function Admin() {
@@ -35,14 +36,12 @@ export default function Admin() {
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<Aviso | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
-  const carregadoEm = useRef(0);
 
   const carregar = useCallback(async (): Promise<PedidoKyc[] | null> => {
     setACarregar(true);
     setErro(null);
     try {
       const lista = await listarPedidosKyc();
-      carregadoEm.current = Date.now();
       setPedidos(lista);
       return lista;
     } catch (e) {
@@ -57,13 +56,8 @@ export default function Admin() {
     if (revisor && online) void carregar();
   }, [revisor, online, carregar]);
 
-  const abrir = async (userId: string) => {
+  const abrir = (userId: string) => {
     setAviso(null);
-    // Os links das fotos duram 10 minutos: se a lista é antiga, pede links novos.
-    if (Date.now() - carregadoEm.current > VALIDADE_LINKS_MS) {
-      const lista = await carregar();
-      if (!lista?.some((p) => p.userId === userId)) return;
-    }
     setAberto(userId);
   };
 
@@ -96,7 +90,6 @@ export default function Admin() {
           pedido={pedido}
           aoVoltar={() => setAberto(null)}
           aoDecidir={(aprovado) => decidido(pedido.userId, aprovado)}
-          aoExpirar={() => void carregar()}
         />
       ) : (
         <>
@@ -113,7 +106,7 @@ export default function Admin() {
                 </Texto>
               ))}
               <Texto suave>{`Enviado a ${dataEnvio(p.enviadoEm)}`}</Texto>
-              <Botao titulo={`Rever ${nomeDoPedido(p)}`} onPress={() => void abrir(p.userId)} desativado={aCarregar} />
+              <Botao titulo={`Rever ${nomeDoPedido(p)}`} onPress={() => abrir(p.userId)} desativado={aCarregar} />
             </Cartao>
           ))}
           <Botao titulo="Atualizar" variante="secundario" onPress={() => void carregar()} aCarregar={aCarregar} />
@@ -127,13 +120,29 @@ function RevisaoPedido({
   pedido,
   aoVoltar,
   aoDecidir,
-  aoExpirar,
 }: {
   pedido: PedidoKyc;
   aoVoltar(): void;
   aoDecidir(aprovado: boolean): void;
-  aoExpirar(): void;
 }) {
+  const [fotos, setFotos] = useState<FotosKyc | null>(null);
+  const [erroFotos, setErroFotos] = useState<string | null>(null);
+  const [pedidoFotos, setPedidoFotos] = useState(0);
+  // Pede os links das fotos ao abrir (e outra vez em "Pedir links novos").
+  useEffect(() => {
+    let ativo = true;
+    setFotos(null);
+    setErroFotos(null);
+    abrirFotosKyc(pedido.userId).then(
+      (f) => ativo && setFotos(f),
+      (e: unknown) => ativo && setErroFotos(e instanceof Error ? e.message : String(e)),
+    );
+    return () => {
+      ativo = false;
+    };
+  }, [pedido.userId, pedidoFotos]);
+  const linksNovos = () => setPedidoFotos((n) => n + 1);
+
   const [modo, setModo] = useState<'ver' | 'confirmar' | 'recusar'>('ver');
   const [motivo, setMotivo] = useState('');
   const [aEnviar, setAEnviar] = useState(false);
@@ -165,9 +174,20 @@ function RevisaoPedido({
         Confirma que o BI é legível, que a cara da selfie é a do BI e que a segunda selfie mostra o gesto escrito na
         marca de água.
       </Texto>
-      <FotoPrivada titulo="BI — frente" url={pedido.frente} aoExpirar={aoExpirar} />
-      <FotoPrivada titulo="BI — verso" url={pedido.verso} aoExpirar={aoExpirar} />
-      <FotoPrivada titulo="Selfies (normal e com o gesto)" url={pedido.selfie} aoExpirar={aoExpirar} />
+      {erroFotos ? (
+        <>
+          <Caixa tipo="erro">{`Não foi possível abrir as fotos: ${erroFotos}`}</Caixa>
+          <Botao titulo="Tentar de novo" variante="secundario" onPress={linksNovos} />
+        </>
+      ) : !fotos ? (
+        <ActivityIndicator accessibilityLabel="A abrir as fotos" color={CORES.primaria} />
+      ) : (
+        <>
+          <FotoPrivada titulo="BI — frente" url={fotos.frente} aoExpirar={linksNovos} />
+          <FotoPrivada titulo="BI — verso" url={fotos.verso} aoExpirar={linksNovos} />
+          <FotoPrivada titulo="Selfies (normal e com o gesto)" url={fotos.selfie} aoExpirar={linksNovos} />
+        </>
+      )}
 
       {erro ? <Caixa tipo="erro">{`Não foi possível guardar a decisão: ${erro}`}</Caixa> : null}
 
