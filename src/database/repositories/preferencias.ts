@@ -9,6 +9,10 @@ export function criarRepositorioPreferencias(db: BaseDados, relogio: Relogio = r
       return linha?.valor ?? null;
     },
 
+    async apagar(chave: string): Promise<void> {
+      await db.run('DELETE FROM preferencias WHERE chave = ?', [chave]);
+    },
+
     async guardar(chave: string, valor: string): Promise<void> {
       await db.run('INSERT OR REPLACE INTO preferencias (chave, valor, atualizado_em) VALUES (?, ?, ?)', [
         chave,

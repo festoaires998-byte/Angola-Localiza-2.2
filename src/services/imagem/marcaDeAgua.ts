@@ -32,3 +32,25 @@ export function desenhoMarca(largura: number, altura: number): DesenhoMarca {
     yLinhas: [Math.round(topo + alturaFaixa * 0.42), Math.round(topo + alturaFaixa * 0.82)],
   };
 }
+
+/**
+ * Onde fica cada foto quando se juntam várias lado a lado (ex.: as duas
+ * selfies da verificação): todas com a mesma altura, uma a seguir à outra.
+ */
+export function ladoALado(tamanhos: { largura: number; altura: number }[], altura: number): {
+  largura: number;
+  altura: number;
+  posicoes: { x: number; largura: number }[];
+} {
+  if (tamanhos.length === 0) throw new Error('Sem fotos para juntar.');
+  let x = 0;
+  const posicoes = tamanhos.map((t) => {
+    if (!(t.largura > 0) || !(t.altura > 0)) throw new Error('Foto sem tamanho.');
+    const largura = Math.round((t.largura * altura) / t.altura);
+    const p = { x, largura };
+    x += largura;
+    return p;
+  });
+  return { largura: x, altura, posicoes };
+}
+

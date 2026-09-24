@@ -229,6 +229,20 @@ describe('Definições → Sair', () => {
     expect(screen.getByText(/Angola Localiza, versão/)).toBeTruthy();
   });
 
+  test('verificação simples: o botão aparece ao cidadão e não ao pessoal com cargo', async () => {
+    comSessao([], null, AAL1_SEM_FATOR);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    expect(screen.getByRole('button', { name: 'Verificação simples' })).toBeTruthy();
+  });
+
+  test('pessoal com cargo não vê a verificação simples (tem a sua própria)', async () => {
+    comSessao(['tecnico_campo'], 'ID_VERIFIED', AAL2);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    expect(screen.queryByRole('button', { name: 'Verificação simples' })).toBeNull();
+  });
+
   test('estado da sincronização, avisos com "Já vi" e falhas sem botão', async () => {
     mockFila = {
       pendentes: 2,

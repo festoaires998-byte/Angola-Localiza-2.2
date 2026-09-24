@@ -16,7 +16,14 @@ import { montarPedidoRegisto, type DadosRegisto, type PedidoRegisto } from '@/do
 /** Bucket do Storage das fotos de campo (o mesmo do site). */
 export const BUCKET_FOTOS = 'field-photos';
 
-export type Verificacao = 'verificado' | 'por_verificar' | 'desconhecido';
+/**
+ * - verificado: o servidor já a aceitou;
+ * - pendente: a verificação está guardada no telemóvel e sobe quando houver rede
+ *   (vai antes dos registos da fila, por isso pode registar);
+ * - por_verificar: ainda não a fez;
+ * - desconhecido: sem rede e sem resposta guardada.
+ */
+export type Verificacao = 'verificado' | 'pendente' | 'por_verificar' | 'desconhecido';
 
 export interface FotoPronta {
   /** Ficheiro final (já com a marca de água) na pasta de documentos. */
@@ -45,6 +52,8 @@ export interface DependenciasRegisto {
 }
 
 const chaveVerificacao = (userId: string) => `cidadao_verificado:${userId}`;
+/** Pedido de verificação guardado no telemóvel (ver src/services/identidade/verificacao.ts). */
+const chavePedidoVerificacao = (userId: string) => `verificacao_pendente:${userId}`;
 
 export function criarServicoRegisto(deps: DependenciasRegisto) {
   return {
@@ -76,17 +85,23 @@ export function criarServicoRegisto(deps: DependenciasRegisto) {
 
     /** O cidadão fez a verificação simples? Com rede pergunta e guarda; sem rede, a última resposta. */
     async verificacao(userId: string, online: boolean): Promise<Verificacao> {
+      let resposta: Verificacao | null = null;
       if (online) {
         try {
           const sim = await deps.servidor.lerVerificacaoCidadao(userId);
           await deps.preferencias.guardar(chaveVerificacao(userId), sim ? '1' : '0').catch(() => undefined);
-          return sim ? 'verificado' : 'por_verificar';
+          resposta = sim ? 'verificado' : 'por_verificar';
         } catch {
           // Usa a guardada.
         }
       }
-      const guardada = await deps.preferencias.obter(chaveVerificacao(userId)).catch(() => null);
-      return guardada === '1' ? 'verificado' : guardada === '0' ? 'por_verificar' : 'desconhecido';
+      if (!resposta) {
+        const guardada = await deps.preferencias.obter(chaveVerificacao(userId)).catch(() => null);
+        resposta = guardada === '1' ? 'verificado' : guardada === '0' ? 'por_verificar' : 'desconhecido';
+      }
+      if (resposta === 'verificado') return resposta;
+      const pedido = await deps.preferencias.obter(chavePedidoVerificacao(userId)).catch(() => null);
+      return pedido ? 'pendente' : resposta;
     },
 
     /** Regista a foto final (com marca de água) para envio e devolve o marcador "offline:<id>". */

@@ -77,6 +77,14 @@ export default function Definicoes() {
         ) : null}
       </Cartao>
 
+      {cargos.length === 0 ? (
+        <Cartao>
+          <Subtitulo>Verificação simples</Subtitulo>
+          <Texto suave>Obrigatória para registares moradas: fotos do BI e duas selfies. Funciona sem rede.</Texto>
+          <Botao titulo="Verificação simples" variante="secundario" onPress={() => router.push('/definicoes/verificacao')} />
+        </Cartao>
+      ) : null}
+
       <Cartao>
         <Subtitulo>Sincronização</Subtitulo>
         <Linha nome="Trabalhos por enviar" valor={String(fila.pendentes)} />

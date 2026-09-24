@@ -13,6 +13,7 @@ export default function LayoutDefinicoes() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="diagnostico" options={{ title: 'Diagnóstico' }} />
+      <Stack.Screen name="verificacao" options={{ title: 'Verificação simples' }} />
     </Stack>
   );
 }

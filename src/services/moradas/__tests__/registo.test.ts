@@ -41,7 +41,7 @@ async function montar() {
     preferencias,
     servidor,
   });
-  return { servico, servidor, fila, ficheiros };
+  return { servico, servidor, fila, ficheiros, preferencias };
 }
 
 describe('ler as respostas do field-service', () => {
@@ -96,6 +96,15 @@ describe('registar uma morada', () => {
     expect(await t.servico.verificacao('u1', true)).toBe('por_verificar');
     expect(await t.servico.verificacao('u1', false)).toBe('por_verificar');
     expect(await t.servico.verificacao('outra-pessoa', false)).toBe('desconhecido');
+  });
+
+  test('verificação guardada no telemóvel à espera de rede: "pendente" (pode registar)', async () => {
+    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce(false);
+    expect(await t.servico.verificacao('u1', true)).toBe('por_verificar');
+    await t.preferencias.guardar('verificacao_pendente:u1', '{}');
+    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce(false);
+    expect(await t.servico.verificacao('u1', true)).toBe('pendente');
+    expect(await t.servico.verificacao('u1', false)).toBe('pendente');
   });
 
   test('enviar: vai para a fila como field_submit, com a foto ligada à operação', async () => {

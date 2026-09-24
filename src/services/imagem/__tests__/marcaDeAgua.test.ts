@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { desenhoMarca } from '../marcaDeAgua';
+import { desenhoMarca, ladoALado } from '../marcaDeAgua';
 
 describe('faixa da marca de água', () => {
   test('foto 1280 × 960: faixa de 12% em baixo, duas linhas dentro dela', () => {
@@ -19,5 +19,19 @@ describe('faixa da marca de água', () => {
 
   test('foto sem tamanho dá erro', () => {
     expect(() => desenhoMarca(0, 100)).toThrow();
+  });
+});
+
+describe('fotos lado a lado (as duas selfies)', () => {
+  test('mesma altura, uma a seguir à outra', () => {
+    expect(ladoALado([{ largura: 720, altura: 960 }, { largura: 1080, altura: 1440 }], 960)).toEqual({
+      largura: 1440,
+      altura: 960,
+      posicoes: [
+        { x: 0, largura: 720 },
+        { x: 720, largura: 720 },
+      ],
+    });
+    expect(() => ladoALado([], 960)).toThrow();
   });
 });

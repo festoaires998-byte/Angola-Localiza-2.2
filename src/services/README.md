@@ -11,4 +11,9 @@ Hardware e nativo.
 - `moradas/registo.ts` — registar uma morada nova: ruas da quadra (guardadas em `referencias` para
   usar sem rede), morada duplicada perto, verificação do cidadão (guardada em `preferencias`), foto
   (`ficheiros_pendentes`, bucket `field-photos`) e envio pela fila como `field_submit`.
+- `identidade/verificacao.ts` — verificação simples com **envio próprio** (funciona sem rede): o pedido
+  (3 fotos + o que já subiu) fica em `preferencias`; com rede sobe cada foto para o bucket privado
+  `kyc-artifacts` (continua onde parou se a rede cair) e chama `citizen-verify?action=submit`. Os
+  gatilhos da sincronização (`src/sync/gatilhos.ts`) enviam-no antes da fila, para os registos de
+  moradas já encontrarem a pessoa verificada no servidor.
 
