@@ -16,7 +16,8 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://qntbknegicaghnbnghyw.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFudGJrbmVnaWNhZ2huYm5naHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MjQ2NzgsImV4cCI6MjEwNDQwMDY3OH0.hTfF2hX66fXaKf2k6xNRH67a237EUBjwsOyT8yTW4A8"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFudGJrbmVnaWNhZ2huYm5naHl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4MjQ2NzgsImV4cCI6MjEwNDQwMDY3OH0.hTfF2hX66fXaKf2k6xNRH67a237EUBjwsOyT8yTW4A8",
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a"
       }
     },
     "production": {

@@ -1,0 +1,74 @@
+name: Tamanho do APK
+
+# Descarrega AQUI NO GITHUB (não no telemóvel) o último APK de teste já feito
+# pela Expo e mede-o: tamanho total, quanto ocupa cada arquitetura (ABI) e
+# quanto teria só com arm64-v8a. Não pede nenhum build à Expo.
+on:
+  pull_request:
+    paths:
+      - 'eas.json'
+      - '.github/workflows/tamanho-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  medir:
+    name: Medir o último APK de teste
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # O eas lê a configuração da app (app.json + plugins), que precisa das dependências.
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: "Instalar o eas-cli (só leitura: lista builds, não cria nenhum)"
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Descarregar o último APK de teste (perfil preview)
+        run: |
+          set -euo pipefail
+          eas build:list --platform android --status finished --limit 10 --json --non-interactive > builds.json
+          build=$(jq -c '[.[] | select(.buildProfile == "preview")][0] // empty' builds.json)
+          if [ -z "$build" ]; then echo "::error::Não encontrei nenhum build Android 'preview' terminado."; exit 1; fi
+          url=$(echo "$build" | jq -r '.artifacts.applicationArchiveUrl // .artifacts.buildUrl')
+          echo "BUILD_ID=$(echo "$build" | jq -r '.id')" >> "$GITHUB_ENV"
+          echo "BUILD_DATA=$(echo "$build" | jq -r '.completedAt // .createdAt')" >> "$GITHUB_ENV"
+          curl -sSfL "$url" -o ultimo.apk
+
+      - name: Medir
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import os, re, zipfile
+          caminho = "ultimo.apk"
+          total = os.path.getsize(caminho)
+          por_abi = {}
+          with zipfile.ZipFile(caminho) as z:
+              for i in z.infolist():
+                  m = re.match(r"lib/([^/]+)/", i.filename)
+                  if m:
+                      por_abi[m.group(1)] = por_abi.get(m.group(1), 0) + i.compress_size
+          mb = lambda b: f"{b / 1048576:.1f} MB"
+          outras = sum(v for k, v in por_abi.items() if k != "arm64-v8a")
+          print("## Tamanho do APK de teste\n")
+          print(f"Build `{os.environ['BUILD_ID']}` ({os.environ['BUILD_DATA']})\n")
+          print("| | |\n| --- | --- |")
+          print(f"| **Tamanho do APK** | **{mb(total)}** |")
+          for abi, b in sorted(por_abi.items()):
+              print(f"| Bibliotecas nativas `{abi}` | {mb(b)} |")
+          if len(por_abi) > 1:
+              print(f"| **Só com arm64-v8a (estimativa)** | **{mb(total - outras)}** |")
+          else:
+              print(f"| Arquiteturas no APK | só {', '.join(por_abi) or '—'} |")
+          EOF
+          cat "$GITHUB_STEP_SUMMARY"
