@@ -12,7 +12,9 @@ import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 import { limitesCelula } from '@/domain/enderecamento/codigoPostal';
 import type { DadosRegisto } from '@/domain/enderecamento/registoMorada';
 
-import { criarServicoRegisto } from '../registo';
+import type { EstadoCidadao } from '@/domain/identidade/verificacaoSimples';
+
+import { criarServicoRegisto, podeRegistar } from '../registo';
 
 const c = limitesCelula(-12.7761, 15.7392);
 const CENTRO = { latitude: (c.latMin + c.latMax) / 2, longitude: (c.lngMin + c.lngMax) / 2 };
@@ -31,7 +33,7 @@ async function montar() {
       lerRuasDaQuadra({ quadra_code: codigoQuadra(lat, lng), streets: [{ id: 'r1', name: 'Rua da Missão' }, { id: 'r2', name: 'Rua A' }] }),
     ),
     procurarDuplicado: jest.fn(async (_lat: number, _lng: number) => lerDuplicado({ found: true, distance_meters: 8.4, postal_code: 'AO-HUA-X' })),
-    lerVerificacaoCidadao: jest.fn(async (_u: string) => true),
+    lerVerificacaoCidadao: jest.fn(async (_u: string): Promise<EstadoCidadao> => 'verificado'),
   };
   const servico = criarServicoRegisto({
     ficheiros,
@@ -92,17 +94,33 @@ describe('registar uma morada', () => {
     expect(await t.servico.verificacao('u1', false)).toBe('desconhecido');
     expect(await t.servico.verificacao('u1', true)).toBe('verificado');
     expect(await t.servico.verificacao('u1', false)).toBe('verificado');
-    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce(false);
+    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce('por_verificar');
     expect(await t.servico.verificacao('u1', true)).toBe('por_verificar');
     expect(await t.servico.verificacao('u1', false)).toBe('por_verificar');
     expect(await t.servico.verificacao('outra-pessoa', false)).toBe('desconhecido');
   });
 
-  test('verificação guardada no telemóvel à espera de rede: "pendente" (pode registar)', async () => {
-    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce(false);
+  test('em revisão e recusada: guardadas para sem rede; só "verificado" (ou sem resposta) deixa registar', async () => {
+    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce('em_revisao');
+    expect(await t.servico.verificacao('u1', true)).toBe('em_revisao');
+    expect(await t.servico.verificacao('u1', false)).toBe('em_revisao');
+    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce('rejeitado');
+    expect(await t.servico.verificacao('u1', true)).toBe('rejeitado');
+    expect(await t.servico.verificacao('u1', false)).toBe('rejeitado');
+    // Aprovada depois: passa a verificado, também sem rede.
+    expect(await t.servico.verificacao('u1', true)).toBe('verificado');
+    expect(await t.servico.verificacao('u1', false)).toBe('verificado');
+
+    expect(podeRegistar('verificado')).toBe(true);
+    expect(podeRegistar('desconhecido')).toBe(true);
+    for (const v of ['em_revisao', 'rejeitado', 'pendente', 'por_verificar', null] as const) expect(podeRegistar(v)).toBe(false);
+  });
+
+  test('verificação guardada no telemóvel à espera de rede: "pendente" (ainda não pode registar)', async () => {
+    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce('por_verificar');
     expect(await t.servico.verificacao('u1', true)).toBe('por_verificar');
     await t.preferencias.guardar('verificacao_pendente:u1', '{}');
-    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce(false);
+    t.servidor.lerVerificacaoCidadao.mockResolvedValueOnce('rejeitado');
     expect(await t.servico.verificacao('u1', true)).toBe('pendente');
     expect(await t.servico.verificacao('u1', false)).toBe('pendente');
   });

@@ -53,3 +53,27 @@ export function linhasMarcaVerificacao(data: Date, desafio?: Desafio): [string, 
 export function nomeNoBucket(userId: string, passo: 'frente' | 'verso' | 'selfie', agora: number): string {
   return `cidadao-${userId}-${passo}-${agora}.jpg`;
 }
+
+/**
+ * Estado da verificação simples no servidor (Edge Function citizen-verify v3):
+ * - verificado: um administrador aprovou (só assim se podem registar moradas);
+ * - em_revisao: fotos enviadas, à espera de um administrador;
+ * - rejeitado: recusada (com motivo); tem de tirar as fotos de novo;
+ * - por_verificar: ainda não enviou.
+ */
+export type EstadoCidadao = 'verificado' | 'em_revisao' | 'rejeitado' | 'por_verificar';
+
+/** Chave (em `preferencias`) do último estado conhecido, para o usar sem rede. */
+export const chaveEstadoCidadao = (userId: string) => `cidadao_estado:${userId}`;
+
+/** Converte a resposta do servidor (status / user_identity) no estado da app. */
+export function estadoDoServidor(verificado: unknown, estado: unknown): EstadoCidadao {
+  if (verificado === true || estado === 'VERIFIED') return 'verificado';
+  if (estado === 'PENDING_REVIEW') return 'em_revisao';
+  if (estado === 'REJECTED') return 'rejeitado';
+  return 'por_verificar';
+}
+
+export function eEstadoCidadao(valor: unknown): valor is EstadoCidadao {
+  return valor === 'verificado' || valor === 'em_revisao' || valor === 'rejeitado' || valor === 'por_verificar';
+}

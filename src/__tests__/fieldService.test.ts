@@ -4,7 +4,9 @@ import { join } from 'path';
 
 import * as fieldService from '../../supabase/functions/field-service/codigoPostal';
 import * as gerarCodigo from '../../supabase/functions/generate-postal-code/codigoPostal';
+import { encode as plusCodeFieldService } from '../../supabase/functions/field-service/plusCode';
 import { codigoPostalProvisorio } from '@/domain/enderecamento/codigoPostal';
+import { encode as plusCodeApp } from '@/domain/enderecamento/plusCode';
 
 const raiz = join(__dirname, '..', '..');
 const ler = (f: string) => readFileSync(join(raiz, f), 'utf8');
@@ -55,5 +57,28 @@ describe('field-service: código postal da aprovação no esquema 2', () => {
     }
     // O erro era real: nesta zona havia pontos com "undefined" no esquema 1.
     expect(comUndefined).toBeGreaterThan(0);
+  });
+});
+
+describe('field-service: a aprovação grava o plus_code', () => {
+  const fonte = ler('supabase/functions/field-service/index.ts');
+
+  test('usa uma cópia EXATA do módulo de Plus Codes da app', () => {
+    expect(ler('supabase/functions/field-service/plusCode.ts')).toBe(ler('src/domain/enderecamento/plusCode.ts'));
+    expect(fonte).toContain('import { encode as plusCode } from "./plusCode.ts";');
+  });
+
+  test('a morada nova (approve) e a fusão (merge) levam o plus_code com 10 dígitos', () => {
+    expect(fonte).toContain('const PLUS_CODE_DIGITOS = 10;');
+    const linhas = fonte.match(/plus_code: plusCode\(record\.latitude, record\.longitude, PLUS_CODE_DIGITOS\),/g) ?? [];
+    expect(linhas).toHaveLength(2);
+    const insert = fonte.slice(fonte.indexOf('supabase.from("addresses").insert('));
+    expect(insert.slice(0, insert.indexOf('.select('))).toContain('plus_code: plusCode(');
+  });
+
+  test('o formato é o dos plus_code já guardados (ex.: "5FVQ5PWV+PJ") e igual ao da app', () => {
+    const codigo = plusCodeFieldService(-12.7761, 15.7392, 10);
+    expect(codigo).toMatch(/^[23456789CFGHJMPQRVWX]{8}\+[23456789CFGHJMPQRVWX]{2}$/);
+    expect(codigo).toBe(plusCodeApp(-12.7761, 15.7392, 10));
   });
 });

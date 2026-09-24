@@ -1,5 +1,10 @@
+import { estadoDoServidor, type EstadoCidadao } from '@/domain/identidade/verificacaoSimples';
+
 import { chamarFuncao } from './edge/chamarFuncao';
 import { supabase } from './supabase';
+import { lerEstadoVerificacao, type EstadoVerificacaoServidor } from './verificacaoNucleo';
+
+export { lerEstadoVerificacao, type EstadoVerificacaoServidor } from './verificacaoNucleo';
 
 /** Bucket PRIVADO das fotos de identidade (ninguém o lê pela app; só a equipa de verificação). */
 export const BUCKET_IDENTIDADE = 'kyc-artifacts';
@@ -16,16 +21,23 @@ export async function enviarFotoIdentidade(nome: string, bytes: Uint8Array): Pro
   }
 }
 
-/** citizen-verify?action=submit: o servidor guarda as 3 fotos e marca a pessoa como verificada. */
+/** citizen-verify?action=submit: o servidor confirma as 3 fotos e põe a verificação "em revisão". */
 export async function submeterVerificacao(pedido: {
   id_photo_front_url: string;
   id_photo_back_url: string;
   selfie_url: string;
-}): Promise<void> {
-  const r = await chamarFuncao<{ ok?: unknown; error?: unknown }>('citizen-verify', 'submit', {
+}): Promise<EstadoCidadao> {
+  const r = await chamarFuncao<{ ok?: unknown; error?: unknown; status?: unknown }>('citizen-verify', 'submit', {
     body: pedido,
     tempoMaximo: 20_000,
   });
   if (r?.error) throw new Error(String(r.error));
-  if (r?.ok !== true) throw new Error('O servidor não confirmou a verificação.');
+  if (r?.ok !== true) throw new Error('O servidor não confirmou o pedido de verificação.');
+  // Versões antigas da função (sem "status") aprovavam logo.
+  return r.status === undefined ? 'verificado' : estadoDoServidor(false, r.status);
+}
+
+/** citizen-verify?action=status: estado atual da verificação de quem tem sessão. */
+export async function pedirEstadoVerificacao(): Promise<EstadoVerificacaoServidor> {
+  return lerEstadoVerificacao(await chamarFuncao<unknown>('citizen-verify', 'status', { tempoMaximo: 15_000 }));
 }

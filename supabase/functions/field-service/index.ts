@@ -2,8 +2,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { codigoBase } from "./codigoPostal.ts";
+import { encode as plusCode } from "./plusCode.ts";
 
-// Angola Localiza - Field Service (v20, PRONPET v5.22)
+// Angola Localiza - Field Service (v21, PRONPET v5.22)
+// v21: a aprovação e a fusão passam a gravar o plus_code da morada (10 dígitos,
+// como os já existentes), com plusCode.ts = cópia exata do módulo da app.
 // v20: o código postal da aprovação passa a usar o esquema 2 (codigoPostal.ts,
 // o mesmo módulo da generate-postal-code e da app). Antes usava uma cópia do
 // esquema 1 (grelha de 31 símbolos) que dava "undefined" dentro do código
@@ -19,6 +22,9 @@ import { codigoBase } from "./codigoPostal.ts";
 //   -10 se foi o proprio cidadao a submeter (sem KYC completo, ao contrario do staff)
 //   -10 se foi aprovada apesar de um aviso de duplicado proximo
 //   -5  se o numero de porta e um sufixo (porta intercalada), nao a sequencia normal
+
+/** Os Plus Codes guardados em addresses têm 10 dígitos (ex.: "5FVQ5PWV+PJ"), como o site. */
+const PLUS_CODE_DIGITOS = 10;
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -331,6 +337,7 @@ Deno.serve(async (req: Request) => {
         const merged: Record<string, unknown> = {
           reference: existing.reference || record.reference, photo_url: existing.photo_url || record.photo_url,
           latitude: record.latitude, longitude: record.longitude, location: `SRID=4326;POINT(${record.longitude} ${record.latitude})`,
+          plus_code: plusCode(record.latitude, record.longitude, PLUS_CODE_DIGITOS),
           quadra_id: existing.quadra_id || record.quadra_id, street_id: existing.street_id || record.street_id,
           validated_by: callerId, validated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
           flagged_for_review: false,
@@ -366,6 +373,7 @@ Deno.serve(async (req: Request) => {
         const submittedByRole = (submitterRoles && submitterRoles.length > 0) ? submitterRoles[0].role : "cidadao";
         const { data: newAddress, error: addrError } = await supabase.from("addresses").insert({
           latitude: record.latitude, longitude: record.longitude, location: `SRID=4326;POINT(${record.longitude} ${record.latitude})`,
+          plus_code: plusCode(record.latitude, record.longitude, PLUS_CODE_DIGITOS),
           house_number: assigned.number, number_origin: assigned.origin, reference: record.reference,
           photo_url: record.photo_url, quadra_id: record.quadra_id, street_id: record.street_id,
           postal_code: postalCode, province_id, municipality_id, commune_id, neighborhood_id,

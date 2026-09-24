@@ -1,7 +1,7 @@
 import { File } from 'expo-file-system';
 
 import { supabase } from '@/api/supabase';
-import { enviarFotoIdentidade, submeterVerificacao } from '@/api/verificacao';
+import { enviarFotoIdentidade, pedirEstadoVerificacao, submeterVerificacao } from '@/api/verificacao';
 import { abrirBaseDados } from '@/database/client';
 import { criarRepositorioPreferencias } from '@/database/repositories/preferencias';
 
@@ -27,6 +27,7 @@ export const servicoVerificacao = criarServicoVerificacao({
   },
   enviarFicheiro: enviarFotoIdentidade,
   submeter: submeterVerificacao,
+  lerEstadoServidor: pedirEstadoVerificacao,
 });
 
 /**
