@@ -82,3 +82,12 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   o servidor responde `PIN_EXPIRED` e o remetente tem de gerar um PIN novo.
 - **Atribuição (decisão B):** o operador postal atribuir e o estafeta "puxar"
   entregas elegíveis vão no PR do separador Entregas.
+
+### Enviar: a seguir
+
+- **Destino fora das moradas guardadas:** hoje o destino é uma das moradas
+  guardadas do remetente. Falta escolher o destino pelo Código Postal Digital
+  ou pelo Plus Code de quem recebe (pesquisa no servidor).
+- **Pedido repetido:** se a ligação cair depois de o servidor criar a entrega
+  mas antes da resposta chegar, a app põe o pedido na fila e ele pode ficar
+  criado duas vezes. Solução: uma chave de pedido (idempotência) na `deliveries`.

@@ -45,6 +45,23 @@ e Conta (`definicoes`). Os nomes das rotas não mudaram.
 O super_admin vê todos. Staff (quem tem cargos) só vê mais do que mapa e
 definicoes depois de ter o KYC em `ID_VERIFIED` **e** a sessão em AAL2 (código MFA).
 
+## Enviar (`entrega/`)
+
+Stack com três ecrãs, que partilham o estado em `src/state/envios.ts`:
+- `entrega/index.tsx`: "Os meus envios" (estado, código de rastreio, "Urgente") e
+  os pedidos feitos sem rede, ainda à espera de rede;
+- `entrega/novo.tsx`: morada de destino (uma das guardadas que já existem no
+  servidor), nome e telefone de quem recebe, instruções e prioridade. A lista
+  "Falta:" bloqueia o botão. Só com a identidade verificada (senão leva a
+  Conta → Verificação);
+- `entrega/[id].tsx`: detalhe, PIN (só a pedido: "Mostrar o PIN"; nunca fica
+  guardado no telemóvel), "Gerar um PIN novo" e "Cancelar o envio" (os dois
+  com confirmação num alerta do sistema).
+
+Com rede o pedido vai logo à `deliveries` (a resposta traz o PIN); sem rede
+vai para a fila (`create_delivery`) e sai sozinho quando a rede voltar. Ver
+`src/services/entregas/envios.ts`.
+
 ## Admin (`admin/`)
 
 `admin/index.tsx` (lista) e `admin/[id].tsx` (detalhe, num ecrã próprio do Stack: o botão Voltar regressa à lista tal como estava). Aprovar pede confirmação num alerta do sistema (`Alert.alert`). A lista e o detalhe partilham o estado em `src/state/revisaoKyc.ts`.
