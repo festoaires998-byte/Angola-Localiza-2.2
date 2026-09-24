@@ -54,3 +54,12 @@ export function ladoALado(tamanhos: { largura: number; altura: number }[], altur
   return { largura: x, altura, posicoes };
 }
 
+
+/** Emojis que a marca de água pode ter no início de uma linha. */
+const EMOJIS_INICIO = ['📍'] as const;
+
+/** Separa o emoji do início da linha (desenhado com outra fonte) do resto do texto. */
+export function separarEmoji(linha: string): { emoji: string | null; resto: string } {
+  const emoji = EMOJIS_INICIO.find((e) => linha.startsWith(e)) ?? null;
+  return emoji ? { emoji, resto: linha.slice(emoji.length).trimStart() } : { emoji: null, resto: linha };
+}

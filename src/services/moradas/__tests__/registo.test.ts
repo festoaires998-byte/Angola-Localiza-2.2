@@ -30,7 +30,11 @@ async function montar() {
   const preferencias = criarRepositorioPreferencias(db);
   const servidor = {
     pedirRuasDaQuadra: jest.fn(async (lat: number, lng: number) =>
-      lerRuasDaQuadra({ quadra_code: codigoQuadra(lat, lng), streets: [{ id: 'r1', name: 'Rua da Missão' }, { id: 'r2', name: 'Rua A' }] }),
+      lerRuasDaQuadra({
+        quadra_code: codigoQuadra(lat, lng),
+        streets: [{ id: 'r1', name: 'Rua da Missão' }, { id: 'r2', name: 'Rua A' }],
+        neighborhoods_nearby: ['Académico', 'Cidade Alta'],
+      }),
     ),
     procurarDuplicado: jest.fn(async (_lat: number, _lng: number) => lerDuplicado({ found: true, distance_meters: 8.4, postal_code: 'AO-HUA-X' })),
     lerVerificacaoCidadao: jest.fn(async (_u: string): Promise<EstadoCidadao> => 'verificado'),
@@ -51,7 +55,12 @@ describe('ler as respostas do field-service', () => {
     expect(lerRuasDaQuadra({ quadra_code: 'Q1-2', streets: [{ id: 'a', name: 'Rua A' }, { id: 'b' }] })).toEqual({
       quadra: 'Q1-2',
       ruas: [{ id: 'a', nome: 'Rua A' }],
+      bairros: [],
     });
+    // Bairros perto: sem vazios nem repetidos, pela ordem do servidor (mais usados primeiro).
+    expect(
+      lerRuasDaQuadra({ quadra_code: 'Q1-2', streets: [], neighborhoods_nearby: ['Académico', ' ', 'Académico', 7, 'Cidade Alta'] }).bairros,
+    ).toEqual(['Académico', 'Cidade Alta']);
     expect(() => lerRuasDaQuadra({ error: 'sessao invalida' })).toThrow(/sessao/);
   });
 
@@ -71,14 +80,16 @@ describe('registar uma morada', () => {
     t = await montar();
   });
 
-  test('ruas: com rede vêm do servidor e ficam guardadas; sem rede usa as guardadas', async () => {
+  test('ruas e bairros: com rede vêm do servidor e ficam guardados; sem rede usa os guardados', async () => {
     expect(await t.servico.ruasPerto(CENTRO.latitude, CENTRO.longitude, true)).toEqual({
       ruas: [{ id: 'r1', nome: 'Rua da Missão' }, { id: 'r2', nome: 'Rua A' }],
+      bairros: ['Académico', 'Cidade Alta'],
       doServidor: true,
     });
     const semRede = await t.servico.ruasPerto(CENTRO.latitude, CENTRO.longitude, false);
     expect(semRede.doServidor).toBe(false);
     expect(semRede.ruas.map((r) => r.nome)).toEqual(['Rua A', 'Rua da Missão']);
+    expect(semRede.bairros).toEqual(['Académico', 'Cidade Alta']);
     // Outra quadra, sem nada guardado.
     expect((await t.servico.ruasPerto(CENTRO.latitude + 0.01, CENTRO.longitude, false)).ruas).toEqual([]);
   });
@@ -134,6 +145,7 @@ describe('registar uma morada', () => {
       tipo: 'Casa',
       ruaId: null,
       ruaNome: 'Rua Nova',
+      bairro: 'Cidade Alta',
       referencia: 'Portão azul',
       foto,
       duplicadoConfirmado: false,
@@ -143,7 +155,7 @@ describe('registar uma morada', () => {
     const op = await t.fila.obter(operationId);
     expect(op).toMatchObject({ operation_type: 'field_submit', estado: 'pendente', user_id: 'u1' });
     expect(op!.payload).toEqual(pedido);
-    expect(pedido).toMatchObject({ device_id: 'dispositivo-1', street_name: 'Rua Nova', photo_facade_url: foto });
+    expect(pedido).toMatchObject({ device_id: 'dispositivo-1', street_name: 'Rua Nova', neighborhood_name: 'Cidade Alta', photo_facade_url: foto });
     const f = await t.ficheiros.obter(foto.slice('offline:'.length));
     expect(f).toMatchObject({ bucket: 'field-photos', content_type: 'image/jpeg', operation_id: operationId, sha256: 'ab'.repeat(32) });
   });
@@ -155,6 +167,7 @@ describe('registar uma morada', () => {
       tipo: null,
       ruaId: null,
       ruaNome: '',
+      bairro: '',
       referencia: '',
       foto: null,
       duplicadoConfirmado: false,

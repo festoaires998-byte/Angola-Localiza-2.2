@@ -7,6 +7,7 @@ import {
   faltaParaEnviar,
   linhasMarcaDeAgua,
   montarPedidoRegisto,
+  pontoAEnviar,
   pontoNaCelula,
   situacaoLimite,
   type DadosRegisto,
@@ -31,6 +32,7 @@ function dados(extra: Partial<DadosRegisto> = {}): DadosRegisto {
     tipo: 'Casa',
     ruaId: 'rua-1',
     ruaNome: '',
+    bairro: 'Académico',
     referencia: 'Portão azul',
     foto: 'offline:foto-1',
     duplicadoConfirmado: false,
@@ -112,11 +114,18 @@ describe('o que falta para enviar', () => {
     expect(faltaParaEnviar({ ...junto, escolhaCelula: 'vizinha' })).toEqual([]);
   });
 
-  test('campos obrigatórios: tipo, rua, referência, foto, duplicado confirmado', () => {
+  test('campos obrigatórios: tipo, rua, bairro, referência, foto, duplicado confirmado', () => {
     const f = faltaParaEnviar(
-      dados({ tipo: null, ruaId: null, ruaNome: '  ', referencia: 'x', foto: null, haDuplicado: true }),
+      dados({ tipo: null, ruaId: null, ruaNome: '  ', bairro: ' ', referencia: 'x', foto: null, haDuplicado: true }),
     );
-    expect(f).toHaveLength(5);
+    expect(f).toHaveLength(6);
+  });
+
+  test('bairro obrigatório: sem ele o botão não ativa, com a frase certa', () => {
+    expect(faltaParaEnviar(dados({ bairro: '' }))).toEqual(['Escolher o bairro ou escrever o nome dele.']);
+    expect(faltaParaEnviar(dados({ bairro: '  ' }))).toEqual(['Escolher o bairro ou escrever o nome dele.']);
+    expect(() => montarPedidoRegisto(dados({ bairro: '' }), 'd')).toThrow('Escolher o bairro ou escrever o nome dele.');
+    expect(faltaParaEnviar(dados({ bairro: 'Bairro Académico' }))).toEqual([]);
   });
 });
 
@@ -131,6 +140,7 @@ describe('pedido para o servidor', () => {
       reference: 'Portão azul',
       place_kind: 'Casa',
       street_id: 'rua-1',
+      neighborhood_name: 'Académico',
       accuracy_meters: 4,
       override_duplicate: false,
       duplicate_justification: null,
@@ -156,9 +166,29 @@ describe('pedido para o servidor', () => {
   });
 });
 
-test('marca de água: Plus Code e data/hora', () => {
-  expect(linhasMarcaDeAgua('5FVQ6PFQ+HJ9', new Date(2026, 8, 24, 9, 5, 7))).toEqual([
-    'Plus Code 5FVQ6PFQ+HJ9',
+test('marca de água igual à dos técnicos de campo: 📍 Plus Code · latitude, longitude (5 casas) e data/hora', () => {
+  expect(linhasMarcaDeAgua('5FVQ6PFQ+HJ9', -12.776104, 15.739249, new Date(2026, 8, 24, 9, 5, 7))).toEqual([
+    '📍 5FVQ6PFQ+HJ9 · -12.77610, 15.73925',
     '24/09/2026 09:05:07',
   ]);
+});
+
+describe('posição a enviar (e a usar para pedir ruas e bairros)', () => {
+  test('longe do limite: a medida; junto ao limite sem escolha: a medida', () => {
+    expect(pontoAEnviar(captura(CENTRO), null)).toEqual(CENTRO);
+    expect(pontoAEnviar(captura(CENTRO), 'vizinha')).toEqual(CENTRO);
+    expect(pontoAEnviar(captura(JUNTO), null)).toEqual(JUNTO);
+  });
+
+  test('junto ao limite com escolha: 1 m dentro da célula escolhida — a mesma posição que vai no pedido', () => {
+    for (const escolha of ['esta', 'vizinha'] as const) {
+      const p = pontoAEnviar(captura(JUNTO), escolha);
+      const esperado = pontoNaCelula(JUNTO.latitude, JUNTO.longitude, escolha);
+      expect(p).toEqual({ latitude: esperado.latitude, longitude: esperado.longitude });
+      const pedido = montarPedidoRegisto(dados({ captura: captura(JUNTO), escolhaCelula: escolha }), 'd');
+      expect({ latitude: pedido.latitude, longitude: pedido.longitude }).toEqual(p);
+    }
+    // A vizinha fica noutra célula (a norte).
+    expect(pontoAEnviar(captura(JUNTO), 'vizinha').latitude).toBeGreaterThan(c.latMax);
+  });
 });

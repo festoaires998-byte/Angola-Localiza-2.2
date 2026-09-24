@@ -115,6 +115,22 @@ export function codigosDasDuasCelulas(
   };
 }
 
+/**
+ * A posição que vai ser enviada: a medida, ou — junto ao limite, depois de a
+ * pessoa escolher a célula — 1 m dentro da célula escolhida. É também esta
+ * posição que se usa para pedir as ruas e os bairros da zona, para as
+ * sugestões serem da célula escolhida.
+ */
+export function pontoAEnviar(
+  c: Pick<Captura, 'latitude' | 'longitude' | 'precisao'>,
+  escolha: EscolhaCelula | null,
+): { latitude: number; longitude: number } {
+  const junto = situacaoLimite(c.latitude, c.longitude, c.precisao).junto;
+  if (!junto || !escolha) return { latitude: c.latitude, longitude: c.longitude };
+  const p = pontoNaCelula(c.latitude, c.longitude, escolha);
+  return { latitude: p.latitude, longitude: p.longitude };
+}
+
 export interface DadosRegisto {
   captura: Captura | null;
   /** Obrigatória quando a posição está junto ao limite. */
@@ -124,6 +140,8 @@ export interface DadosRegisto {
   ruaId: string | null;
   /** …ou o nome de uma rua que não está na lista. */
   ruaNome: string;
+  /** Bairro (da lista de bairros conhecidos perto, ou escrito à mão). Obrigatório. */
+  bairro: string;
   referencia: string;
   /** Marcador "offline:<id>" da foto da fachada (já com marca de água). */
   foto: string | null;
@@ -142,6 +160,7 @@ export function faltaParaEnviar(d: DadosRegisto): string[] {
   }
   if (!d.tipo) falta.push('Escolher o tipo de local.');
   if (!d.ruaId && !d.ruaNome.trim()) falta.push('Escolher a rua ou escrever o nome dela.');
+  if (d.bairro.trim().length < 2) falta.push('Escolher o bairro ou escrever o nome dele.');
   if (d.referencia.trim().length < 3) falta.push('Escrever uma referência (ex.: portão azul).');
   if (!d.foto) falta.push('Tirar a foto da fachada.');
   if (d.haDuplicado && !d.duplicadoConfirmado) falta.push('Confirmar que é um local diferente da morada que já existe perto.');
@@ -158,6 +177,7 @@ export interface PedidoRegisto {
   place_kind: TipoLocal;
   street_id?: string;
   street_name?: string;
+  neighborhood_name: string;
   accuracy_meters: number;
   override_duplicate: boolean;
   duplicate_justification: string | null;
@@ -169,8 +189,7 @@ export function montarPedidoRegisto(d: DadosRegisto, deviceId: string): PedidoRe
   const falta = faltaParaEnviar(d);
   if (falta.length > 0) throw new Error(falta[0]);
   const c = d.captura!;
-  const junto = situacaoLimite(c.latitude, c.longitude, c.precisao).junto;
-  const ponto = junto && d.escolhaCelula ? pontoNaCelula(c.latitude, c.longitude, d.escolhaCelula) : c;
+  const ponto = pontoAEnviar(c, d.escolhaCelula);
   return {
     device_id: deviceId,
     latitude: ponto.latitude,
@@ -179,6 +198,7 @@ export function montarPedidoRegisto(d: DadosRegisto, deviceId: string): PedidoRe
     reference: d.referencia.trim(),
     place_kind: d.tipo!,
     ...(d.ruaId ? { street_id: d.ruaId } : { street_name: d.ruaNome.trim() }),
+    neighborhood_name: d.bairro.replace(/\s+/g, ' ').trim(),
     accuracy_meters: Math.round(c.precisao * 10) / 10,
     override_duplicate: d.haDuplicado && d.duplicadoConfirmado,
     duplicate_justification: d.haDuplicado && d.duplicadoConfirmado ? 'Cidadão confirma que é um local diferente.' : null,
@@ -186,9 +206,14 @@ export function montarPedidoRegisto(d: DadosRegisto, deviceId: string): PedidoRe
   };
 }
 
-/** As duas linhas da marca de água da foto (como no site: Plus Code e data/hora). */
-export function linhasMarcaDeAgua(plusCode: string, data: Date): [string, string] {
+/**
+ * As duas linhas da marca de água da foto da fachada — o mesmo formato
+ * exigido aos técnicos de campo:
+ *   1.ª "📍 <Plus Code> · <latitude>, <longitude>" (5 casas decimais, ~1 m);
+ *   2.ª a data e a hora.
+ */
+export function linhasMarcaDeAgua(plusCode: string, latitude: number, longitude: number, data: Date): [string, string] {
   const dois = (n: number) => String(n).padStart(2, '0');
   const quando = `${dois(data.getDate())}/${dois(data.getMonth() + 1)}/${data.getFullYear()} ${dois(data.getHours())}:${dois(data.getMinutes())}:${dois(data.getSeconds())}`;
-  return [`Plus Code ${plusCode}`, quando];
+  return [`📍 ${plusCode} · ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`, quando];
 }

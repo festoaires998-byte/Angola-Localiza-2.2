@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { limitesCelula } from '@/domain/enderecamento/codigoPostal';
-import { codigosDasDuasCelulas } from '@/domain/enderecamento/registoMorada';
+import { encode } from '@/domain/enderecamento/plusCode';
+import { codigosDasDuasCelulas, pontoNaCelula } from '@/domain/enderecamento/registoMorada';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -31,16 +32,18 @@ jest.mock('@/services/imagem/fotoComMarca', () => ({
 }));
 
 let mockVerificacao = 'verificado';
-let mockRuas: { ruas: { id: string; nome: string }[]; doServidor: boolean } = {
+let mockRuas: { ruas: { id: string; nome: string }[]; bairros: string[]; doServidor: boolean } = {
   ruas: [{ id: 'r1', nome: 'Rua da Missão' }],
+  bairros: ['Académico', 'Cidade Alta'],
   doServidor: true,
 };
+const mockRuasPerto = jest.fn(async (_lat: number, _lng: number, _online: boolean) => mockRuas);
 let mockDuplicado: unknown = null;
 const mockEnviar = jest.fn(async (_u: string, _d: unknown) => ({ operationId: 'op-1', pedido: {} }));
 jest.mock('@/services/moradas/registoApp', () => ({
   servicoRegisto: {
     verificacao: async () => mockVerificacao,
-    ruasPerto: async () => mockRuas,
+    ruasPerto: (lat: number, lng: number, online: boolean) => mockRuasPerto(lat, lng, online),
     duplicadoPerto: async () => mockDuplicado,
     guardarFoto: async () => 'offline:foto-1',
     enviar: (u: string, d: unknown) => mockEnviar(u, d),
@@ -86,6 +89,7 @@ async function desenhar() {
 
 async function preencherEFotografar() {
   fireEvent.press(screen.getByRole('radio', { name: 'Rua: Rua da Missão' }));
+  fireEvent.press(screen.getByRole('radio', { name: 'Bairro: Académico' }));
   fireEvent.changeText(screen.getByLabelText('Referência (para ajudar a encontrar)'), 'Portão azul');
   await act(async () => {
     fireEvent.press(screen.getByRole('button', { name: 'Abrir a câmara' }));
@@ -98,19 +102,23 @@ async function preencherEFotografar() {
 beforeEach(() => {
   mockOnline = true;
   mockVerificacao = 'verificado';
-  mockRuas = { ruas: [{ id: 'r1', nome: 'Rua da Missão' }], doServidor: true };
+  mockRuas = { ruas: [{ id: 'r1', nome: 'Rua da Missão' }], bairros: ['Académico', 'Cidade Alta'], doServidor: true };
   mockDuplicado = null;
   mockMedida = medida(CENTRO);
-  [mockBack, mockTirar, mockFotoComMarca, mockEnviar, mockMedirDeNovo].forEach((f) => f.mockClear());
+  [mockBack, mockTirar, mockFotoComMarca, mockEnviar, mockMedirDeNovo, mockRuasPerto].forEach((f) => f.mockClear());
 });
 
 describe('Registar morada', () => {
-  test('registo completo: rua, referência, foto com marca de água → fila', async () => {
+  test('registo completo: rua, bairro, referência, foto com marca de água → fila', async () => {
     await desenhar();
     expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
     await preencherEFotografar();
-    // A marca de água leva o Plus Code medido e a data/hora.
-    expect(mockFotoComMarca).toHaveBeenCalledWith('file:///cache/camara.jpg', [expect.stringMatching(/^Plus Code 5FVQ/), expect.any(String)]);
+    // A marca de água é a dos técnicos de campo: 📍 Plus Code · latitude, longitude (5 casas) e a data/hora.
+    const plus = encode(CENTRO.latitude, CENTRO.longitude);
+    expect(mockFotoComMarca).toHaveBeenCalledWith('file:///cache/camara.jpg', [
+      `📍 ${plus} · ${CENTRO.latitude.toFixed(5)}, ${CENTRO.longitude.toFixed(5)}`,
+      expect.stringMatching(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/),
+    ]);
     expect(screen.getByLabelText('Foto da fachada')).toBeTruthy();
     expect(screen.queryByText('Falta:')).toBeNull();
     await act(async () => {
@@ -118,7 +126,7 @@ describe('Registar morada', () => {
     });
     expect(mockEnviar).toHaveBeenCalledWith(
       'user-1',
-      expect.objectContaining({ ruaId: 'r1', referencia: 'Portão azul', foto: 'offline:foto-1', tipo: 'Casa', escolhaCelula: null }),
+      expect.objectContaining({ ruaId: 'r1', bairro: 'Académico', referencia: 'Portão azul', foto: 'offline:foto-1', tipo: 'Casa', escolhaCelula: null }),
     );
     expect(screen.getByText(/Registo enviado para revisão/)).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Voltar às moradas' }));
@@ -155,6 +163,49 @@ describe('Registar morada', () => {
       fireEvent.press(botaoEnviar());
     });
     expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ escolhaCelula: 'vizinha' }));
+  });
+
+  test('junto ao limite: as ruas e os bairros são pedidos de novo com a posição 1 m dentro da célula escolhida', async () => {
+    mockMedida = medida(JUNTO);
+    await desenhar();
+    expect(mockRuasPerto).toHaveBeenLastCalledWith(JUNTO.latitude, JUNTO.longitude, true);
+    const codigos = codigosDasDuasCelulas(JUNTO.latitude, JUNTO.longitude, 'Huambo');
+    await act(async () => {
+      fireEvent.press(screen.getByRole('radio', { name: `Célula: A célula vizinha (a norte), ${codigos.vizinha}` }));
+    });
+    const vizinha = pontoNaCelula(JUNTO.latitude, JUNTO.longitude, 'vizinha');
+    expect(mockRuasPerto).toHaveBeenLastCalledWith(vizinha.latitude, vizinha.longitude, true);
+    // Voltar à célula onde está: pede outra vez, agora com a posição dentro desta célula.
+    await act(async () => {
+      fireEvent.press(screen.getByRole('radio', { name: `Célula: Esta célula (onde estás), ${codigos.esta}` }));
+    });
+    const esta = pontoNaCelula(JUNTO.latitude, JUNTO.longitude, 'esta');
+    expect(mockRuasPerto).toHaveBeenLastCalledWith(esta.latitude, esta.longitude, true);
+  });
+
+  test('bairro obrigatório: sem ele o "Falta" avisa e o botão fica desligado; "Outro bairro" deixa escrever', async () => {
+    await desenhar();
+    expect(screen.getByText('Bairro')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Bairro: Cidade Alta' })).toBeTruthy();
+    fireEvent.press(screen.getByRole('radio', { name: 'Rua: Rua da Missão' }));
+    fireEvent.changeText(screen.getByLabelText('Referência (para ajudar a encontrar)'), 'Portão azul');
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Abrir a câmara' }));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Tirar foto' }));
+    });
+    expect(screen.getByText('• Escolher o bairro ou escrever o nome dele.')).toBeTruthy();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(true);
+
+    fireEvent.press(screen.getByRole('radio', { name: 'Bairro: Outro bairro (escrever à mão)' }));
+    fireEvent.changeText(screen.getByLabelText('Nome do bairro'), 'Bairro Novo');
+    expect(screen.queryByText('• Escolher o bairro ou escrever o nome dele.')).toBeNull();
+    expect(botaoEnviar().props.accessibilityState.disabled).toBe(false);
+    await act(async () => {
+      fireEvent.press(botaoEnviar());
+    });
+    expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ bairro: 'Bairro Novo' }));
   });
 
   test('junto ao limite: a medição a melhorar (mexe uns cm) não apaga a célula escolhida', async () => {
@@ -212,11 +263,13 @@ describe('Registar morada', () => {
   test('sem rede: escreve a rua à mão e o registo fica guardado para enviar depois', async () => {
     mockOnline = false;
     mockVerificacao = 'desconhecido';
-    mockRuas = { ruas: [], doServidor: false };
+    mockRuas = { ruas: [], bairros: [], doServidor: false };
     await desenhar();
     expect(screen.getByText(/Sem rede não deu para confirmar a tua verificação/)).toBeTruthy();
     expect(screen.getByText(/Sem rede e sem ruas guardadas desta zona/)).toBeTruthy();
+    expect(screen.getByText(/Ainda não há bairros conhecidos aqui/)).toBeTruthy();
     fireEvent.changeText(screen.getByLabelText('Nome da rua'), 'Rua Nova');
+    fireEvent.changeText(screen.getByLabelText('Nome do bairro'), 'Cidade Alta');
     fireEvent.changeText(screen.getByLabelText('Referência (para ajudar a encontrar)'), 'Casa amarela');
     await act(async () => {
       fireEvent.press(screen.getByRole('button', { name: 'Abrir a câmara' }));
@@ -227,7 +280,7 @@ describe('Registar morada', () => {
     await act(async () => {
       fireEvent.press(botaoEnviar());
     });
-    expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ ruaId: null, ruaNome: 'Rua Nova' }));
+    expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ ruaId: null, ruaNome: 'Rua Nova', bairro: 'Cidade Alta' }));
     expect(screen.getByText(/ficou guardado neste telemóvel/)).toBeTruthy();
   });
 

@@ -47,7 +47,7 @@ export interface DependenciasRegisto {
   idDispositivo(): Promise<string>;
   referencias: {
     guardarVarias(r: Omit<Referencia, 'atualizado_em'>[]): Promise<void>;
-    listar(tipo: 'rua', paiId: string): Promise<Referencia[]>;
+    listar(tipo: 'rua' | 'bairro', paiId: string): Promise<Referencia[]>;
   };
   preferencias: { obter(chave: string): Promise<string | null>; guardar(chave: string, valor: string): Promise<void> };
   servidor: {
@@ -67,20 +67,32 @@ export function criarServicoRegisto(deps: DependenciasRegisto) {
      * Ruas conhecidas na quadra do ponto. Com rede vêm do servidor e ficam
      * guardadas; sem rede (ou se o servidor falhar), as guardadas.
      */
-    async ruasPerto(latitude: number, longitude: number, online: boolean): Promise<{ ruas: Rua[]; doServidor: boolean }> {
+    async ruasPerto(
+      latitude: number,
+      longitude: number,
+      online: boolean,
+    ): Promise<{ ruas: Rua[]; bairros: string[]; doServidor: boolean }> {
       if (online) {
         try {
           const r = await deps.servidor.pedirRuasDaQuadra(latitude, longitude);
           await deps.referencias
-            .guardarVarias(r.ruas.map((rua) => ({ tipo: 'rua', id: rua.id, pai_id: r.quadra, nome: rua.nome, dados: null })))
+            .guardarVarias([
+              ...r.ruas.map((rua) => ({ tipo: 'rua' as const, id: rua.id, pai_id: r.quadra, nome: rua.nome, dados: null })),
+              // Os bairros não têm id no servidor: o id é "quadra:nome".
+              ...r.bairros.map((b) => ({ tipo: 'bairro' as const, id: `${r.quadra}:${b}`, pai_id: r.quadra, nome: b, dados: null })),
+            ])
             .catch(() => undefined);
-          return { ruas: r.ruas, doServidor: true };
+          return { ruas: r.ruas, bairros: r.bairros, doServidor: true };
         } catch {
           // Usa as guardadas.
         }
       }
-      const guardadas = await deps.referencias.listar('rua', codigoQuadra(latitude, longitude)).catch(() => []);
-      return { ruas: guardadas.map((g) => ({ id: g.id, nome: g.nome })), doServidor: false };
+      const quadra = codigoQuadra(latitude, longitude);
+      const [ruas, bairros] = await Promise.all([
+        deps.referencias.listar('rua', quadra).catch(() => []),
+        deps.referencias.listar('bairro', quadra).catch(() => []),
+      ]);
+      return { ruas: ruas.map((g) => ({ id: g.id, nome: g.nome })), bairros: bairros.map((b) => b.nome), doServidor: false };
     },
 
     /** Morada a menos de 15 m? undefined = não se sabe (sem rede; o servidor volta a ver ao receber). */

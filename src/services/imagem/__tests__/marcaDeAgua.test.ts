@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { desenhoMarca, ladoALado } from '../marcaDeAgua';
+import { desenhoMarca, ladoALado, separarEmoji } from '../marcaDeAgua';
 
 describe('faixa da marca de água', () => {
   test('foto 1280 × 960: faixa de 12% em baixo, duas linhas dentro dela', () => {
@@ -33,5 +33,12 @@ describe('fotos lado a lado (as duas selfies)', () => {
       ],
     });
     expect(() => ladoALado([], 960)).toThrow();
+  });
+});
+
+describe('emoji no início da linha (desenhado com a fonte de emojis)', () => {
+  test('separa o 📍 do resto; linhas sem emoji ficam iguais', () => {
+    expect(separarEmoji('📍 5FVQ6PFQ+HJ9 · -12.77610, 15.73925')).toEqual({ emoji: '📍', resto: '5FVQ6PFQ+HJ9 · -12.77610, 15.73925' });
+    expect(separarEmoji('24/09/2026 09:05:07')).toEqual({ emoji: null, resto: '24/09/2026 09:05:07' });
   });
 });
