@@ -6,7 +6,7 @@ import { criarRepositorioFavoritos } from '@/database/repositories/favoritos';
 import { criarRepositorioMoradas } from '@/database/repositories/moradas';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 
-import { criarServicoMoradas, ultimaAtualizacao } from '../moradas';
+import { criarServicoMoradas, ultimaAtualizacao, type NovoFavoritoComMorada } from '../moradas';
 
 const EU = 'user-1';
 const OUTRO = 'user-2';
@@ -53,8 +53,16 @@ async function montar(linhasServidor: unknown[]) {
     ),
     atualizarFavorito: jest.fn(async (_id: string, _m: { nome: string; categoria: string }) => undefined),
     removerFavorito: jest.fn(async (_id: string) => undefined),
+    criarFavoritoComMorada: jest.fn(async (_userId: string, _novo: NovoFavoritoComMorada) => undefined),
   };
-  const servico = criarServicoMoradas({ favoritos, moradas, servidor });
+  let n = 0;
+  const servico = criarServicoMoradas({
+    favoritos,
+    moradas,
+    servidor,
+    gerarId: () => `id-${++n}`,
+    agora: () => agora,
+  });
   return { servico, servidor, favoritos, avancar: (ms: number) => (agora = new Date(agora.getTime() + ms)) };
 }
 
@@ -171,5 +179,91 @@ describe('Moradas: telemóvel + servidor', () => {
     t.servidor.lerFavoritos.mockRejectedValueOnce(new Error('Sem ligação ao servidor.'));
     await expect(t.servico.atualizar(EU)).rejects.toThrow(/Sem ligação/);
     expect(await t.servico.listar(EU)).toHaveLength(2);
+  });
+});
+
+describe('Guardar como favorito (Mapa)', () => {
+  const PONTO = {
+    latitude: -12.7761,
+    longitude: 15.7392,
+    precisao: 4,
+    plusCode: '5FVQ5PWV+PH5',
+    codigoPostal: 'AO-HUA-MNFQPN2S-95',
+    provincia: 'Huambo',
+    municipio: 'Huambo',
+  };
+
+  let t: Awaited<ReturnType<typeof montar>>;
+  beforeEach(async () => {
+    t = await montar([linha('f1')]);
+    await t.servico.atualizar(EU);
+  });
+
+  test('sem rede: aparece logo nas Moradas, por validar, à espera de rede', async () => {
+    const item = await t.servico.guardarDoMapa(EU, PONTO, { visibilidade: 'LIMITED', categoria: 'trabalho', nome: '  Escritório ' });
+    expect(item.favorito).toMatchObject({ id: 'id-2', morada_id: 'id-1', nome: 'Escritório', categoria: 'trabalho', pendente: 'criar' });
+    const lista = await t.servico.listar(EU);
+    expect(lista.map((i) => i.favorito.id)).toEqual(['id-2', 'f1']);
+    expect(lista[0].morada).toMatchObject({
+      id: 'id-1',
+      plus_code: '5FVQ5PWV+PH5',
+      codigo_postal: 'AO-HUA-MNFQPN2S-95',
+      estado: 'PROPOSED',
+      origem: 'local',
+      precisao_m: 4,
+      provincia: 'Huambo',
+    });
+    expect(lerDadosMorada(lista[0].morada?.dados).visibilidade).toBe('LIMITED');
+    // Outra pessoa no mesmo telemóvel não o vê.
+    expect(await t.servico.listar(OUTRO)).toEqual([]);
+  });
+
+  test('com rede: cria a morada e o favorito com os ids do telemóvel e fica igual ao servidor', async () => {
+    await t.servico.guardarDoMapa(EU, PONTO, { visibilidade: 'PRIVATE', categoria: 'casa' });
+    const r = await t.servico.enviarPendentes(EU);
+    expect(r).toEqual({ enviados: 1, erro: null });
+    expect(t.servidor.criarFavoritoComMorada).toHaveBeenCalledWith(EU, {
+      morada: {
+        id: 'id-1',
+        latitude: -12.7761,
+        longitude: 15.7392,
+        precisao: 4,
+        plusCode: '5FVQ5PWV+PH5',
+        codigoPostal: 'AO-HUA-MNFQPN2S-95',
+        visibilidade: 'PRIVATE',
+      },
+      favorito: { id: 'id-2', categoria: 'casa', nome: '' },
+    });
+    expect((await t.servico.obter(EU, 'id-2'))?.favorito.pendente).toBeNull();
+    // Só se envia uma vez.
+    await t.servico.enviarPendentes(EU);
+    expect(t.servidor.criarFavoritoComMorada).toHaveBeenCalledTimes(1);
+  });
+
+  test('se o envio falhar, fica no telemóvel e não desaparece com a lista do servidor', async () => {
+    await t.servico.guardarDoMapa(EU, PONTO, { visibilidade: 'PUBLIC', categoria: 'outro' });
+    t.servidor.criarFavoritoComMorada.mockRejectedValueOnce(new Error('Sem ligação ao servidor.'));
+    const r = await t.servico.atualizar(EU);
+    expect(r.erro?.message).toMatch(/Sem ligação/);
+    expect((await t.servico.obter(EU, 'id-2'))?.favorito.pendente).toBe('criar');
+    expect((await t.servico.listar(EU)).map((i) => i.favorito.id)).toEqual(['id-2', 'f1']);
+  });
+
+  test('mudar o nome antes de enviar: continua por criar e vai com o nome novo', async () => {
+    await t.servico.guardarDoMapa(EU, PONTO, { visibilidade: 'PUBLIC', categoria: 'outro' });
+    await t.servico.alterar('id-2', { nome: 'Loja do Zé', categoria: 'loja' });
+    expect((await t.servico.obter(EU, 'id-2'))?.favorito.pendente).toBe('criar');
+    await t.servico.enviarPendentes(EU);
+    expect(t.servidor.criarFavoritoComMorada.mock.calls[0][1].favorito).toEqual({ id: 'id-2', categoria: 'loja', nome: 'Loja do Zé' });
+    expect(t.servidor.atualizarFavorito).not.toHaveBeenCalled();
+  });
+
+  test('tirar antes de enviar: apaga no telemóvel e não pede nada ao servidor', async () => {
+    await t.servico.guardarDoMapa(EU, PONTO, { visibilidade: 'PUBLIC', categoria: 'outro' });
+    await t.servico.remover('id-2');
+    expect(await t.servico.obter(EU, 'id-2')).toBeNull();
+    await t.servico.enviarPendentes(EU);
+    expect(t.servidor.criarFavoritoComMorada).not.toHaveBeenCalled();
+    expect(t.servidor.removerFavorito).not.toHaveBeenCalled();
   });
 });

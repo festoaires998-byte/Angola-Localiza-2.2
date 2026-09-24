@@ -22,6 +22,7 @@ Criação e alteração das tabelas da base de dados local.
 | 6 | `006_codigos_confirmados.ts` | Cria `codigos_confirmados`: o último Código Postal Digital confirmado pelo servidor para cada célula (sigla + grelha), para o mostrar sem rede em vez do provisório. |
 | 7 | `007_favoritos_do_utilizador.ts` | Junta à `favoritos` as colunas `user_id` (de quem é), `pendente` (`atualizar`/`remover` feito sem rede, à espera de ir para o servidor) e `criado_em`. Os favoritos antigos ficam com `user_id` nulo e não aparecem a ninguém. |
 | 8 | `008_preferencias.ts` | Cria `preferencias` (chave → valor), para pequenos valores usados sem rede, ex.: se o cidadão já fez a verificação simples (`cidadao_verificado:<user_id>`). |
+| 9 | `009_favoritos_criados_sem_rede.ts` | Refaz a `favoritos` (com os mesmos dados) para `pendente` aceitar também `criar`: favorito guardado no Mapa (mesmo sem rede) cuja morada ainda não está no servidor. |
 
 ## Como juntar uma migração nova
 

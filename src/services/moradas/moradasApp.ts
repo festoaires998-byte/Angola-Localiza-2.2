@@ -1,6 +1,7 @@
-import { atualizarFavorito, lerFavoritos, removerFavorito } from '@/api/moradas';
+import { atualizarFavorito, criarFavoritoComMorada, lerFavoritos, removerFavorito } from '@/api/moradas';
 import { juntarAosFavoritos, lerMeusRegistos } from '@/api/registos';
 import { abrirBaseDados } from '@/database/client';
+import { gerarUuid } from '@/database/ids';
 import { criarRepositorioFavoritos } from '@/database/repositories/favoritos';
 import { criarRepositorioMoradas } from '@/database/repositories/moradas';
 import { criarRepositorioPreferencias } from '@/database/repositories/preferencias';
@@ -26,6 +27,7 @@ function aoAbrir<R extends object, K extends keyof R>(abrir: () => Promise<R>, n
 
 const deps: DependenciasMoradas = {
   favoritos: aoAbrir(favoritos, [
+    'guardar',
     'listarDoUtilizador',
     'listarPendentes',
     'obter',
@@ -36,7 +38,8 @@ const deps: DependenciasMoradas = {
     'substituirDoServidor',
   ]),
   moradas: aoAbrir(moradas, ['obter', 'guardarVarias']),
-  servidor: { lerFavoritos, atualizarFavorito, removerFavorito },
+  servidor: { lerFavoritos, atualizarFavorito, removerFavorito, criarFavoritoComMorada },
+  gerarId: gerarUuid,
 };
 
 /** Serviço das Moradas ligado à base de dados e ao Supabase (um só para a app). */

@@ -1,6 +1,7 @@
 // Supabase falso, em memória, para correr as Edge Functions (Deno) dentro do Jest.
 // Só implementa o que as funções usam: from() com filtros simples, rpc(),
 // auth.getUser(), auth.admin.getUserById() e storage (download e links).
+// O ilike segue o Postgres: % e _ são curingas e \ escapa o que vem a seguir.
 
 type Linha = Record<string, any>;
 type Filtro = (l: Linha) => boolean;
@@ -21,6 +22,19 @@ let contador = 0;
 function novoId() {
   contador += 1;
   return `00000000-0000-4000-8000-${String(contador).padStart(12, '0')}`;
+}
+
+/** Padrão do ilike (%, _ e \ para escapar) → expressão regular. */
+function ilikeParaRegex(padrao: string): string {
+  let re = '';
+  for (let i = 0; i < padrao.length; i++) {
+    const c = padrao[i];
+    if (c === '\\' && i + 1 < padrao.length) re += padrao[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    else if (c === '%') re += '.*';
+    else if (c === '_') re += '.';
+    else re += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return re;
 }
 
 const copia = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
@@ -94,6 +108,11 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
         return b;
       },
       gte(c: string, v: any) { filtros.push((l) => l[c] >= v); return b; },
+      ilike(c: string, padrao: string) {
+        const re = new RegExp(`^${ilikeParaRegex(padrao)}$`, 'is');
+        filtros.push((l) => typeof l[c] === 'string' && re.test(l[c]));
+        return b;
+      },
       order() { return b; },
       limit(n: number) { limite = n; return b; },
       single() {

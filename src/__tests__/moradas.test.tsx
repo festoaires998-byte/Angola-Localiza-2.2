@@ -148,6 +148,12 @@ describe('Moradas: lista', () => {
     expect(screen.queryByRole('button', { name: 'Categoria: Todas' })).toBeNull();
   });
 
+  test('favorito guardado no Mapa sem rede também aparece "À espera de rede"', () => {
+    mockEstado = { itens: [item('f1', { pendente: 'criar' }, { origem: 'local' })] };
+    desenhar(Lista);
+    expect(screen.getByText('À espera de rede')).toBeTruthy();
+  });
+
   test('alteração à espera de rede aparece na morada', () => {
     mockEstado = { itens: [item('f1', { pendente: 'atualizar' })] };
     desenhar(Lista);
@@ -200,6 +206,13 @@ describe('Moradas: os meus registos', () => {
 });
 
 describe('Moradas: detalhe', () => {
+  test('guardada no Mapa sem rede: diz que ainda só está no telemóvel', () => {
+    mockEstado = { itens: [item('f1', { pendente: 'criar' }, { origem: 'local', codigo_postal: null })] };
+    desenhar(Detalhe);
+    expect(screen.getByText(/Guardada no Mapa sem rede: ainda só está neste telemóvel/)).toBeTruthy();
+    expect(screen.queryByText('Alteração guardada neste telemóvel, à espera de rede.')).toBeNull();
+  });
+
   test('mostra tudo o que se sabe da morada', () => {
     desenhar(Detalhe);
     expect(screen.getAllByText('AO-HUA-MNFQPN2S-3-95').length).toBeGreaterThan(0);

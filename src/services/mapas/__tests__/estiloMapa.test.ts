@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { ATRIBUICAO_OSM, criarEstilo } from '../estiloMapa';
+import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE, criarEstilo, criarEstiloSatelite, TILES_SATELITE } from '../estiloMapa';
 import { dentroDaRegiao, FONTES_MAPA, REGIAO_HUAMBO } from '../regioes';
 
 const ORIGEM = {
@@ -37,5 +37,22 @@ describe('estilo do mapa', () => {
   test('região do Huambo', () => {
     expect(dentroDaRegiao(REGIAO_HUAMBO, -12.7761, 15.7392)).toBe(true);
     expect(dentroDaRegiao(REGIAO_HUAMBO, -8.8383, 13.2344)).toBe(false); // Luanda
+  });
+});
+
+describe('estilo Satélite', () => {
+  test('uma camada de imagens (as do site), com a atribuição obrigatória', () => {
+    const estilo = criarEstiloSatelite();
+    expect(estilo.sources).toEqual({
+      satelite: {
+        type: 'raster',
+        tiles: [TILES_SATELITE],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: ATRIBUICAO_SATELITE,
+      },
+    });
+    expect(TILES_SATELITE).toBe('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+    expect(estilo.layers).toEqual([{ id: 'satelite', type: 'raster', source: 'satelite' }]);
   });
 });

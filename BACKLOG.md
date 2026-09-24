@@ -83,6 +83,21 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **Atribuição (decisão B):** o operador postal atribuir e o estafeta "puxar"
   entregas elegíveis vão no PR do separador Entregas.
 
+### Pesquisa: pendências (PR #42)
+
+- **Funções antigas `search` e `resolve-address` (usadas pelo site):** leem com
+  a service role e **não respeitam a privacidade**. A `search` responde até
+  sem sessão e devolve moradas **por validar e privadas** (código postal,
+  coordenadas e referência) a quem souber pesquisar; a `resolve-address`
+  devolve moradas aprovadas mesmo quando são "Privadas". A app já usa a nova
+  `pesquisa` (segura). **Proposta:** o site passar a usar a `pesquisa` e depois
+  desligar a `search` (ou corrigi-la com as mesmas regras). Decisão do dono.
+- **Acentos:** a pesquisa por texto usa `ilike` (não liga a maiúsculas, mas
+  "missao" não encontra "Missão"). Solução: a extensão `unaccent` numa função SQL.
+- **Favorito do Mapa sem província/município:** o "Guardar como
+  favorito" cria a morada sem `province_id`/`municipality_id` (o site procurava
+  pelo nome). O validador completa na validação.
+
 ### Enviar: a seguir
 
 - **Destino fora das moradas guardadas:** hoje o destino é uma das moradas
