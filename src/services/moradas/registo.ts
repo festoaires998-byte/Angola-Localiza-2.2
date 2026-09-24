@@ -48,6 +48,7 @@ export interface DependenciasRegisto {
   referencias: {
     guardarVarias(r: Omit<Referencia, 'atualizado_em'>[]): Promise<void>;
     listar(tipo: 'rua' | 'bairro', paiId: string): Promise<Referencia[]>;
+    obter(tipo: 'quadra', id: string): Promise<Referencia | null>;
   };
   preferencias: { obter(chave: string): Promise<string | null>; guardar(chave: string, valor: string): Promise<void> };
   servidor: {
@@ -61,6 +62,12 @@ const chaveVerificacao = (userId: string) => `cidadao_verificado:${userId}`;
 /** Pedido de verificação guardado no telemóvel (ver src/services/identidade/verificacao.ts). */
 const chavePedidoVerificacao = (userId: string) => `verificacao_pendente:${userId}`;
 
+/** A quadra onde cai o ponto: o código (mesma conta do servidor) e se já está delimitada. */
+export interface QuadraDoPonto {
+  codigo: string;
+  mapeada: boolean;
+}
+
 export function criarServicoRegisto(deps: DependenciasRegisto) {
   return {
     /**
@@ -71,7 +78,7 @@ export function criarServicoRegisto(deps: DependenciasRegisto) {
       latitude: number,
       longitude: number,
       online: boolean,
-    ): Promise<{ ruas: Rua[]; bairros: string[]; doServidor: boolean }> {
+    ): Promise<{ ruas: Rua[]; bairros: string[]; quadra: QuadraDoPonto; doServidor: boolean }> {
       if (online) {
         try {
           const r = await deps.servidor.pedirRuasDaQuadra(latitude, longitude);
@@ -80,19 +87,33 @@ export function criarServicoRegisto(deps: DependenciasRegisto) {
               ...r.ruas.map((rua) => ({ tipo: 'rua' as const, id: rua.id, pai_id: r.quadra, nome: rua.nome, dados: null })),
               // Os bairros não têm id no servidor: o id é "quadra:nome".
               ...r.bairros.map((b) => ({ tipo: 'bairro' as const, id: `${r.quadra}:${b}`, pai_id: r.quadra, nome: b, dados: null })),
+              // As quadras delimitadas ficam guardadas para se saber sem rede.
+              ...(r.quadraMapeada ? [{ tipo: 'quadra' as const, id: r.quadra, pai_id: null, nome: r.quadra, dados: null }] : []),
             ])
             .catch(() => undefined);
-          return { ruas: r.ruas, bairros: r.bairros, doServidor: true };
+          return {
+            ruas: r.ruas,
+            bairros: r.bairros,
+            quadra: { codigo: r.quadra, mapeada: r.quadraMapeada },
+            doServidor: true,
+          };
         } catch {
           // Usa as guardadas.
         }
       }
       const quadra = codigoQuadra(latitude, longitude);
-      const [ruas, bairros] = await Promise.all([
+      const [ruas, bairros, guardada] = await Promise.all([
         deps.referencias.listar('rua', quadra).catch(() => []),
         deps.referencias.listar('bairro', quadra).catch(() => []),
+        deps.referencias.obter('quadra', quadra).catch(() => null),
       ]);
-      return { ruas: ruas.map((g) => ({ id: g.id, nome: g.nome })), bairros: bairros.map((b) => b.nome), doServidor: false };
+      return {
+        ruas: ruas.map((g) => ({ id: g.id, nome: g.nome })),
+        bairros: bairros.map((b) => b.nome),
+        // Sem rede: delimitada se já se soube (com rede) que o era.
+        quadra: { codigo: quadra, mapeada: guardada !== null },
+        doServidor: false,
+      };
     },
 
     /** Morada a menos de 15 m? undefined = não se sabe (sem rede; o servidor volta a ver ao receber). */

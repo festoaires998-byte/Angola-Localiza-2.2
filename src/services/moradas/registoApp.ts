@@ -21,6 +21,7 @@ export const servicoRegisto = criarServicoRegisto({
   referencias: {
     guardarVarias: async (r) => (await referencias()).guardarVarias(r),
     listar: async (tipo, pai) => (await referencias()).listar(tipo, pai),
+    obter: async (tipo, id) => (await referencias()).obter(tipo, id),
   },
   preferencias: {
     obter: async (c) => (await preferencias()).obter(c),

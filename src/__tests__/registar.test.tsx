@@ -32,9 +32,15 @@ jest.mock('@/services/imagem/fotoComMarca', () => ({
 }));
 
 let mockVerificacao = 'verificado';
-let mockRuas: { ruas: { id: string; nome: string }[]; bairros: string[]; doServidor: boolean } = {
+let mockRuas: {
+  ruas: { id: string; nome: string }[];
+  bairros: string[];
+  quadra: { codigo: string; mapeada: boolean };
+  doServidor: boolean;
+} = {
   ruas: [{ id: 'r1', nome: 'Rua da Missão' }],
   bairros: ['Académico', 'Cidade Alta'],
+  quadra: { codigo: 'Q-11807-14361', mapeada: true },
   doServidor: true,
 };
 const mockRuasPerto = jest.fn(async (_lat: number, _lng: number, _online: boolean) => mockRuas);
@@ -102,7 +108,12 @@ async function preencherEFotografar() {
 beforeEach(() => {
   mockOnline = true;
   mockVerificacao = 'verificado';
-  mockRuas = { ruas: [{ id: 'r1', nome: 'Rua da Missão' }], bairros: ['Académico', 'Cidade Alta'], doServidor: true };
+  mockRuas = {
+    ruas: [{ id: 'r1', nome: 'Rua da Missão' }],
+    bairros: ['Académico', 'Cidade Alta'],
+    quadra: { codigo: 'Q-11807-14361', mapeada: true },
+    doServidor: true,
+  };
   mockDuplicado = null;
   mockMedida = medida(CENTRO);
   [mockBack, mockTirar, mockFotoComMarca, mockEnviar, mockMedirDeNovo, mockRuasPerto].forEach((f) => f.mockClear());
@@ -215,6 +226,23 @@ describe('Registar morada', () => {
     expect(mockEnviar).toHaveBeenCalledWith('user-1', expect.objectContaining({ tipo: 'Loja', tipoOutro: '' }));
   });
 
+  test('quadra delimitada: etiqueta só de leitura "📍 Quadra: …" junto à rua (não é um campo)', async () => {
+    await desenhar();
+    expect(screen.getByText('📍 Quadra: Q-11807-14361')).toBeTruthy();
+    expect(screen.getByLabelText('Quadra Q-11807-14361')).toBeTruthy();
+    expect(screen.queryByText(/ainda não está delimitada/)).toBeNull();
+    // Não há nenhum campo para escrever a quadra.
+    expect(screen.queryByLabelText(/^Quadra$/)).toBeNull();
+    expect(screen.queryByDisplayValue('Q-11807-14361')).toBeNull();
+  });
+
+  test('quadra ainda não delimitada: sem etiqueta, só um aviso discreto', async () => {
+    mockRuas = { ...mockRuas, quadra: { codigo: 'Q-11807-14361', mapeada: false } };
+    await desenhar();
+    expect(screen.queryByText(/📍 Quadra:/)).toBeNull();
+    expect(screen.getByText('A quadra desta zona ainda não está delimitada.')).toBeTruthy();
+  });
+
   test('bairro obrigatório: sem ele o "Falta" avisa e o botão fica desligado; "Outro bairro" deixa escrever', async () => {
     await desenhar();
     expect(screen.getByText('Bairro')).toBeTruthy();
@@ -295,7 +323,7 @@ describe('Registar morada', () => {
   test('sem rede: escreve a rua à mão e o registo fica guardado para enviar depois', async () => {
     mockOnline = false;
     mockVerificacao = 'desconhecido';
-    mockRuas = { ruas: [], bairros: [], doServidor: false };
+    mockRuas = { ruas: [], bairros: [], quadra: { codigo: 'Q-11807-14361', mapeada: false }, doServidor: false };
     await desenhar();
     expect(screen.getByText(/Sem rede não deu para confirmar a tua verificação/)).toBeTruthy();
     expect(screen.getByText(/Sem rede e sem ruas guardadas desta zona/)).toBeTruthy();

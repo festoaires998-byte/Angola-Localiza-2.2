@@ -27,7 +27,7 @@ import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useSessao } from '@/hooks/useSessao';
 import { fotoComMarcaDeAgua } from '@/services/imagem/fotoComMarca';
-import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
+import { podeRegistar, type QuadraDoPonto, type Verificacao } from '@/services/moradas/registo';
 import { servicoRegisto } from '@/services/moradas/registoApp';
 
 const RUA_NOVA = '__nova__';
@@ -77,6 +77,7 @@ export default function RegistarMorada() {
   const [ruas, setRuas] = useState<Rua[]>([]);
   const [ruasDoServidor, setRuasDoServidor] = useState(false);
   const [bairros, setBairros] = useState<string[]>([]);
+  const [quadraDoPonto, setQuadraDoPonto] = useState<QuadraDoPonto | null>(null);
   const [bairro, setBairro] = useState<string | null>(null);
   const [bairroNome, setBairroNome] = useState('');
   const [duplicado, setDuplicado] = useState<Duplicado | null | undefined>(undefined);
@@ -110,6 +111,7 @@ export default function RegistarMorada() {
       if (!ativo) return;
       setRuas(r.ruas);
       setBairros(r.bairros);
+      setQuadraDoPonto(r.quadra);
       setRuasDoServidor(r.doServidor);
     });
     return () => {
@@ -266,6 +268,13 @@ export default function RegistarMorada() {
             autoCapitalize="sentences"
           />
         ) : null}
+        {quadraDoPonto?.mapeada ? (
+          <View style={estilos.chip} accessibilityLabel={`Quadra ${quadraDoPonto.codigo}`}>
+            <Text style={estilos.textoChip}>{`📍 Quadra: ${quadraDoPonto.codigo}`}</Text>
+          </View>
+        ) : quadraDoPonto ? (
+          <Texto suave>A quadra desta zona ainda não está delimitada.</Texto>
+        ) : null}
         <Text style={estilos.rotulo}>Rua</Text>
         {ruas.length > 0 ? (
           <Opcoes
@@ -361,5 +370,14 @@ const estilos = StyleSheet.create({
   bloco: { gap: 10 },
   rotulo: { fontSize: 15, color: CORES.textoSuave, fontWeight: '600' },
   falta: { gap: 4 },
+  chip: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: CORES.primaria,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  textoChip: { fontSize: TAMANHOS.texto, fontWeight: '700', color: CORES.primaria },
   itemFalta: { fontSize: TAMANHOS.textoPequeno, color: CORES.texto },
 });
