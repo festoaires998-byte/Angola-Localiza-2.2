@@ -9,8 +9,8 @@ coisas ao dono do projeto em português simples.
 - **Builds da Expo (EAS) só quando o dono pedir.** O saldo de dados é curto:
   nunca correr o workflow `build-android.yml` nem `eas build` por iniciativa própria.
 - **Merge de PR só com autorização explícita do dono**, dada para cada PR.
-- **Cada PR tem testes para tudo o que muda** (Jest; e fluxos do Maestro em
-  `.maestro/` quando muda um ecrã que o emulador consegue testar).
+- **Cada PR tem testes para tudo o que muda** (Jest: lógica, base de dados local
+  com sql.js e ecrãs).
 - **A descrição de cada PR segue `.github/pull_request_template.md`**, com as
   secções "Como foi testado" e "O que só se pode testar num telemóvel real".
 - Antes de enviar: `npx tsc --noEmit` e `npm test` sem erros.
@@ -23,7 +23,7 @@ coisas ao dono do projeto em português simples.
 ## Testes
 
 - `npm test`: Jest (lógica, base de dados local com sql.js, ecrãs).
-- `.github/workflows/testes-emulador.yml`: compila o APK no GitHub, corre os
-  fluxos do Maestro num emulador Android (GPS falso no Huambo, modo avião) e
-  guarda capturas de ecrã. Usa a conta de teste dos segredos `TESTE_EMAIL` e
-  `TESTE_PASSWORD` (cidadão, sem cargos).
+- `npx tsc --noEmit`: tipos.
+- O que não se pode provar com testes automáticos (GPS verdadeiro, câmara,
+  instalação do APK…) vai na secção "O que só se pode testar num telemóvel
+  real" da descrição do PR.

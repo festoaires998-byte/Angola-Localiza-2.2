@@ -58,7 +58,6 @@ export default function Entrar() {
         keyboardType="email-address"
         textContentType="emailAddress"
         placeholder="nome@exemplo.ao"
-        testID="campo-email"
       />
       <Campo
         rotulo="Palavra-passe"
@@ -68,7 +67,6 @@ export default function Entrar() {
         autoComplete="current-password"
         textContentType="password"
         onSubmitEditing={() => void carregar()}
-        testID="campo-palavra-passe"
       />
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
       <Botao titulo="Entrar" aCarregar={aEntrar} onPress={() => void carregar()} />
