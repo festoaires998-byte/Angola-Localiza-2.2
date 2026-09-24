@@ -25,7 +25,7 @@ function novoId() {
 }
 
 /** Padrão do ilike (%, _ e \ para escapar) → expressão regular. */
-function ilikeParaRegex(padrao: string): string {
+export function ilikeParaRegex(padrao: string): string {
   let re = '';
   for (let i = 0; i < padrao.length; i++) {
     const c = padrao[i];

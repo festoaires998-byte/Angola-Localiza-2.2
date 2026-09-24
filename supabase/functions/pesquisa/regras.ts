@@ -7,7 +7,7 @@
 // - uma morada "Privada" só aparece a quem a criou;
 // - nunca devolve contactos, quem criou nem outros dados internos.
 
-/** Estados de morada que se podem encontrar (os mesmos da resolve-address). */
+/** Estados de morada que se podem encontrar (pesquisa e cartão público). */
 export const ESTADOS_PUBLICOS = ["APPROVED", "OFFICIAL", "PUBLISHED"] as const;
 
 export const MIN_TEXTO = 3;
@@ -44,6 +44,37 @@ export function interpretar(entrada: unknown): Pedido | null {
   return { tipo: "texto", valor: q };
 }
 
+/**
+ * Cartão público de uma morada (link "?endereco=" do site), sem sessão:
+ * só o código postal completo ou o Plus Code completo, nunca texto livre.
+ */
+export function interpretarCodigo(entrada: unknown): { tipo: "codigo_postal" | "plus_code"; valor: string } | null {
+  if (typeof entrada !== "string") return null;
+  const valor = entrada.replace(/\s+/g, "").toUpperCase();
+  if (CODIGO_POSTAL.test(valor)) return { tipo: "codigo_postal", valor };
+  if (/^[23456789CFGHJMPQRVWX]{8}\+[23456789CFGHJMPQRVWX]{2,3}$/.test(valor)) return { tipo: "plus_code", valor };
+  return null;
+}
+
+/** Sem sessão só se veem moradas aprovadas que não são "Privadas". */
+export function podeVerPublico(m: Pick<MoradaLida, "status" | "visibility_level">): boolean {
+  return (ESTADOS_PUBLICOS as readonly string[]).includes(m.status ?? "") && m.visibility_level !== "PRIVATE";
+}
+
+/** O que o cartão público mostra (nada de posição exata, estado interno ou quem criou). */
+export interface CartaoPublico {
+  postal_code: string | null;
+  plus_code: string | null;
+  house_number: string | null;
+  reference: string | null;
+  rua: string | null;
+  quadra: string | null;
+}
+
+export function cartaoPublico(m: MoradaLida, rua: string | null, quadra: string | null): CartaoPublico {
+  return { postal_code: m.postal_code, plus_code: m.plus_code, house_number: m.house_number, reference: m.reference, rua, quadra };
+}
+
 /** Padrão para ilike com o texto tal e qual (os %, _ e \ escritos pela pessoa não são curingas). */
 export function padraoContem(texto: string): string {
   return `%${texto.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -62,6 +93,7 @@ export interface MoradaLida {
   longitude: number | null;
   street_id: string | null;
   neighborhood_id: string | null;
+  quadra_id?: string | null;
 }
 
 /** Colunas lidas das moradas (created_by só serve para decidir; não sai na resposta). */
