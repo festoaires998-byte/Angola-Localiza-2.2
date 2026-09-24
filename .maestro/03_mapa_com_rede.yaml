@@ -1,0 +1,49 @@
+appId: ao.angolalocaliza.app
+name: Mapa e Moradas com rede
+---
+# O GPS falso (adb emu geo fix) é enviado pelo script, uma vez por segundo.
+- extendedWaitUntil:
+    visible: "Média de .* leituras do GPS com menos de ±10 m\\."
+    timeout: 90000
+- assertVisible: "5FVQ6PFQ\\+HJ9"
+# Código confirmado pelo servidor (o "-N" depende das moradas que já existem na célula).
+- extendedWaitUntil:
+    visible: "AO-HUA-MNFQR6JW(-[0-9]+)?-90"
+    timeout: 60000
+- takeScreenshot: capturas/02_mapa_com_rede
+
+# O painel ocupa a metade de baixo do ecrã: desliza dentro dele (no centro do
+# ecrã estaria a mexer no mapa).
+- swipe:
+    start: 50%, 85%
+    end: 50%, 60%
+- extendedWaitUntil:
+    visible: "Confirmado"
+    timeout: 60000
+- assertVisible: "Estás junto ao limite entre duas células do código postal.*"
+- assertVisible: "Huambo"
+- takeScreenshot: capturas/03_mapa_limite_e_provincia
+
+# Mapa para usar sem rede.
+- repeat:
+    times: 6
+    while:
+      notVisible: "Descarregar mapa"
+    commands:
+      - swipe:
+          start: 50%, 85%
+          end: 50%, 55%
+- tapOn: "Descarregar mapa"
+- extendedWaitUntil:
+    notVisible: "Mapa para usar sem rede"
+    timeout: 180000
+- assertNotVisible: "A descarregar o mapa…"
+- takeScreenshot: capturas/04_mapa_descarregado
+
+# Moradas (com rede: lê a lista do servidor e guarda-a no telemóvel).
+- tapOn: "Moradas"
+- extendedWaitUntil:
+    visible: "As minhas moradas"
+    timeout: 30000
+- takeScreenshot: capturas/05_moradas_com_rede
+- tapOn: "Mapa"

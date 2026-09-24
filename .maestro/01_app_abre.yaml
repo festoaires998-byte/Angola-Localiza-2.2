@@ -1,0 +1,12 @@
+appId: ao.angolalocaliza.app
+name: A app abre
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "Entra com o teu email e a tua palavra-passe."
+    timeout: 90000
+- assertVisible: "Entrar"
+- takeScreenshot: capturas/01_ecra_de_entrada
