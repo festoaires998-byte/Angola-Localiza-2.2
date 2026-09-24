@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 
 import type { PerfilLocal } from '@/database/repositories/perfilLocal';
 import { decidirAcesso } from '@/domain/organizacao/cargos';
@@ -299,7 +299,10 @@ describe('nome completo obrigatório', () => {
     comSessao([], null, AAL1_SEM_FATOR, null);
     const r = renderRouter('./src/app', { initialUrl: '/' });
     await waitFor(() => expect(r.getPathname()).toBe('/o-teu-nome'));
-    comSessao([], null, AAL1_SEM_FATOR, 'Ana Silva');
+    // A sessão muda com a app aberta (como o USER_UPDATED do Supabase): dentro de act.
+    await act(async () => {
+      comSessao([], null, AAL1_SEM_FATOR, 'Ana Silva');
+    });
     await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
   });
 
