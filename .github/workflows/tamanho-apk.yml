@@ -23,6 +23,11 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
+
+      # O eas lê a configuração da app (app.json + plugins), que precisa das dependências.
+      - name: Instalar dependências
+        run: npm ci
 
       - name: "Instalar o eas-cli (só leitura: lista builds, não cria nenhum)"
         uses: expo/expo-github-action@v8
