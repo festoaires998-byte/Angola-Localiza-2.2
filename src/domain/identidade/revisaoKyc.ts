@@ -18,6 +18,10 @@ export function podeReverKyc(cargos: readonly unknown[] | null | undefined): boo
 export interface PedidoKyc {
   userId: string;
   enviadoEm: string | null;
+  /** Da conta do cidadão (null se não houver). */
+  email: string | null;
+  nome: string | null;
+  telefone: string | null;
   /** Links temporários (10 minutos) para as fotos privadas. null se a foto falta. */
   frente: string | null;
   verso: string | null;
@@ -40,6 +44,9 @@ export function lerPedidosKyc(r: unknown): PedidoKyc[] {
     .map((p) => ({
       userId: String(p.user_id),
       enviadoEm: texto(p.submitted_at),
+      email: texto(p.email),
+      nome: texto(p.name),
+      telefone: texto(p.phone),
       frente: texto(p.front_url),
       verso: texto(p.back_url),
       selfie: texto(p.selfie_url),
@@ -68,6 +75,20 @@ export function erroMotivo(motivo: string): string | null {
 
 /** Id curto para mostrar (os 8 primeiros caracteres). */
 export const idCurto = (userId: string) => userId.slice(0, 8);
+
+/** Como identificar o cidadão no ecrã: o nome, senão o email, senão o id curto. */
+export function nomeDoPedido(p: Pick<PedidoKyc, 'userId' | 'nome' | 'email'>): string {
+  return p.nome ?? p.email ?? `Cidadão ${idCurto(p.userId)}`;
+}
+
+/** As outras informações (email, telefone e id), sem repetir o que já está no nome. */
+export function detalhesDoPedido(p: Pick<PedidoKyc, 'userId' | 'nome' | 'email' | 'telefone'>): string[] {
+  const linhas: string[] = [];
+  if (p.nome && p.email) linhas.push(`Email: ${p.email}`);
+  if (p.telefone) linhas.push(`Telefone: ${p.telefone}`);
+  if (p.nome || p.email) linhas.push(`Id: ${idCurto(p.userId)}`);
+  return linhas;
+}
 
 /** "24/09/2026 14:05" (hora do telemóvel). */
 export function dataEnvio(iso: string | null): string {

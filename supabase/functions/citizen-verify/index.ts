@@ -1,9 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-import { BUCKET, estadoPublico, validarPedido, validarRevisao } from "./regras.ts";
+import { BUCKET, contactoDoCidadao, estadoPublico, validarPedido, validarRevisao } from "./regras.ts";
 
-// Angola Localiza - Citizen Verify Service (v3)
+// Angola Localiza - Citizen Verify Service (v4)
 // Verificacao simples do cidadao comum (para poder registar casas/lojas/escolas):
 // BI frente + BI verso + selfie (por camara, com marca de agua aplicada no cliente),
 // no bucket PRIVADO kyc-artifacts.
@@ -14,6 +14,8 @@ import { BUCKET, estadoPublico, validarPedido, validarRevisao } from "./regras.t
 //     PENDING_REVIEW). citizen_id_verified (o que a field-service consulta) so
 //     fica true quando um administrador aprova (action=review).
 //   - list_pending / review: so administradores (is_admin).
+// v4: list_pending devolve tambem o email, o nome (se a conta o tiver) e o
+//   telefone do cidadao, para o administrador saber quem esta a rever.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -79,15 +81,18 @@ Deno.serve(async (req: Request) => {
 
       if (action === "list_pending") {
         const { data, error } = await supabase.from("user_identity")
-          .select("user_id, citizen_id_photo_front_url, citizen_id_photo_back_url, citizen_selfie_url, citizen_id_submitted_at")
+          .select("user_id, phone, citizen_id_photo_front_url, citizen_id_photo_back_url, citizen_selfie_url, citizen_id_submitted_at")
           .eq("citizen_id_status", "PENDING_REVIEW").order("citizen_id_submitted_at", { ascending: true }).limit(30);
         if (error) return resposta({ error: error.message }, 400);
         const pedidos = [];
         for (const p of data ?? []) {
           // Links temporários (10 min) para o administrador ver as fotos privadas.
           const assinar = async (nome: string | null) => nome ? (await supabase.storage.from(BUCKET).createSignedUrl(nome, 600)).data?.signedUrl ?? null : null;
+          // Email e nome da conta (auth.users): so a service role os le.
+          const { data: conta } = await supabase.auth.admin.getUserById(p.user_id);
           pedidos.push({
             user_id: p.user_id, submitted_at: p.citizen_id_submitted_at,
+            ...contactoDoCidadao(conta?.user ?? null, p.phone),
             front_url: await assinar(p.citizen_id_photo_front_url),
             back_url: await assinar(p.citizen_id_photo_back_url),
             selfie_url: await assinar(p.citizen_selfie_url),

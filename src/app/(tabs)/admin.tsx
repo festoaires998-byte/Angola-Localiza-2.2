@@ -6,9 +6,11 @@ import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
 import {
   dataEnvio,
+  detalhesDoPedido,
   erroMotivo,
   idCurto,
   MOTIVOS_RAPIDOS,
+  nomeDoPedido,
   podeReverKyc,
   VALIDADE_LINKS_MS,
   type PedidoKyc,
@@ -66,12 +68,14 @@ export default function Admin() {
   };
 
   const decidido = (userId: string, aprovado: boolean) => {
+    const p = pedidos?.find((x) => x.userId === userId);
+    const quem = p ? nomeDoPedido(p) : idCurto(userId);
     setPedidos((l) => (l ?? []).filter((p) => p.userId !== userId));
     setAberto(null);
     setAviso(
       aprovado
-        ? { tipo: 'sucesso', texto: `Verificação de ${idCurto(userId)} aprovada ✅ O cidadão já pode registar moradas.` }
-        : { tipo: 'info', texto: `Verificação de ${idCurto(userId)} recusada. O cidadão recebe o motivo.` },
+        ? { tipo: 'sucesso', texto: `Verificação de ${quem} aprovada ✅ O cidadão já pode registar moradas.` }
+        : { tipo: 'info', texto: `Verificação de ${quem} recusada. O cidadão recebe o motivo.` },
     );
   };
 
@@ -102,9 +106,14 @@ export default function Admin() {
           {pedidos !== null && pedidos.length === 0 ? <Texto>Não há verificações por rever. 👍</Texto> : null}
           {(pedidos ?? []).map((p) => (
             <Cartao key={p.userId}>
-              <Text style={estilos.nomePedido}>{`Cidadão ${idCurto(p.userId)}`}</Text>
+              <Text style={estilos.nomePedido}>{nomeDoPedido(p)}</Text>
+              {detalhesDoPedido(p).map((l) => (
+                <Texto key={l} suave>
+                  {l}
+                </Texto>
+              ))}
               <Texto suave>{`Enviado a ${dataEnvio(p.enviadoEm)}`}</Texto>
-              <Botao titulo={`Rever ${idCurto(p.userId)}`} onPress={() => void abrir(p.userId)} desativado={aCarregar} />
+              <Botao titulo={`Rever ${nomeDoPedido(p)}`} onPress={() => void abrir(p.userId)} desativado={aCarregar} />
             </Cartao>
           ))}
           <Botao titulo="Atualizar" variante="secundario" onPress={() => void carregar()} aCarregar={aCarregar} />
@@ -145,7 +154,13 @@ function RevisaoPedido({
 
   return (
     <View style={estilos.bloco}>
-      <Text style={estilos.nomePedido}>{`Cidadão ${idCurto(pedido.userId)} · enviado a ${dataEnvio(pedido.enviadoEm)}`}</Text>
+      <Text style={estilos.nomePedido}>{nomeDoPedido(pedido)}</Text>
+      {detalhesDoPedido(pedido).map((l) => (
+        <Texto key={l} suave>
+          {l}
+        </Texto>
+      ))}
+      <Texto suave>{`Enviado a ${dataEnvio(pedido.enviadoEm)}`}</Texto>
       <Texto suave>
         Confirma que o BI é legível, que a cara da selfie é a do BI e que a segunda selfie mostra o gesto escrito na
         marca de água.

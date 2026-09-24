@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { BUCKET, estadoPublico, validarPedido, validarRevisao } from '../../supabase/functions/citizen-verify/regras';
+import { BUCKET, contactoDoCidadao, estadoPublico, validarPedido, validarRevisao } from '../../supabase/functions/citizen-verify/regras';
 import { lerEstadoVerificacao } from '@/api/verificacaoNucleo';
 import { estadoDoServidor, nomeNoBucket } from '@/domain/identidade/verificacaoSimples';
 
@@ -74,6 +74,32 @@ describe('citizen-verify v3: regras do pedido', () => {
     expect(validarRevisao({ user_id: UID, decision: 'reject' })).toMatchObject({ ok: false });
     expect(validarRevisao({ user_id: 'x', decision: 'approve' })).toMatchObject({ ok: false });
     expect(validarRevisao({ user_id: UID, decision: 'talvez' })).toMatchObject({ ok: false });
+  });
+});
+
+describe('citizen-verify v4: quem é o cidadão (para o administrador)', () => {
+  test('email e nome da conta, telefone de user_identity (ou da conta)', () => {
+    expect(
+      contactoDoCidadao({ email: 'ana@exemplo.ao', phone: '', user_metadata: { full_name: ' Ana Silva ' } }, '+244923000000'),
+    ).toEqual({ email: 'ana@exemplo.ao', name: 'Ana Silva', phone: '+244923000000' });
+    expect(contactoDoCidadao({ email: 'b@x.ao', phone: '+244911', user_metadata: { name: 'Bento' } }, null)).toEqual({
+      email: 'b@x.ao',
+      name: 'Bento',
+      phone: '+244911',
+    });
+    expect(contactoDoCidadao({ email: null, user_metadata: { nome: 'Carla' } }, undefined)).toMatchObject({ name: 'Carla' });
+    // Conta que já não existe, ou sem dados.
+    expect(contactoDoCidadao(null, null)).toEqual({ email: null, name: null, phone: null });
+    expect(contactoDoCidadao({ email: '  ', user_metadata: { full_name: 42 } }, '  ')).toEqual({ email: null, name: null, phone: null });
+  });
+
+  test('list_pending junta o contacto a cada pedido (só administradores chegam aqui)', () => {
+    const fonte = ler('supabase/functions/citizen-verify/index.ts');
+    const lista = fonte.slice(fonte.indexOf('if (action === "list_pending") {'), fonte.indexOf('const r = validarRevisao(body);'));
+    expect(lista).toContain('supabase.auth.admin.getUserById(p.user_id)');
+    expect(lista).toContain('...contactoDoCidadao(conta?.user ?? null, p.phone),');
+    expect(lista).toContain('.select("user_id, phone, ');
+    expect(fonte.indexOf('rpc("is_admin"')).toBeLessThan(fonte.indexOf('getUserById'));
   });
 });
 

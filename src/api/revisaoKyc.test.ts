@@ -16,7 +16,9 @@ afterEach(() => {
 describe('api da revisão das verificações', () => {
   test('list_pending e review na citizen-verify, com o corpo que o servidor espera', async () => {
     mockChamar.mockResolvedValueOnce({ pending: [{ user_id: 'u1', front_url: 'https://x/f' }] });
-    expect(await listarPedidosKyc()).toEqual([{ userId: 'u1', enviadoEm: null, frente: 'https://x/f', verso: null, selfie: null }]);
+    expect(await listarPedidosKyc()).toEqual([
+      { userId: 'u1', enviadoEm: null, email: null, nome: null, telefone: null, frente: 'https://x/f', verso: null, selfie: null },
+    ]);
     expect(mockChamar).toHaveBeenLastCalledWith('citizen-verify', 'list_pending', expect.anything());
 
     await decidirPedidoKyc('u1', { aprovar: true });
