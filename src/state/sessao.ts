@@ -2,6 +2,7 @@ import { nivelGarantia } from '@/api/auth';
 import { carregarPerfil } from '@/api/perfil';
 import { supabase } from '@/api/supabase';
 import { abrirBaseDados } from '@/database/client';
+import { nomeDaConta } from '@/domain/identidade/nome';
 import { criarRepositorioPerfilLocal } from '@/database/repositories/perfilLocal';
 
 import { criarSessao } from './criarSessao';
@@ -18,7 +19,7 @@ export const sessao = criarSessao({
       // A documentação do supabase-js pede para não chamar o cliente dentro
       // deste callback (pode bloquear): o trabalho corre logo a seguir.
       setTimeout(() => {
-        ouvinte(s?.user ? { id: s.user.id, email: s.user.email ?? null } : null);
+        ouvinte(s?.user ? { id: s.user.id, email: s.user.email ?? null, nome: nomeDaConta(s.user.user_metadata) } : null);
       }, 0);
     });
     return () => data.subscription.unsubscribe();

@@ -1,5 +1,6 @@
 import type { Factor } from '@supabase/supabase-js';
 
+import { normalizarNome } from '@/domain/identidade/nome';
 import { cofreApp } from '@/services/cofre/cofreApp';
 
 import { criarAdesao, type ResultadoAdesao, type ResultadoConsumo } from './adesao';
@@ -52,16 +53,26 @@ export async function entrar(email: string, password: string): Promise<Resultado
 export async function criarConta(
   email: string,
   password: string,
+  nome: string,
   redirecionarPara?: string,
 ): Promise<{ userId: string | null; precisaConfirmar: boolean }> {
   const { data, error } = await supabase.auth.signUp({
     email: email.trim(),
     password,
-    ...(redirecionarPara ? { options: { emailRedirectTo: redirecionarPara } } : {}),
+    options: {
+      data: { full_name: normalizarNome(nome) },
+      ...(redirecionarPara ? { emailRedirectTo: redirecionarPara } : {}),
+    },
   });
   if (error) falhar(error);
   if (data.session) await consumirAdesaoPendente();
   return { userId: data.user?.id ?? null, precisaConfirmar: !data.session };
+}
+
+/** Guarda o nome completo na conta (user_metadata.full_name). Precisa de rede. */
+export async function guardarNome(nome: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ data: { full_name: normalizarNome(nome) } });
+  if (error) falhar(error);
 }
 
 /**

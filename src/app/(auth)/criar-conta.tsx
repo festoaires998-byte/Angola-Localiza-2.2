@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { criarConta, eErroDeRede, ErroAuth } from '@/api/auth';
 import { Botao, Caixa, Campo, Ecra, Ligacao, Texto, Titulo } from '@/components/ui';
+import { erroNome } from '@/domain/identidade/nome';
 import { useSessao } from '@/hooks/useSessao';
 import { LINK_EMAIL_CONFIRMADO } from '@/services/links/linksProfundos';
 import { estaOnline } from '@/services/rede/conectividade';
@@ -12,6 +13,7 @@ const SEM_REDE = 'Precisas de internet para criar conta. Liga os dados móveis o
 export default function CriarConta() {
   const router = useRouter();
   const { utilizador } = useSessao();
+  const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [repetir, setRepetir] = useState('');
@@ -22,13 +24,15 @@ export default function CriarConta() {
 
   async function carregar() {
     setErro(null);
+    const problemaNome = erroNome(nome);
+    if (problemaNome) return setErro(problemaNome);
     if (!email.trim()) return setErro('Escreve o teu email.');
     if (password.length < 6) return setErro('A palavra-passe tem de ter pelo menos 6 caracteres.');
     if (password !== repetir) return setErro('As duas palavras-passe não são iguais.');
     setACriar(true);
     try {
       if (!(await estaOnline())) return setErro(SEM_REDE);
-      const r = await criarConta(email, password, LINK_EMAIL_CONFIRMADO);
+      const r = await criarConta(email, password, nome, LINK_EMAIL_CONFIRMADO);
       if (r.precisaConfirmar) {
         router.replace({ pathname: '/verifica-email', params: { email: email.trim() } });
       }
@@ -45,6 +49,16 @@ export default function CriarConta() {
     <Ecra>
       <Titulo>Criar conta</Titulo>
       <Texto>Usa um email a que tenhas acesso: vamos enviar-te uma mensagem para o confirmar.</Texto>
+      <Campo
+        rotulo="Nome completo"
+        value={nome}
+        onChangeText={setNome}
+        autoCapitalize="words"
+        autoComplete="name"
+        textContentType="name"
+        placeholder="Ana Maria Silva"
+        maxLength={80}
+      />
       <Campo
         rotulo="Email"
         value={email}

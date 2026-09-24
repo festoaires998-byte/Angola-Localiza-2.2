@@ -5,7 +5,8 @@ Ecrãs de entrada. O grupo `(auth)` não aparece no endereço (ex.: `/entrar`).
 | Ecrã | Endereço | Quando |
 | --- | --- | --- |
 | Entrar | `/entrar` | Sem sessão. Sem rede, explica que é preciso internet para entrar pela primeira vez. |
-| Criar conta | `/criar-conta` | Depois de criar, vai para "Verifica o teu email". |
+| Criar conta | `/criar-conta` | Nome completo (obrigatório), email e palavra-passe. Depois de criar, vai para "Verifica o teu email". |
+| O teu nome | `/o-teu-nome` | Contas sem nome (antigas ou do site): pede o nome completo antes de abrir a app. |
 | Verifica o teu email | `/verifica-email` | Explica que tem de abrir o link do email. |
 | Esqueci-me da palavra-passe | `/recuperar-password` | Envia o email com o link `angolalocaliza://nova-password`. |
 | Nova palavra-passe | `/nova-password` | Aberto pelo link do email de recuperação. |

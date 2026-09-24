@@ -5,6 +5,8 @@ import type { PerfilLocal } from '@/database/repositories/perfilLocal';
 export interface UtilizadorSessao {
   id: string;
   email: string | null;
+  /** Nome completo da conta (user_metadata.full_name); null se ainda não tem. */
+  nome?: string | null;
 }
 
 export interface ResultadoPerfil {

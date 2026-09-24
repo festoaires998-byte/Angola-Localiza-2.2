@@ -18,12 +18,6 @@
 
 ## Decidido, por fazer
 
-### Nome obrigatório no registo da conta (a seguir)
-
-Hoje as contas só têm email, sem nome. O registo na app vai pedir o nome
-completo como campo obrigatório, e o nome passa a aparecer na revisão das
-verificações no separador Admin.
-
 ### Retenção das fotos da verificação simples: 90 dias
 
 As fotos do BI (frente e verso) e as selfies no bucket `kyc-artifacts` são
@@ -46,3 +40,10 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - Guardar a estrutura completa da base de dados no repositório (migração inicial).
 - Testes das Edge Functions a correr de verdade, com uma base de dados falsa.
 - Relatório de erros da app, leve, para gastar poucos dados.
+
+### Site antigo: pedir o nome completo no registo
+
+- **Desde:** a app passou a exigir o nome completo (user_metadata.full_name).
+- **O quê:** quem cria conta no site ainda fica sem nome. A app pede-o no
+  primeiro acesso ("Como te chamas?"), mas o site devia pedi-lo no registo,
+  com o mesmo campo (`options.data.full_name`).
