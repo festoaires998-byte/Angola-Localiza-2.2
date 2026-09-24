@@ -34,6 +34,7 @@ async function montar() {
         quadra_code: codigoQuadra(lat, lng),
         streets: [{ id: 'r1', name: 'Rua da Missão' }, { id: 'r2', name: 'Rua A' }],
         neighborhoods_nearby: ['Académico', 'Cidade Alta'],
+        quadra_id: 'quadra-uuid-1',
       }),
     ),
     procurarDuplicado: jest.fn(async (_lat: number, _lng: number) => lerDuplicado({ found: true, distance_meters: 8.4, postal_code: 'AO-HUA-X' })),
@@ -54,9 +55,12 @@ describe('ler as respostas do field-service', () => {
   test('ruas da quadra (ignora linhas sem id ou nome)', () => {
     expect(lerRuasDaQuadra({ quadra_code: 'Q1-2', streets: [{ id: 'a', name: 'Rua A' }, { id: 'b' }] })).toEqual({
       quadra: 'Q1-2',
+      quadraMapeada: false,
       ruas: [{ id: 'a', nome: 'Rua A' }],
       bairros: [],
     });
+    // A função só manda quadra_id quando a quadra já existe (está delimitada).
+    expect(lerRuasDaQuadra({ quadra_code: 'Q1-2', quadra_id: 'uuid', streets: [] }).quadraMapeada).toBe(true);
     // Bairros perto: sem vazios nem repetidos, pela ordem do servidor (mais usados primeiro).
     expect(
       lerRuasDaQuadra({ quadra_code: 'Q1-2', streets: [], neighborhoods_nearby: ['Académico', ' ', 'Académico', 7, 'Cidade Alta'] }).bairros,
@@ -84,14 +88,28 @@ describe('registar uma morada', () => {
     expect(await t.servico.ruasPerto(CENTRO.latitude, CENTRO.longitude, true)).toEqual({
       ruas: [{ id: 'r1', nome: 'Rua da Missão' }, { id: 'r2', nome: 'Rua A' }],
       bairros: ['Académico', 'Cidade Alta'],
+      quadra: { codigo: codigoQuadra(CENTRO.latitude, CENTRO.longitude), mapeada: true },
       doServidor: true,
     });
     const semRede = await t.servico.ruasPerto(CENTRO.latitude, CENTRO.longitude, false);
     expect(semRede.doServidor).toBe(false);
     expect(semRede.ruas.map((r) => r.nome)).toEqual(['Rua A', 'Rua da Missão']);
     expect(semRede.bairros).toEqual(['Académico', 'Cidade Alta']);
-    // Outra quadra, sem nada guardado.
-    expect((await t.servico.ruasPerto(CENTRO.latitude + 0.01, CENTRO.longitude, false)).ruas).toEqual([]);
+    // Sem rede, lembra-se de que a quadra está delimitada.
+    expect(semRede.quadra).toEqual({ codigo: codigoQuadra(CENTRO.latitude, CENTRO.longitude), mapeada: true });
+    // Outra quadra, sem nada guardado: nem ruas, nem quadra delimitada conhecida.
+    const outra = await t.servico.ruasPerto(CENTRO.latitude + 0.01, CENTRO.longitude, false);
+    expect(outra.ruas).toEqual([]);
+    expect(outra.quadra).toEqual({ codigo: codigoQuadra(CENTRO.latitude + 0.01, CENTRO.longitude), mapeada: false });
+  });
+
+  test('quadra ainda não delimitada no servidor: não fica guardada como delimitada', async () => {
+    t.servidor.pedirRuasDaQuadra.mockImplementationOnce(async (lat: number, lng: number) =>
+      lerRuasDaQuadra({ quadra_code: codigoQuadra(lat, lng), streets: [] }),
+    );
+    const r = await t.servico.ruasPerto(CENTRO.latitude, CENTRO.longitude, true);
+    expect(r.quadra.mapeada).toBe(false);
+    expect((await t.servico.ruasPerto(CENTRO.latitude, CENTRO.longitude, false)).quadra.mapeada).toBe(false);
   });
 
   test('duplicado: só com rede; se o servidor falhar, "não se sabe"', async () => {

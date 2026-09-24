@@ -8,6 +8,8 @@ export interface Rua {
 export interface RuasDaQuadra {
   /** Código da quadra (ex.: "Q-11807-14361"): as ruas guardadas no telemóvel ficam por quadra. */
   quadra: string;
+  /** A quadra já existe no servidor (já há registos nela) — "delimitada". */
+  quadraMapeada: boolean;
   ruas: Rua[];
   /** Bairros já registados perto (até ~700 m), dos mais usados para os menos. */
   bairros: string[];
@@ -24,7 +26,13 @@ function texto(valor: unknown): string | null {
 
 /** field-service?action=list_streets_in_quadra */
 export function lerRuasDaQuadra(resposta: unknown): RuasDaQuadra {
-  const r = (resposta ?? {}) as { quadra_code?: unknown; streets?: unknown; neighborhoods_nearby?: unknown; error?: unknown };
+  const r = (resposta ?? {}) as {
+    quadra_code?: unknown;
+    quadra_id?: unknown;
+    streets?: unknown;
+    neighborhoods_nearby?: unknown;
+    error?: unknown;
+  };
   if (texto(r.error)) throw new Error(String(r.error));
   const quadra = texto(r.quadra_code);
   if (!quadra) throw new Error('Resposta do servidor sem quadra.');
@@ -34,7 +42,8 @@ export function lerRuasDaQuadra(resposta: unknown): RuasDaQuadra {
   const bairros = [
     ...new Set((Array.isArray(r.neighborhoods_nearby) ? r.neighborhoods_nearby : []).map(texto).filter((b): b is string => b !== null)),
   ];
-  return { quadra, ruas, bairros };
+  // A função só devolve quadra_id quando a quadra já existe na base de dados.
+  return { quadra, quadraMapeada: texto(r.quadra_id) !== null, ruas, bairros };
 }
 
 /** field-service?action=check_duplicates → null se não há morada a menos de 15 m. */
