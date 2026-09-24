@@ -131,6 +131,9 @@ describe('envio: estados e mensagens', () => {
   test('erros do servidor em palavras simples', () => {
     expect(mensagemErroEnvio('CITIZEN_ID_NOT_VERIFIED: verifica')).toMatch(/identidade ainda não foi verificada/);
     expect(mensagemErroEnvio('CONTACTO_INVALID: x')).toMatch(/telefone/);
+    expect(mensagemErroEnvio('DESTINO_NAO_PERMITIDO: esta morada e privada ou nao existe')).toBe(
+      'Não é possível enviar para esta morada: é privada ou já não existe. Escolhe outra das tuas Moradas.',
+    );
     expect(mensagemErroEnvio('Sem ligação ao servidor.')).toMatch(/Sem ligação/);
     expect(mensagemErroEnvio('transicao invalida: OUT_FOR_DELIVERY -> CANCELLED')).toMatch(/Já não é possível cancelar/);
     expect(mensagemErroEnvio('outra coisa')).toBe('outra coisa');

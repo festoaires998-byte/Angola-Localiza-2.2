@@ -188,3 +188,24 @@ export function contactoValido(telefone: unknown): boolean {
   const local = digitos.startsWith("244") ? digitos.slice(3) : digitos;
   return local.length === 0 || local.length === 9;
 }
+
+/** Estados de uma morada aprovada (as que se podem ver quando não são "Privadas"). */
+export const ESTADOS_MORADA_APROVADA = ["APPROVED", "OFFICIAL", "PUBLISHED"];
+
+/**
+ * Quem cria uma entrega só pode usar como destino uma morada que já pode ver
+ * (a mesma regra da leitura de addresses, migração 20260924090000):
+ * aprovada e não "Privada", criada por quem pede, nos favoritos de quem pede,
+ * ou quem pede é administrador. Sem isto, criar uma entrega servia para ler
+ * uma morada privada de outra pessoa.
+ */
+export function podeUsarComoDestino(
+  morada: { status: string | null; visibility_level: string | null; created_by: string | null } | null,
+  quemPede: string,
+  nosFavoritos: boolean,
+  eAdmin: boolean,
+): boolean {
+  if (!morada) return false;
+  const publica = ESTADOS_MORADA_APROVADA.includes(morada.status ?? "") && morada.visibility_level !== "PRIVATE";
+  return publica || morada.created_by === quemPede || nosFavoritos || eAdmin;
+}

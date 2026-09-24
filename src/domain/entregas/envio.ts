@@ -188,6 +188,9 @@ export function mensagemErroEnvio(mensagem: string): string {
     return 'A tua identidade ainda não foi verificada. Faz a verificação em Conta → Verificação da identidade.';
   }
   if (mensagem.startsWith('CONTACTO_INVALID')) return 'O telefone de quem recebe não é válido (ex.: 923 456 789).';
+  if (mensagem.startsWith('DESTINO_NAO_PERMITIDO')) {
+    return 'Não é possível enviar para esta morada: é privada ou já não existe. Escolhe outra das tuas Moradas.';
+  }
   if (/sem ligação|network|fetch/i.test(mensagem)) return 'Sem ligação ao servidor. Tenta de novo quando houver rede.';
   if (/entrega ja terminou/.test(mensagem)) return 'Esta entrega já terminou.';
   if (/mudou de estado/.test(mensagem)) return 'A entrega mudou entretanto. Atualiza a lista e tenta de novo.';
