@@ -1,0 +1,153 @@
+import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+
+import type { PedidoKyc } from '@/domain/identidade/revisaoKyc';
+
+const pedido = (userId: string, extra: Partial<PedidoKyc> = {}): PedidoKyc => ({
+  userId,
+  enviadoEm: '2026-09-24T09:00:00Z',
+  frente: `https://arquivo/${userId}/frente?token=t`,
+  verso: `https://arquivo/${userId}/verso?token=t`,
+  selfie: `https://arquivo/${userId}/selfie?token=t`,
+  ...extra,
+});
+
+let mockPedidos: PedidoKyc[] = [];
+const mockListar = jest.fn(async () => mockPedidos);
+const mockDecidir = jest.fn(async (_u: string, _d: unknown) => undefined);
+const mockLerFoto = jest.fn(async (url: string) => `data:image/jpeg;base64,${url.length}`);
+jest.mock('@/api/revisaoKyc', () => ({
+  listarPedidosKyc: () => mockListar(),
+  decidirPedidoKyc: (u: string, d: unknown) => mockDecidir(u, d),
+  lerFotoKyc: (url: string) => mockLerFoto(url),
+}));
+
+let mockOnline: boolean | null = true;
+jest.mock('@/hooks/useOnline', () => ({ useOnline: () => mockOnline }));
+let mockCargos: string[] = ['admin_municipal'];
+jest.mock('@/hooks/useSessao', () => ({ useSessao: () => ({ perfil: { cargos: mockCargos } }) }));
+
+const Admin = (require('@/app/(tabs)/admin') as { default: () => React.JSX.Element }).default;
+
+async function desenhar() {
+  render(<Admin />);
+  await act(async () => {});
+}
+async function carregar(nome: string) {
+  await act(async () => {
+    fireEvent.press(screen.getByRole('button', { name: nome }));
+  });
+}
+
+beforeEach(() => {
+  mockPedidos = [pedido('aaaaaaaa-1111-4111-8111-111111111111'), pedido('bbbbbbbb-2222-4222-8222-222222222222')];
+  mockOnline = true;
+  mockCargos = ['admin_municipal'];
+  [mockListar, mockDecidir, mockLerFoto].forEach((f) => f.mockClear());
+});
+
+describe('Admin: verificações por rever', () => {
+  test('lista os pedidos por rever', async () => {
+    await desenhar();
+    expect(mockListar).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Cidadão aaaaaaaa')).toBeTruthy();
+    expect(screen.getByText('Cidadão bbbbbbbb')).toBeTruthy();
+  });
+
+  test('sem pedidos: diz que não há nada', async () => {
+    mockPedidos = [];
+    await desenhar();
+    expect(screen.getByText(/Não há verificações por rever/)).toBeTruthy();
+  });
+
+  test('o auditor vê o separador mas não pode rever (nem pede a lista)', async () => {
+    mockCargos = ['auditor'];
+    await desenhar();
+    expect(screen.getByText(/Só os administradores podem aprovar ou recusar/)).toBeTruthy();
+    expect(mockListar).not.toHaveBeenCalled();
+  });
+
+  test('sem rede: explica e não pede nada', async () => {
+    mockOnline = false;
+    await desenhar();
+    expect(screen.getByText(/Sem rede\. A revisão das verificações precisa de rede/)).toBeTruthy();
+    expect(mockListar).not.toHaveBeenCalled();
+  });
+
+  test('erro do servidor aparece', async () => {
+    mockListar.mockRejectedValueOnce(new Error('apenas administradores'));
+    await desenhar();
+    expect(screen.getByText('Não foi possível ler os pedidos: apenas administradores')).toBeTruthy();
+  });
+
+  test('rever: mostra as 3 fotos (descarregadas para a memória) e aprova com confirmação', async () => {
+    await desenhar();
+    await carregar('Rever aaaaaaaa');
+    expect(mockLerFoto).toHaveBeenCalledTimes(3);
+    expect(screen.getByLabelText('Foto: BI — frente').props.source).toEqual({ uri: expect.stringMatching(/^data:image\/jpeg;base64,/) });
+    expect(screen.getByLabelText('Foto: BI — verso')).toBeTruthy();
+    expect(screen.getByLabelText('Foto: Selfies (normal e com o gesto)')).toBeTruthy();
+
+    await carregar('Aprovar');
+    expect(mockDecidir).not.toHaveBeenCalled(); // precisa de confirmar
+    await carregar('Sim, aprovar');
+    expect(mockDecidir).toHaveBeenCalledWith('aaaaaaaa-1111-4111-8111-111111111111', { aprovar: true });
+    expect(screen.getByText(/Verificação de aaaaaaaa aprovada ✅/)).toBeTruthy();
+    // Sai da lista.
+    expect(screen.queryByText('Cidadão aaaaaaaa')).toBeNull();
+    expect(screen.getByText('Cidadão bbbbbbbb')).toBeTruthy();
+  });
+
+  test('recusar exige motivo; um motivo rápido preenche-o', async () => {
+    await desenhar();
+    await carregar('Rever bbbbbbbb');
+    await carregar('Recusar');
+    const recusar = () => screen.getByRole('button', { name: 'Recusar a verificação' });
+    expect(recusar().props.accessibilityState.disabled).toBe(true);
+
+    fireEvent.changeText(screen.getByLabelText('Motivo da recusa'), 'ab');
+    expect(screen.getByText(/Escreve o motivo da recusa/)).toBeTruthy();
+    expect(recusar().props.accessibilityState.disabled).toBe(true);
+
+    await carregar('Motivo: A foto do BI está desfocada ou ilegível.');
+    expect(recusar().props.accessibilityState.disabled).toBe(false);
+    await carregar('Recusar a verificação');
+    expect(mockDecidir).toHaveBeenCalledWith('bbbbbbbb-2222-4222-8222-222222222222', {
+      aprovar: false,
+      motivo: 'A foto do BI está desfocada ou ilegível.',
+    });
+    expect(screen.getByText(/Verificação de bbbbbbbb recusada/)).toBeTruthy();
+  });
+
+  test('se o servidor recusar a decisão, mostra o erro e fica no pedido', async () => {
+    mockDecidir.mockRejectedValueOnce(new Error('este pedido nao esta por rever'));
+    await desenhar();
+    await carregar('Rever aaaaaaaa');
+    await carregar('Aprovar');
+    await carregar('Sim, aprovar');
+    expect(screen.getByText('Não foi possível guardar a decisão: este pedido nao esta por rever')).toBeTruthy();
+    expect(screen.getByText(/Cidadão aaaaaaaa · enviado a/)).toBeTruthy();
+  });
+
+  test('foto em falta ou que não abre: avisa e deixa pedir links novos', async () => {
+    mockPedidos = [pedido('aaaaaaaa-1111-4111-8111-111111111111', { verso: null })];
+    mockLerFoto.mockRejectedValueOnce(new Error('O link da foto expirou.'));
+    await desenhar();
+    await carregar('Rever aaaaaaaa');
+    expect(screen.getByText('Esta foto não está no arquivo.')).toBeTruthy();
+    expect(screen.getByText('A foto não abriu: O link da foto expirou.')).toBeTruthy();
+    await carregar('Pedir links novos');
+    expect(mockListar).toHaveBeenCalledTimes(2);
+  });
+
+  test('links com mais de 9 minutos: pede a lista de novo antes de abrir', async () => {
+    const agora = jest.spyOn(Date, 'now');
+    agora.mockReturnValue(1_000_000);
+    await desenhar();
+    agora.mockReturnValue(1_000_000 + 10 * 60 * 1000);
+    await carregar('Rever aaaaaaaa');
+    expect(mockListar).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Foto: BI — frente')).toBeTruthy();
+    agora.mockRestore();
+  });
+});

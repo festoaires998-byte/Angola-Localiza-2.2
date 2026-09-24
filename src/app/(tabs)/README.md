@@ -44,3 +44,16 @@ e Conta (`definicoes`). Os nomes das rotas não mudaram.
 
 O super_admin vê todos. Staff (quem tem cargos) só vê mais do que mapa e
 definicoes depois de ter o KYC em `ID_VERIFIED` **e** a sessão em AAL2 (código MFA).
+
+## Admin (`admin.tsx`)
+
+Revisão das verificações simples dos cidadãos (citizen-verify `list_pending` e
+`review`):
+- lista os pedidos "por rever";
+- mostra as 3 fotos do bucket privado `kyc-artifacts` (links de 10 minutos,
+  descarregadas só para a memória do ecrã, sem cache nem ficheiros);
+- aprova com confirmação, ou recusa com motivo obrigatório (o cidadão vê o motivo).
+
+Só para super_admin, admin_nacional, admin_provincial e admin_municipal (os
+mesmos que a função SQL `is_admin` aceita). O auditor vê o separador, mas não
+decide. Precisa de rede.
