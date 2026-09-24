@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { Duplicado, Rua } from '@/api/registoNucleo';
-import { codigoQuadra } from '@/api/registoNucleo';
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { textoPrecisao } from '@/components/nomes';
 import { Opcoes } from '@/components/Opcoes';
@@ -15,6 +14,7 @@ import {
   codigosDasDuasCelulas,
   faltaParaEnviar,
   linhasMarcaDeAgua,
+  pontoAEnviar,
   situacaoLimite,
   TIPOS_LOCAL,
   type EscolhaCelula,
@@ -30,6 +30,7 @@ import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
 import { servicoRegisto } from '@/services/moradas/registoApp';
 
 const RUA_NOVA = '__nova__';
+const BAIRRO_NOVO = '__novo__';
 /** Porque é que ainda não pode registar (null = pode). */
 function motivoBloqueio(v: Verificacao | null): { texto: string; botao: string | null } | null {
   switch (v) {
@@ -74,6 +75,9 @@ export default function RegistarMorada() {
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
   const [ruas, setRuas] = useState<Rua[]>([]);
   const [ruasDoServidor, setRuasDoServidor] = useState(false);
+  const [bairros, setBairros] = useState<string[]>([]);
+  const [bairro, setBairro] = useState<string | null>(null);
+  const [bairroNome, setBairroNome] = useState('');
   const [duplicado, setDuplicado] = useState<Duplicado | null | undefined>(undefined);
   const [escolha, setEscolha] = useState<EscolhaCelula | null>(null);
   const [tipo, setTipo] = useState<TipoLocal | null>('Casa');
@@ -90,22 +94,26 @@ export default function RegistarMorada() {
     if (userId && online !== null) void servicoRegisto.verificacao(userId, online).then(setVerificacao);
   }, [userId, online]);
 
-  // Ruas e duplicados: quando se sabe a quadra (e de novo se a pessoa mudar de quadra/célula).
-  const quadra = boa ? codigoQuadra(boa.latitude, boa.longitude) : null;
+  const limite = boa ? situacaoLimite(boa.latitude, boa.longitude, boa.precisao) : null;
+  // A posição que vai ser enviada (junto ao limite: 1 m dentro da célula escolhida).
+  const ponto = boa ? pontoAEnviar(boa, escolha) : null;
+
+  // Ruas e bairros: pedidos com a posição a ENVIAR (a da célula escolhida, se a
+  // pessoa escolheu) e de novo sempre que a célula dessa posição mudar.
+  const celulaAEnviar = ponto ? codificarGrelha(ponto.latitude, ponto.longitude) : null;
   useEffect(() => {
-    if (!boa || online === null) return;
+    if (!ponto || online === null) return;
     let ativo = true;
-    void servicoRegisto.ruasPerto(boa.latitude, boa.longitude, online).then((r) => {
+    void servicoRegisto.ruasPerto(ponto.latitude, ponto.longitude, online).then((r) => {
       if (!ativo) return;
       setRuas(r.ruas);
+      setBairros(r.bairros);
       setRuasDoServidor(r.doServidor);
     });
     return () => {
       ativo = false;
     };
-  }, [quadra, online]);
-
-  const limite = boa ? situacaoLimite(boa.latitude, boa.longitude, boa.precisao) : null;
+  }, [celulaAEnviar, online]);
   const codigos = useMemo(
     () => (boa && limite?.junto ? codigosDasDuasCelulas(boa.latitude, boa.longitude, provincia) : null),
     [boa?.latitude, boa?.longitude, limite?.junto, provincia],
@@ -132,6 +140,7 @@ export default function RegistarMorada() {
     tipo,
     ruaId: rua && rua !== RUA_NOVA ? rua : null,
     ruaNome: rua === RUA_NOVA || ruas.length === 0 ? ruaNome : '',
+    bairro: bairro && bairro !== BAIRRO_NOVO ? bairro : bairro === BAIRRO_NOVO || bairros.length === 0 ? bairroNome : '',
     referencia,
     foto: foto?.marcador ?? null,
     duplicadoConfirmado,
@@ -143,7 +152,11 @@ export default function RegistarMorada() {
 
   const fotografar = async (uriCamara: string) => {
     if (!boa) throw new Error('Espera pela medição da posição.');
-    const pronta = await fotoComMarcaDeAgua(uriCamara, linhasMarcaDeAgua(encode(boa.latitude, boa.longitude), new Date()));
+    // A marca de água leva a posição medida pelo GPS (a prova de onde a foto foi tirada).
+    const pronta = await fotoComMarcaDeAgua(
+      uriCamara,
+      linhasMarcaDeAgua(encode(boa.latitude, boa.longitude), boa.latitude, boa.longitude, new Date()),
+    );
     const marcador = await servicoRegisto.guardarFoto(pronta);
     setFoto({ uri: pronta.uri, marcador });
   };
@@ -258,6 +271,24 @@ export default function RegistarMorada() {
         )}
         {ruas.length === 0 || rua === RUA_NOVA ? (
           <Campo rotulo="Nome da rua" value={ruaNome} onChangeText={setRuaNome} placeholder="Ex.: Rua da Missão" maxLength={80} />
+        ) : null}
+        <Text style={estilos.rotulo}>Bairro</Text>
+        {bairros.length > 0 ? (
+          <Opcoes
+            grupo="Bairro"
+            empilhadas
+            valor={bairro}
+            aoEscolher={setBairro}
+            opcoes={[
+              ...bairros.map((b) => ({ valor: b, nome: b })),
+              { valor: BAIRRO_NOVO, nome: 'Outro bairro (escrever à mão)' },
+            ]}
+          />
+        ) : (
+          <Texto suave>Ainda não há bairros conhecidos aqui: escreve o nome do bairro.</Texto>
+        )}
+        {bairros.length === 0 || bairro === BAIRRO_NOVO ? (
+          <Campo rotulo="Nome do bairro" value={bairroNome} onChangeText={setBairroNome} placeholder="Ex.: Bairro Académico" maxLength={80} />
         ) : null}
         <Campo
           rotulo="Referência (para ajudar a encontrar)"

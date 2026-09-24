@@ -1,11 +1,11 @@
-import { ImageFormat, matchFont, Skia, type SkImage } from '@shopify/react-native-skia';
+import { FontSlant, FontWeight, ImageFormat, matchFont, Skia, type SkCanvas, type SkFont, type SkImage, type SkPaint } from '@shopify/react-native-skia';
 import { Directory, File, Paths } from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import { gerarUuid } from '@/database/ids';
 
 import { sha256Hex } from './hashFoto';
-import { desenhoMarca, ladoALado, LARGURA_FOTO, QUALIDADE_JPEG } from './marcaDeAgua';
+import { desenhoMarca, ladoALado, LARGURA_FOTO, QUALIDADE_JPEG, separarEmoji } from './marcaDeAgua';
 
 export interface FotoComMarca {
   /** Ficheiro final na pasta de documentos (o sistema não o apaga, ao contrário da cache). */
@@ -29,6 +29,37 @@ async function abrir(uriCamara: string, redimensionar: { width: number } | { hei
   }
   if (!imagem) throw new Error('Não foi possível abrir a foto.');
   return imagem;
+}
+
+/** Fonte de emojis do Android (a fonte normal não tem o "📍"). null se não houver. */
+function fonteEmoji(tamanho: number): SkFont | null {
+  try {
+    const tipo = Skia.FontMgr.System().matchFamilyStyle('Noto Color Emoji', { weight: FontWeight.Normal, slant: FontSlant.Upright });
+    return tipo ? Skia.Font(tipo, tamanho) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Uma linha da marca de água. Se começar por um emoji (ex.: "📍"), o emoji
+ * é desenhado com a fonte de emojis e o resto com a fonte normal; sem fonte
+ * de emojis, fica só o texto (nunca um quadrado vazio).
+ */
+function desenharLinha(tela: SkCanvas, linha: string, x: number, y: number, letra: SkPaint, fonte: SkFont, tamanho: number): void {
+  const { emoji, resto } = separarEmoji(linha);
+  if (!emoji) {
+    tela.drawText(linha, x, y, letra, fonte);
+    return;
+  }
+  const fEmoji = fonteEmoji(tamanho);
+  if (!fEmoji) {
+    tela.drawText(resto, x, y, letra, fonte);
+    return;
+  }
+  tela.drawText(emoji, x, y, letra, fEmoji);
+  const largura = fEmoji.measureText(emoji).width;
+  tela.drawText(` ${resto}`, x + largura, y, letra, fonte);
 }
 
 /**
@@ -58,8 +89,8 @@ function desenharEGravar(imagens: SkImage[], linhas: [string, string], prefixo: 
   const letra = Skia.Paint();
   letra.setColor(Skia.Color('white'));
   const fonte = matchFont({ fontFamily: 'sans-serif', fontSize: d.tamanhoLetra, fontWeight: 'bold' });
-  tela.drawText(linhas[0], d.margem, d.yLinhas[0], letra, fonte);
-  tela.drawText(linhas[1], d.margem, d.yLinhas[1], letra, fonte);
+  desenharLinha(tela, linhas[0], d.margem, d.yLinhas[0], letra, fonte, d.tamanhoLetra);
+  desenharLinha(tela, linhas[1], d.margem, d.yLinhas[1], letra, fonte, d.tamanhoLetra);
   superficie.flush();
 
   const bytes = superficie.makeImageSnapshot().encodeToBytes(ImageFormat.JPEG, QUALIDADE_JPEG);
