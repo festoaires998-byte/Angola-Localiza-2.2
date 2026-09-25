@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { REENCAMINHADAS, eUuid, limparEdicaoMorada, limparFavorito, limparMoradaNova, podeEditarMorada } from "./regras.ts";
 
-// Angola Localiza - Sync Service (v8)
+// Angola Localiza - Sync Service (v9)\n// Claim de operation_id protegido contra concorrência.
 // Recebe a fila feita sem rede (app e site) e aplica cada operação uma vez.
 // v8 (segurança): a sync grava com a service role, por isso já não copia o
 // payload tal como vem:
@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const { data: existing } = await supabase
+      let { data: existing } = await supabase
         .from("sync_operations")
         .select("operation_id, sync_status, user_id")
         .eq("operation_id", op.operation_id)
@@ -73,8 +73,16 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // Claim atómico: só uma requisição pode passar de PENDING/FAILED/CONFLICT
+      // para SYNCING. Isto fecha a corrida em que dois pedidos liam o mesmo
+      // estado antes de qualquer um o atualizar.
+      if (existing?.sync_status === "SYNCING") {
+        results.push({ operation_id: op.operation_id, status: "FAILED", error: "operacao ja esta em processamento; sera tentada novamente" });
+        continue;
+      }
+
       if (!existing) {
-        await supabase.from("sync_operations").insert({
+        const { error: insertError } = await supabase.from("sync_operations").insert({
           operation_id: op.operation_id,
           device_id: op.device_id,
           user_id: callerId,
@@ -82,8 +90,70 @@ Deno.serve(async (req: Request) => {
           payload: op.payload,
           sync_status: "SYNCING",
         });
-      } else {
-        await supabase.from("sync_operations").update({ sync_status: "SYNCING" }).eq("operation_id", op.operation_id);
+
+        if (insertError) {
+          // Outra requisição pode ter criado a operação entre o SELECT e o INSERT.
+          // A PK operation_id torna esse caso determinístico; nunca se executa a
+          // operação depois de perder o claim.
+          const { data: afterConflict } = await supabase
+            .from("sync_operations")
+            .select("operation_id, sync_status, user_id")
+            .eq("operation_id", op.operation_id)
+            .maybeSingle();
+
+          if (!afterConflict) {
+            results.push({ operation_id: op.operation_id, status: "FAILED", error: "nao foi possivel reservar a operacao para sincronizacao" });
+            continue;
+          }
+          if (afterConflict.user_id !== callerId) {
+            results.push({ operation_id: op.operation_id, status: "FAILED", error: "esta operacao pertence a outra pessoa" });
+            continue;
+          }
+          if (afterConflict.sync_status === "SYNCED") {
+            results.push({ operation_id: op.operation_id, status: "SYNCED", note: "ja tinha sido sincronizada antes" });
+            continue;
+          }
+          if (afterConflict.sync_status === "SYNCING") {
+            results.push({ operation_id: op.operation_id, status: "FAILED", error: "operacao ja esta em processamento; sera tentada novamente" });
+            continue;
+          }
+          existing = afterConflict;
+        } else {
+          existing = {
+            operation_id: op.operation_id,
+            sync_status: "SYNCING",
+            user_id: callerId,
+          };
+        }
+      }
+
+      if (existing.sync_status !== "SYNCING") {
+        const { data: claimed, error: claimError } = await supabase
+          .from("sync_operations")
+          .update({ sync_status: "SYNCING", error_message: null, processed_at: null })
+          .eq("operation_id", op.operation_id)
+          .eq("user_id", callerId)
+          .in("sync_status", ["PENDING", "FAILED", "CONFLICT"])
+          .select("operation_id")
+          .maybeSingle();
+
+        if (claimError) {
+          results.push({ operation_id: op.operation_id, status: "FAILED", error: "nao foi possivel reservar a operacao para sincronizacao" });
+          continue;
+        }
+        if (!claimed) {
+          const { data: afterClaim } = await supabase
+            .from("sync_operations")
+            .select("sync_status")
+            .eq("operation_id", op.operation_id)
+            .maybeSingle();
+          if (afterClaim?.sync_status === "SYNCED") {
+            results.push({ operation_id: op.operation_id, status: "SYNCED", note: "ja tinha sido sincronizada antes" });
+          } else {
+            results.push({ operation_id: op.operation_id, status: "FAILED", error: "operacao ja esta em processamento; sera tentada novamente" });
+          }
+          continue;
+        }
       }
 
       let finalStatus = "SYNCED";
