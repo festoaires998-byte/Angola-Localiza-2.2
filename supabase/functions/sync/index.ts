@@ -51,9 +51,31 @@ Deno.serve(async (req: Request) => {
 
     const results = [];
 
+    const { data: callerDevices, error: devicesError } = await supabase
+      .from("signing_keys")
+      .select("device_id")
+      .eq("user_id", callerId);
+    if (devicesError) {
+      return new Response(JSON.stringify({ error: "nao foi possivel validar o dispositivo" }), { status: 500, headers: cors });
+    }
+    const allowedDeviceIds = new Set((callerDevices ?? []).map((row) => row.device_id));
+    const allowedOperationTypes = new Set(["create_address", "update_address", "create_favorite", ...Object.keys(REENCAMINHADAS)]);
+
     for (const op of operations) {
       if (!op || !eUuid(op.operation_id)) {
         results.push({ operation_id: op?.operation_id ?? null, status: "FAILED", error: "operation_id invalido" });
+        continue;
+      }
+      if (typeof op.device_id !== "string" || op.device_id.length < 8 || op.device_id.length > 200 || !allowedDeviceIds.has(op.device_id)) {
+        results.push({ operation_id: op.operation_id, status: "FAILED", error: "device_id nao pertence a esta sessao" });
+        continue;
+      }
+      if (typeof op.operation_type !== "string" || !allowedOperationTypes.has(op.operation_type)) {
+        results.push({ operation_id: op.operation_id, status: "FAILED", error: "operation_type desconhecido" });
+        continue;
+      }
+      if (!op.payload || typeof op.payload !== "object" || Array.isArray(op.payload)) {
+        results.push({ operation_id: op.operation_id, status: "FAILED", error: "payload invalido" });
         continue;
       }
 
