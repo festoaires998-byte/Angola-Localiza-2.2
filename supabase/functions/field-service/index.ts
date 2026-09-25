@@ -263,6 +263,8 @@ Deno.serve(async (req: Request) => {
     if (action === "submit") {
       const { device_id, latitude, longitude, photo_facade_url, photo_qr_url, street_id: chosenStreetId, street_name, new_unnamed_street, neighborhood_name, reference, accuracy_meters, accuracy_justification, override_duplicate, duplicate_justification, infill_base_house_number, place_kind, watermark_match, sync_operation_id } = body;
       if (!device_id || typeof latitude !== "number" || typeof longitude !== "number") return new Response(JSON.stringify({ error: "device_id, latitude e longitude sao obrigatorios" }), { status: 400, headers: cors });
+      const { data: deviceKey } = await supabase.from("signing_keys").select("id").eq("user_id", callerId).eq("device_id", device_id).maybeSingle();
+      if (!deviceKey) return new Response(JSON.stringify({ error: "DEVICE_NOT_REGISTERED: este dispositivo nao pertence a esta sessao" }), { status: 403, headers: cors });
 
       // Idempotência offline: uma mesma operação só pode criar um field_record.
       if (sync_operation_id) {
@@ -287,6 +289,10 @@ Deno.serve(async (req: Request) => {
       if (!quadraId) return new Response(JSON.stringify({ error: "SCOPE_MISSING" }), { status: 422, headers: cors });
       const streetId = chosenStreetId || await getOrCreateStreet(supabase, quadraId, street_name, !!new_unnamed_street);
       if (!streetId) return new Response(JSON.stringify({ error: "STREET_MISSING" }), { status: 422, headers: cors });
+      if (chosenStreetId) {
+        const { data: chosenStreet } = await supabase.from("streets").select("quadra_id").eq("id", chosenStreetId).maybeSingle();
+        if (!chosenStreet || chosenStreet.quadra_id !== quadraId) return new Response(JSON.stringify({ error: "STREET_SCOPE_MISMATCH" }), { status: 422, headers: cors });
+      }
 
       const { data: nearby } = await supabase.rpc("nearby_for_duplicates", { in_lat: latitude, in_lng: longitude, radius_meters: 15 });
       const closeAddress = (nearby ?? []).find((n: { source: string }) => n.source === "address");
