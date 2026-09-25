@@ -138,7 +138,15 @@ Deno.serve(async (req: Request) => {
       const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
       if (delivery.created_by !== callerId && !isAdminRes) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       const { error } = await supabase.from("deliveries").update({ is_urgent: !!is_urgent }).eq("id", delivery_id);
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      if (error) {
+        if (sync_operation_id) {
+          const { data: already } = await supabase.from("deliveries")
+            .select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)")
+            .eq("sync_operation_id", sync_operation_id).maybeSingle();
+          if (already) return new Response(JSON.stringify(already), { headers: cors });
+        }
+        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      }
       return new Response(JSON.stringify({ ok: true, is_urgent: !!is_urgent }), { headers: cors });
     }
 
@@ -199,7 +207,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "create") {
-      const { address_id, recipient_name, recipient_phone, instructions, origin_latitude, origin_longitude, origin_municipality_id, origin_province_id, origin_postal_code, origin_plus_code, zone_code, payer_organization_id, is_urgent } = body;
+      const { address_id, recipient_name, recipient_phone, instructions, origin_latitude, origin_longitude, origin_municipality_id, origin_province_id, origin_postal_code, origin_plus_code, zone_code, payer_organization_id, is_urgent, sync_operation_id } = body;
       if (!address_id || !recipient_name) return new Response(JSON.stringify({ error: "address_id e recipient_name sao obrigatorios" }), { status: 400, headers: cors });
       if (!contactoValido(recipient_phone)) {
         return new Response(JSON.stringify({ error: "CONTACTO_INVALID: o contacto deve ter o formato +244 9xx xxx xxx" }), { status: 422, headers: cors });
@@ -211,6 +219,13 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: "DESTINO_NAO_PERMITIDO: esta morada e privada ou nao existe" }), { status: 403, headers: cors });
       }
 
+      if (sync_operation_id) {
+        const { data: already } = await supabase.from("deliveries")
+          .select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)")
+          .eq("sync_operation_id", sync_operation_id).maybeSingle();
+        if (already) return new Response(JSON.stringify(already), { headers: cors });
+      }
+
       const { data: delivery, error } = await supabase.from("deliveries").insert({
         address_id, recipient_name, recipient_phone: recipient_phone || null, instructions: instructions || null,
         origin_latitude: origin_latitude ?? null, origin_longitude: origin_longitude ?? null,
@@ -219,6 +234,7 @@ Deno.serve(async (req: Request) => {
         zone_code: zone_code ?? null, payer_organization_id: payer_organization_id ?? null,
         is_urgent: !!is_urgent,
         created_by: callerId,
+        sync_operation_id: sync_operation_id ?? null,
       }).select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)").single();
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
 
