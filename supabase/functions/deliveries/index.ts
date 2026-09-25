@@ -218,6 +218,15 @@ Deno.serve(async (req: Request) => {
       if (!(await destinoPermitido(supabase, callerId, String(address_id)))) {
         return new Response(JSON.stringify({ error: "DESTINO_NAO_PERMITIDO: esta morada e privada ou nao existe" }), { status: 403, headers: cors });
       }
+      if (payer_organization_id) {
+        const { data: membership } = await supabase.from("organization_members")
+          .select("organization_id").eq("organization_id", payer_organization_id).eq("user_id", callerId).maybeSingle();
+        if (!membership) return new Response(JSON.stringify({ error: "PAYER_ORGANIZATION_NOT_ALLOWED" }), { status: 403, headers: cors });
+      }
+      if (zone_code) {
+        const { data: zone } = await supabase.from("pricing_zones").select("zone_code").eq("zone_code", zone_code).maybeSingle();
+        if (!zone) return new Response(JSON.stringify({ error: "ZONE_NOT_FOUND" }), { status: 422, headers: cors });
+      }
 
       if (sync_operation_id) {
         const { data: already } = await supabase.from("deliveries")
