@@ -200,7 +200,7 @@ Deno.serve(async (req: Request) => {
         } else if (REENCAMINHADAS[op.operation_type]) {
           // Entregas recebem a operation_id para que o destino seja idempotente
           // mesmo se a sync cair depois de criar a entrega e antes de gravar SYNCED.
-          const payload = (op.operation_type === "create_delivery" || op.operation_type === "delivery_proof")
+          const payload = (op.operation_type === "create_delivery" || op.operation_type === "delivery_proof" || op.operation_type === "field_submit")
             ? { ...op.payload, sync_operation_id: op.operation_id }
             : op.payload;
           const resp = await fetch(supabaseUrl + "/functions/v1/" + REENCAMINHADAS[op.operation_type], {
