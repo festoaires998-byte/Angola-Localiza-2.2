@@ -121,6 +121,8 @@ export function respostaPin(r: ResultadoPin | null): { status: number; erro: str
   switch (r?.resultado) {
     case "OK":
       return null;
+    case "ALREADY_VERIFIED":
+      return { status: 409, erro: "PIN_ALREADY_VERIFIED: o PIN desta entrega ja foi utilizado" };
     case "EXPIRED":
       return { status: 410, erro: "PIN_EXPIRED: o PIN desta entrega expirou (72h) - pede ao remetente para gerar um novo" };
     case "LOCKED":
