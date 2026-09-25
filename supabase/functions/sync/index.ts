@@ -198,11 +198,15 @@ Deno.serve(async (req: Request) => {
           const { error } = await supabase.from("favorites").upsert(limpa.linha, { onConflict: "user_id,address_id" });
           if (error) throw error;
         } else if (REENCAMINHADAS[op.operation_type]) {
-          // As regras destas operações estão na função de destino (com a sessão de quem pede).
+          // Entregas recebem a operation_id para que o destino seja idempotente
+          // mesmo se a sync cair depois de criar a entrega e antes de gravar SYNCED.
+          const payload = op.operation_type === "create_delivery"
+            ? { ...op.payload, sync_operation_id: op.operation_id }
+            : op.payload;
           const resp = await fetch(supabaseUrl + "/functions/v1/" + REENCAMINHADAS[op.operation_type], {
             method: "POST",
             headers: { "Content-Type": "application/json", "apikey": anonKey, "Authorization": "Bearer " + token },
-            body: JSON.stringify(op.payload),
+            body: JSON.stringify(payload),
           });
           const respData = await resp.json();
           if (respData.error) throw new Error(respData.error);
