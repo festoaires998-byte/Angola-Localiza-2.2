@@ -345,9 +345,43 @@ Deno.serve(async (req: Request) => {
       const { data: record } = await supabase.from("field_records").select("*").eq("id", field_record_id).single();
       if (!record) return new Response(JSON.stringify({ error: "registo nao encontrado" }), { status: 404, headers: cors });
 
+      // Estados finais são idempotentes: repetir a validação não cria uma nova morada.
+      if (recordToValidate.status !== "PENDING_REVIEW") {
+        return new Response(JSON.stringify({
+          ok: true,
+          status: recordToValidate.status,
+          address_id: recordToValidate.resulting_address_id ?? null,
+          already_processed: true,
+        }), { headers: cors });
+      }
+
+      // Claim atómico com lease de 5 minutos. Impede dois validadores de
+      // processarem o mesmo field_record em simultâneo e permite recuperar
+      // uma validação abandonada por queda de processo/rede.
+      const claimCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: claimed } = await supabase.from("field_records")
+        .update({ validation_claimed_by: callerId, validation_claimed_at: new Date().toISOString() })
+        .eq("id", field_record_id)
+        .eq("status", "PENDING_REVIEW")
+        .or("validation_claimed_at.is.null,validation_claimed_at.lt." + claimCutoff)
+        .select("id")
+        .maybeSingle();
+      if (!claimed) {
+        return new Response(JSON.stringify({
+          error: "VALIDATION_IN_PROGRESS",
+          message: "este registo está a ser validado por outro processo; tenta novamente dentro de alguns instantes",
+        }), { status: 409, headers: cors });
+      }
+
+      // Recarregar depois do claim para garantir que todas as decisões usam
+      // a versão que ficou efectivamente sob o nosso processamento.
+      const { data: lockedRecord } = await supabase.from("field_records").select("*").eq("id", field_record_id).single();
+      if (!lockedRecord) return new Response(JSON.stringify({ error: "registo nao encontrado" }), { status: 404, headers: cors });
+      const recordToValidate = lockedRecord;
+
       if (decision === "reject") {
         await supabase.from("field_records").update({ status: "REJECTED", validated_by: callerId, validated_at: new Date().toISOString() }).eq("id", field_record_id);
-        await supabase.from("notifications").insert({ user_id: record.collected_by, title: "O teu registo não foi aceite", body: "O registo de \"" + record.reference + "\" foi rejeitado pela revisão.", entity_type: "field_record", entity_id: field_record_id });
+        await supabase.from("notifications").insert({ user_id: recordToValidate.collected_by, title: "O teu registo não foi aceite", body: "O registo de \"" + recordToValidate.reference + "\" foi rejeitado pela revisão.", entity_type: "field_record", entity_id: field_record_id });
         return new Response(JSON.stringify({ ok: true, status: "REJECTED" }), { headers: cors });
       }
       if (decision === "duplicate") {
@@ -355,23 +389,23 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ ok: true, status: "DUPLICATE" }), { headers: cors });
       }
       if (decision === "merge") {
-        if (!record.duplicate_of_address_id) return new Response(JSON.stringify({ error: "sem morada para fundir" }), { status: 400, headers: cors });
-        const { data: existing } = await supabase.from("addresses").select("*").eq("id", record.duplicate_of_address_id).single();
+        if (!recordToValidate.duplicate_of_address_id) return new Response(JSON.stringify({ error: "sem morada para fundir" }), { status: 400, headers: cors });
+        const { data: existing } = await supabase.from("addresses").select("*").eq("id", recordToValidate.duplicate_of_address_id).single();
         if (!existing) return new Response(JSON.stringify({ error: "morada existente nao encontrada" }), { status: 404, headers: cors });
-        const { data: submitterRolesMerge } = await supabase.from("organization_members").select("role").eq("user_id", record.collected_by);
+        const { data: submitterRolesMerge } = await supabase.from("organization_members").select("role").eq("user_id", recordToValidate.collected_by);
         const submittedByRoleMerge = (submitterRolesMerge && submitterRolesMerge.length > 0) ? submitterRolesMerge[0].role : "cidadao";
         const merged: Record<string, unknown> = {
-          reference: existing.reference || record.reference, photo_url: existing.photo_url || record.photo_url,
-          latitude: record.latitude, longitude: record.longitude, location: `SRID=4326;POINT(${record.longitude} ${record.latitude})`,
-          plus_code: plusCode(record.latitude, record.longitude, PLUS_CODE_DIGITOS),
-          quadra_id: existing.quadra_id || record.quadra_id, street_id: existing.street_id || record.street_id,
+          reference: existing.reference || recordToValidate.reference, photo_url: existing.photo_url || recordToValidate.photo_url,
+          latitude: recordToValidate.latitude, longitude: recordToValidate.longitude, location: `SRID=4326;POINT(${recordToValidate.longitude} ${recordToValidate.latitude})`,
+          plus_code: plusCode(recordToValidate.latitude, recordToValidate.longitude, PLUS_CODE_DIGITOS),
+          quadra_id: existing.quadra_id || recordToValidate.quadra_id, street_id: existing.street_id || recordToValidate.street_id,
           validated_by: callerId, validated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
           flagged_for_review: false,
-          accuracy_meters: record.accuracy_meters ?? existing.accuracy_meters,
+          accuracy_meters: recordToValidate.accuracy_meters ?? existing.accuracy_meters,
         };
         var numberWasAssignedNow = false;
         if (!existing.house_number) {
-          const assigned = await assignHouseNumber(supabase, merged.street_id as string, record.latitude, record.longitude, record.infill_base_house_number);
+          const assigned = await assignHouseNumber(supabase, merged.street_id as string, recordToValidate.latitude, recordToValidate.longitude, recordToValidate.infill_base_house_number);
           if ("error" in assigned) return new Response(JSON.stringify({ error: assigned.error }), { status: 422, headers: cors });
           merged.house_number = assigned.number; merged.number_origin = assigned.origin; numberWasAssignedNow = true;
         }
@@ -386,32 +420,32 @@ Deno.serve(async (req: Request) => {
         await supabase.from("field_records").update({ status: "APPROVED", validated_by: callerId, validated_at: new Date().toISOString(), resulting_address_id: existing.id }).eq("id", field_record_id);
         await supabase.from("audit_logs").insert({ actor_id: callerId, action: "field_record_merged", entity_type: "address", entity_id: existing.id, before: existing, after: merged });
         if (numberWasAssignedNow) await supabase.from("audit_logs").insert({ actor_id: callerId, action: "number_assigned", entity_type: "address", entity_id: existing.id, before: null, after: { street_id: merged.street_id, house_number: merged.house_number, origin: merged.number_origin } });
-        await supabase.from("notifications").insert({ user_id: record.collected_by, title: "O teu registo foi aprovado ✅", body: "Código postal: " + existing.postal_code + " · nº " + merged.house_number, entity_type: "address", entity_id: existing.id });
+        await supabase.from("notifications").insert({ user_id: recordToValidate.collected_by, title: "O teu registo foi aprovado ✅", body: "Código postal: " + existing.postal_code + " · nº " + merged.house_number, entity_type: "address", entity_id: existing.id });
         return new Response(JSON.stringify({ ok: true, status: "MERGED", address_id: existing.id, house_number: merged.house_number }), { headers: cors });
       }
       if (decision === "approve") {
         let resolvedProvinceName = province_name;
         if (!resolvedProvinceName && province_id) { const { data: p } = await supabase.from("provinces").select("name").eq("id", province_id).single(); resolvedProvinceName = p?.name; }
-        const postalCode = await generatePostalCode(supabase, record.latitude, record.longitude, resolvedProvinceName);
-        const assigned = await assignHouseNumber(supabase, record.street_id, record.latitude, record.longitude, record.infill_base_house_number);
+        const postalCode = await generatePostalCode(supabase, recordToValidate.latitude, recordToValidate.longitude, resolvedProvinceName);
+        const assigned = await assignHouseNumber(supabase, recordToValidate.street_id, recordToValidate.latitude, recordToValidate.longitude, recordToValidate.infill_base_house_number);
         if ("error" in assigned) return new Response(JSON.stringify({ error: assigned.error }), { status: 422, headers: cors });
-        const { data: submitterRoles } = await supabase.from("organization_members").select("role").eq("user_id", record.collected_by);
+        const { data: submitterRoles } = await supabase.from("organization_members").select("role").eq("user_id", recordToValidate.collected_by);
         const submittedByRole = (submitterRoles && submitterRoles.length > 0) ? submitterRoles[0].role : "cidadao";
         const { data: newAddress, error: addrError } = await supabase.from("addresses").insert({
-          latitude: record.latitude, longitude: record.longitude, location: `SRID=4326;POINT(${record.longitude} ${record.latitude})`,
-          plus_code: plusCode(record.latitude, record.longitude, PLUS_CODE_DIGITOS),
-          house_number: assigned.number, number_origin: assigned.origin, reference: record.reference,
-          photo_url: record.photo_url, quadra_id: record.quadra_id, street_id: record.street_id,
+          latitude: recordToValidate.latitude, longitude: recordToValidate.longitude, location: `SRID=4326;POINT(${recordToValidate.longitude} ${recordToValidate.latitude})`,
+          plus_code: plusCode(recordToValidate.latitude, recordToValidate.longitude, PLUS_CODE_DIGITOS),
+          house_number: assigned.number, number_origin: assigned.origin, reference: recordToValidate.reference,
+          photo_url: recordToValidate.photo_url, quadra_id: recordToValidate.quadra_id, street_id: recordToValidate.street_id,
           postal_code: postalCode, province_id, municipality_id, commune_id, neighborhood_id,
-          status: "APPROVED", source: "field_survey", created_by: record.collected_by, validated_by: callerId, validated_at: new Date().toISOString(),
+          status: "APPROVED", source: "field_survey", created_by: recordToValidate.collected_by, validated_by: callerId, validated_at: new Date().toISOString(),
           submitted_by_role: submittedByRole,
-          accuracy_meters: record.accuracy_meters ?? null,
+          accuracy_meters: recordToValidate.accuracy_meters ?? null,
           confidence_score: calcularConfianca(record, submittedByRole, assigned.origin),
         }).select("id, postal_code, plus_code").single();
         if (addrError) return new Response(JSON.stringify({ error: addrError.message }), { status: 400, headers: cors });
         await supabase.from("field_records").update({ status: "APPROVED", validated_by: callerId, validated_at: new Date().toISOString(), resulting_address_id: newAddress.id }).eq("id", field_record_id);
-        await supabase.from("audit_logs").insert({ actor_id: callerId, action: "number_assigned", entity_type: "address", entity_id: newAddress.id, before: null, after: { street_id: record.street_id, house_number: assigned.number, origin: assigned.origin } });
-        await supabase.from("notifications").insert({ user_id: record.collected_by, title: "O teu registo foi aprovado ✅", body: "Código postal: " + postalCode + " · nº " + assigned.number + " — vê os detalhes completos em Guardados.", entity_type: "address", entity_id: newAddress.id });
+        await supabase.from("audit_logs").insert({ actor_id: callerId, action: "number_assigned", entity_type: "address", entity_id: newAddress.id, before: null, after: { street_id: recordToValidate.street_id, house_number: assigned.number, origin: assigned.origin } });
+        await supabase.from("notifications").insert({ user_id: recordToValidate.collected_by, title: "O teu registo foi aprovado ✅", body: "Código postal: " + postalCode + " · nº " + assigned.number + " — vê os detalhes completos em Guardados.", entity_type: "address", entity_id: newAddress.id });
         return new Response(JSON.stringify({ ok: true, status: "APPROVED", address_id: newAddress.id, postal_code: postalCode, house_number: assigned.number }), { headers: cors });
       }
       return new Response(JSON.stringify({ error: "decision invalida" }), { status: 400, headers: cors });
