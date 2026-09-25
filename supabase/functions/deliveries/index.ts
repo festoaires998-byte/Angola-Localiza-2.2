@@ -369,7 +369,8 @@ Deno.serve(async (req: Request) => {
       const assinatura = comProva && proof ? await verificarAssinaturaProva(supabase, callerId, delivery_id, proof, ficheiros.foto, ficheiros.assinatura) : null;
       const cryptoVerified: boolean | null = assinatura ? assinatura.verified : null;
 
-      const updatePayload: Record<string, unknown> = { status: new_status, updated_at: new Date().toISOString() };
+      const transitionTimestamp = new Date().toISOString();
+      const updatePayload: Record<string, unknown> = { status: new_status, updated_at: transitionTimestamp };
       if (typeof is_volumoso === "boolean") updatePayload.is_volumoso = is_volumoso;
       if (typeof is_espera_longa === "boolean") updatePayload.is_espera_longa = is_espera_longa;
       const { data: mudou, error: updateError } = await supabase.from("deliveries").update(updatePayload).eq("id", delivery_id).eq("status", delivery.status).select("id");
@@ -409,7 +410,7 @@ Deno.serve(async (req: Request) => {
             }
           }
           // Sem prova não há mudança de estado: volta ao estado anterior.
-          await supabase.from("deliveries").update({ status: delivery.status }).eq("id", delivery_id).eq("status", new_status);
+          await supabase.from("deliveries").update({ status: delivery.status, updated_at: new Date().toISOString() }).eq("id", delivery_id).eq("status", new_status).eq("updated_at", transitionTimestamp);
           await supabase.from("delivery_status_history").insert({ delivery_id, status: delivery.status });
           return new Response(JSON.stringify({ error: "nao foi possivel guardar a prova - tenta de novo" }), { status: 500, headers: cors });
         }
@@ -428,14 +429,14 @@ Deno.serve(async (req: Request) => {
             const now = new Date(); const isNightWeekend = now.getHours() >= 20 || now.getHours() < 6 || now.getDay() === 0 || now.getDay() === 6;
             let surcharge = 0; if (isNightWeekend) { surcharge = Math.round(total * 0.2); total += surcharge; }
             await supabase.from("usage_events").insert({
-              delivery_id, organization_id: delivery.payer_organization_id, event_type: "DELIVERY_POD", zone_code: delivery.zone_code,
+              delivery_id, organization_id: delivery.payer_organization_id, event_type: "DELIVERY_POD", zone_code: delivery.zone_code, sync_operation_id: sync_operation_id ?? null,
               amount_total: total, amount_driver: rates.base_fee, amount_platform: total - rates.base_fee, is_free_pilot: isFreePilot,
               breakdown: { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee, ...extrasBreakdown, noturno_fim_de_semana: surcharge || undefined },
             });
           } else {
             const attemptFee = Math.round(rates.base_fee * 0.3);
             await supabase.from("usage_events").insert({
-              delivery_id, organization_id: delivery.payer_organization_id, event_type: "DELIVERY_FAILED_ATTEMPT", zone_code: delivery.zone_code,
+              delivery_id, organization_id: delivery.payer_organization_id, event_type: "DELIVERY_FAILED_ATTEMPT", zone_code: delivery.zone_code, sync_operation_id: sync_operation_id ?? null,
               amount_total: attemptFee + rates.routing_fee + rates.proof_fee, amount_driver: attemptFee, amount_platform: rates.routing_fee + rates.proof_fee,
               is_free_pilot: isFreePilot, breakdown: { taxa_tentativa_estafeta: attemptFee, roteamento_creditado: rates.routing_fee, prova_creditado: rates.proof_fee, motivo: reason },
             });
