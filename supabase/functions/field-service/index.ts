@@ -55,20 +55,30 @@ async function getOrCreateQuadra(supabase: ReturnType<typeof createClient>, lat:
   const { data: existing } = await supabase.from("quadras").select("id").eq("code", code).maybeSingle();
   if (existing) return existing.id;
   const { data: created } = await supabase.from("quadras").insert({ code, kind: "GRID", area_m2: 14400 }).select("id").single();
-  return created?.id ?? null;
+  if (created?.id) return created.id;
+  // Outra requisição pode ter criado a mesma quadra entre o SELECT e o INSERT.
+  const { data: raced } = await supabase.from("quadras").select("id").eq("code", code).maybeSingle();
+  return raced?.id ?? null;
 }
 async function getOrCreateStreet(supabase: ReturnType<typeof createClient>, quadraId: string, streetName: string | null, newUnnamed: boolean) {
   if (newUnnamed || !streetName || !streetName.trim()) {
     const { count } = await supabase.from("streets").select("*", { count: "exact", head: true }).eq("quadra_id", quadraId).ilike("name", "Rua S/N% %");
     const n = (count ?? 0) + 1; const name = `Rua S/Nº ${n}`;
-    const { data: created } = await supabase.from("streets").insert({ name, nome_normalizado: name.toLowerCase(), quadra_id: quadraId, next_seq: 1 }).select("id").single();
-    return created?.id ?? null;
+    const normalized = name.toLowerCase();
+    const { data: created } = await supabase.from("streets").insert({ name, nome_normalizado: normalized, quadra_id: quadraId, next_seq: 1 }).select("id").single();
+    if (created?.id) return created.id;
+    // Concorrência: se outra submissão ganhou o mesmo nome, reutilizar a rua.
+    const { data: raced } = await supabase.from("streets").select("id").eq("quadra_id", quadraId).eq("nome_normalizado", normalized).maybeSingle();
+    return raced?.id ?? null;
   }
   const norm = streetName.trim().toLowerCase();
   const { data: existing } = await supabase.from("streets").select("id").eq("quadra_id", quadraId).eq("nome_normalizado", norm).maybeSingle();
   if (existing) return existing.id;
   const { data: created } = await supabase.from("streets").insert({ name: streetName.trim(), nome_normalizado: norm, quadra_id: quadraId, next_seq: 1 }).select("id").single();
-  return created?.id ?? null;
+  if (created?.id) return created.id;
+  // Concorrência: o índice único (nome_normalizado, quadra_id) define o vencedor.
+  const { data: raced } = await supabase.from("streets").select("id").eq("quadra_id", quadraId).eq("nome_normalizado", norm).maybeSingle();
+  return raced?.id ?? null;
 }
 async function assignHouseNumber(supabase: ReturnType<typeof createClient>, streetId: string, lat: number, lng: number, infillBase: string | null): Promise<{ number: string; origin: string } | { error: string }> {
   const { data: street } = await supabase.from("streets").select("*").eq("id", streetId).single();
@@ -221,18 +231,7 @@ Deno.serve(async (req: Request) => {
       const update: Record<string, unknown> = { numbering_mode };
       if (numbering_mode === "METRICO") { update.origin_lat = origin_lat; update.origin_lng = origin_lng; }
       const { error } = await supabase.from("streets").update(update).eq("id", street_id);
-      if (error) {
-        if (sync_operation_id) {
-          const { data: raced } = await supabase.from("field_records")
-            .select("id, status")
-            .eq("sync_operation_id", sync_operation_id)
-            .maybeSingle();
-          if (raced) return new Response(JSON.stringify({
-            field_record_id: raced.id, status: raced.status, idempotent_replay: true,
-          }), { headers: cors });
-        }
-        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
-      }
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
       await supabase.from("audit_logs").insert({ actor_id: callerId, action: "street_mode_changed", entity_type: "street", entity_id: street_id, before, after: { numbering_mode, origin_lat, origin_lng, reason: reason ?? null } });
       return new Response(JSON.stringify({ ok: true }), { headers: cors });
     }
