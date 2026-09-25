@@ -246,6 +246,7 @@ Deno.serve(async (req: Request) => {
           const total = rates.base_fee + rates.routing_fee + rates.proof_fee;
           await supabase.from("usage_events").insert({
             delivery_id: delivery.id, organization_id: payer_organization_id ?? null, event_type: "DELIVERY_ROUTED", zone_code,
+            sync_operation_id: sync_operation_id ?? null,
             amount_total: total, amount_driver: rates.base_fee, amount_platform: rates.routing_fee + rates.proof_fee,
             is_free_pilot: !payer_organization_id,
             breakdown: { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee },
