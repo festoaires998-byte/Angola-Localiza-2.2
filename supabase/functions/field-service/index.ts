@@ -221,7 +221,18 @@ Deno.serve(async (req: Request) => {
       const update: Record<string, unknown> = { numbering_mode };
       if (numbering_mode === "METRICO") { update.origin_lat = origin_lat; update.origin_lng = origin_lng; }
       const { error } = await supabase.from("streets").update(update).eq("id", street_id);
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      if (error) {
+        if (sync_operation_id) {
+          const { data: raced } = await supabase.from("field_records")
+            .select("id, status")
+            .eq("sync_operation_id", sync_operation_id)
+            .maybeSingle();
+          if (raced) return new Response(JSON.stringify({
+            field_record_id: raced.id, status: raced.status, idempotent_replay: true,
+          }), { headers: cors });
+        }
+        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      }
       await supabase.from("audit_logs").insert({ actor_id: callerId, action: "street_mode_changed", entity_type: "street", entity_id: street_id, before, after: { numbering_mode, origin_lat, origin_lng, reason: reason ?? null } });
       return new Response(JSON.stringify({ ok: true }), { headers: cors });
     }
@@ -252,8 +263,23 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "submit") {
-      const { device_id, latitude, longitude, photo_facade_url, photo_qr_url, street_id: chosenStreetId, street_name, new_unnamed_street, neighborhood_name, reference, accuracy_meters, accuracy_justification, override_duplicate, duplicate_justification, infill_base_house_number, place_kind, watermark_match } = body;
+      const { device_id, latitude, longitude, photo_facade_url, photo_qr_url, street_id: chosenStreetId, street_name, new_unnamed_street, neighborhood_name, reference, accuracy_meters, accuracy_justification, override_duplicate, duplicate_justification, infill_base_house_number, place_kind, watermark_match, sync_operation_id } = body;
       if (!device_id || typeof latitude !== "number" || typeof longitude !== "number") return new Response(JSON.stringify({ error: "device_id, latitude e longitude sao obrigatorios" }), { status: 400, headers: cors });
+
+      // Idempotência offline: uma mesma operação só pode criar um field_record.
+      if (sync_operation_id) {
+        const { data: previous } = await supabase.from("field_records")
+          .select("id, status")
+          .eq("sync_operation_id", sync_operation_id)
+          .maybeSingle();
+        if (previous) {
+          return new Response(JSON.stringify({
+            field_record_id: previous.id,
+            status: previous.status,
+            idempotent_replay: true,
+          }), { headers: cors });
+        }
+      }
       if (!reference) return new Response(JSON.stringify({ error: "a referencia e obrigatoria" }), { status: 400, headers: cors });
       if (!chosenStreetId && !street_name && !new_unnamed_street) return new Response(JSON.stringify({ error: "STREET_MISSING" }), { status: 422, headers: cors });
       if (!photo_facade_url) return new Response(JSON.stringify({ error: "a foto da fachada e obrigatoria" }), { status: 400, headers: cors });
@@ -271,6 +297,7 @@ Deno.serve(async (req: Request) => {
 
       const { data, error } = await supabase.from("field_records").insert({
         device_id, collected_by: callerId, latitude, longitude, location: `SRID=4326;POINT(${longitude} ${latitude})`,
+        sync_operation_id: sync_operation_id ?? null,
         photo_url: photo_facade_url, photo_qr_url: photo_qr_url || null, quadra_id: quadraId, street_id: streetId, neighborhood_name,
         reference: (place_kind ? "[" + place_kind + "] " : "") + reference,
         infill_base_house_number: infill_base_house_number || null,
