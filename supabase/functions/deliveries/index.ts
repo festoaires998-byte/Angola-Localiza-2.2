@@ -315,8 +315,27 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "update_status") {
-      const { delivery_id, new_status, proof, pin, reason, is_volumoso, is_espera_longa } = body;
+      const { delivery_id, new_status, proof, pin, reason, is_volumoso, is_espera_longa, sync_operation_id } = body;
       if (!delivery_id || !new_status) return new Response(JSON.stringify({ error: "delivery_id e new_status sao obrigatorios" }), { status: 400, headers: cors });
+
+      // Idempotência offline: se esta mesma operação já criou a prova,
+      // devolver sucesso sem repetir transição, cobrança ou auditoria.
+      if (sync_operation_id) {
+        const { data: previousProof } = await supabase
+          .from("delivery_proofs")
+          .select("id, delivery_id, crypto_verified")
+          .eq("sync_operation_id", sync_operation_id)
+          .maybeSingle();
+        if (previousProof) {
+          return new Response(JSON.stringify({
+            ok: true,
+            status: new_status,
+            crypto_verified: previousProof.crypto_verified,
+            proof_id: previousProof.id,
+            idempotent_replay: true,
+          }), { headers: cors });
+        }
+      }
 
       const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, zone_code, payer_organization_id").eq("id", delivery_id).single();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
@@ -366,6 +385,7 @@ Deno.serve(async (req: Request) => {
           photo_url: ficheiros.foto ? textoDoFicheiro(ficheiros.foto, supabaseUrl) : null,
           signature_url: ficheiros.assinatura ? textoDoFicheiro(ficheiros.assinatura, supabaseUrl) : null,
           created_by: callerId,
+          sync_operation_id: sync_operation_id ?? null,
           crypto_signature: proof.crypto_signature ?? null, crypto_payload: proof.crypto_payload ?? null,
           crypto_algorithm: proof.crypto_algorithm ?? null, crypto_device_id: proof.crypto_device_id ?? null,
           crypto_verified: cryptoVerified, crypto_failure_reason: assinatura?.motivo ?? null,
@@ -373,6 +393,20 @@ Deno.serve(async (req: Request) => {
         if (typeof proof.latitude === "number" && typeof proof.longitude === "number") proofRow.location = `SRID=4326;POINT(${proof.longitude} ${proof.latitude})`;
         const { data: proofData, error: proofError } = await supabase.from("delivery_proofs").insert(proofRow).select("id").single();
         if (proofError) {
+          // Se outra tentativa ganhou a corrida, reconhecer a prova já criada.
+          if (sync_operation_id) {
+            const { data: racedProof } = await supabase
+              .from("delivery_proofs")
+              .select("id, crypto_verified")
+              .eq("sync_operation_id", sync_operation_id)
+              .maybeSingle();
+            if (racedProof) {
+              return new Response(JSON.stringify({
+                ok: true, status: new_status, crypto_verified: racedProof.crypto_verified,
+                proof_id: racedProof.id, idempotent_replay: true,
+              }), { headers: cors });
+            }
+          }
           // Sem prova não há mudança de estado: volta ao estado anterior.
           await supabase.from("deliveries").update({ status: delivery.status }).eq("id", delivery_id).eq("status", new_status);
           await supabase.from("delivery_status_history").insert({ delivery_id, status: delivery.status });
