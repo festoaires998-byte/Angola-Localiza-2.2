@@ -240,25 +240,24 @@ Deno.serve(async (req: Request) => {
       const { data: canValidate } = await supabase.rpc("can_validate_field", { check_user_id: callerId });
       if (!canValidate) return new Response(JSON.stringify({ error: "apenas supervisores/admins" }), { status: 403, headers: cors });
       const { quadra_id, confirmed_plates_or_notified } = body;
+      if (!quadra_id) return new Response(JSON.stringify({ error: "quadra_id e obrigatorio" }), { status: 400, headers: cors });
       if (!confirmed_plates_or_notified) return new Response(JSON.stringify({ error: "e preciso confirmar N9" }), { status: 400, headers: cors });
-      const { data: streets } = await supabase.from("streets").select("*").eq("quadra_id", quadra_id);
-      let doorsRenumbered = 0;
-      for (const street of streets ?? []) {
-        const { data: addrs } = await supabase.from("addresses").select("id, latitude, longitude, house_number").eq("street_id", street.id).eq("status", "APPROVED");
-        if (!addrs || addrs.length === 0) { await supabase.from("streets").update({ numbering_mode: "FECHADO" }).eq("id", street.id); continue; }
-        const originLat = street.origin_lat ?? addrs[0].latitude; const originLng = street.origin_lng ?? addrs[0].longitude;
-        const ordered = [...addrs].sort((a, b) => haversineMeters(originLat, originLng, a.latitude, a.longitude) - haversineMeters(originLat, originLng, b.latitude, b.longitude));
-        for (let i = 0; i < ordered.length; i++) {
-          const newNumber = String(i + 1);
-          if (ordered[i].house_number !== newNumber) {
-            await supabase.from("audit_logs").insert({ actor_id: callerId, action: "address_renumbered_n9", entity_type: "address", entity_id: ordered[i].id, before: { house_number: ordered[i].house_number }, after: { house_number: newNumber } });
-            await supabase.from("addresses").update({ house_number: newNumber }).eq("id", ordered[i].id);
-            doorsRenumbered++;
-          }
-        }
-        await supabase.from("streets").update({ numbering_mode: "FECHADO", next_seq: ordered.length + 1 }).eq("id", street.id);
+
+      const { data, error } = await supabase.rpc("close_quadra_n9", {
+        p_quadra_id: quadra_id,
+        p_actor_id: callerId,
+      });
+      if (error) {
+        const status = error.message === "QUADRA_NOT_FOUND" ? 404 : 409;
+        return new Response(JSON.stringify({ error: error.message }), { status, headers: cors });
       }
-      return new Response(JSON.stringify({ ok: true, streets_closed: (streets ?? []).length, doors_renumbered: doorsRenumbered }), { headers: cors });
+
+      const result = Array.isArray(data) ? data[0] : data;
+      return new Response(JSON.stringify({
+        ok: true,
+        streets_closed: result?.streets_closed ?? 0,
+        doors_renumbered: result?.doors_renumbered ?? 0,
+      }), { headers: cors });
     }
 
     if (action === "submit") {
