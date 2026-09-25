@@ -346,11 +346,11 @@ Deno.serve(async (req: Request) => {
       if (!record) return new Response(JSON.stringify({ error: "registo nao encontrado" }), { status: 404, headers: cors });
 
       // Estados finais são idempotentes: repetir a validação não cria uma nova morada.
-      if (recordToValidate.status !== "PENDING_REVIEW") {
+      if (record.status !== "PENDING_REVIEW") {
         return new Response(JSON.stringify({
           ok: true,
-          status: recordToValidate.status,
-          address_id: recordToValidate.resulting_address_id ?? null,
+          status: record.status,
+          address_id: record.resulting_address_id ?? null,
           already_processed: true,
         }), { headers: cors });
       }
