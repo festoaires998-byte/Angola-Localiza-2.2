@@ -555,7 +555,7 @@ describe('Mapa / Satélite', () => {
 
   test('o marcador de localização pesquisada usa a cor primária do site', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });
+    desenhar();
     expect(screen.getByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();
   });
   test('por omissão é o mapa do telemóvel', () => {
