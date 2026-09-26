@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -53,11 +53,12 @@ export default function Entregas() {
   const [orgCarregando, setOrgCarregando] = useState(visaoOrganizacao);
   const [orgErro, setOrgErro] = useState<string | null>(null);
 
-  if (visaoOrganizacao && orgCarregando && estado.entregas === null) {
+  useEffect(() => {
+    if (!visaoOrganizacao || !orgCarregando) return;
     void recarregarEntregasOrganizacao()
       .catch((e) => setOrgErro(e instanceof Error ? e.message : String(e)))
       .finally(() => setOrgCarregando(false));
-  }
+  }, [orgCarregando, visaoOrganizacao]);
 
   if (!eEstafeta && !visaoOrganizacao) {
     return (
