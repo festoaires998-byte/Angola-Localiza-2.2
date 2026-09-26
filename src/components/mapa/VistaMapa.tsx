@@ -54,7 +54,7 @@ export function VistaMapa({
     camara.current?.flyTo({ center: [alvo.longitude, alvo.latitude], zoom: 17, duration: 800 });
   }, [alvo?.latitude, alvo?.longitude]);
 
-  const centro = alvo ?? posicao;\n  const aoMoverMapa = () => {\n    if (alvo) setSeguir(false);\n  };
+  const centro = alvo ?? posicao;\n  const aoMoverMapa = () => {\n    // Qualquer gesto manual assume intenção de exploração; nunca recentramos sem ação explícita.\n    setSeguir(false);\n  };
   return (
     <View
       style={[estilos.mapa, altura === 'cheio' ? estilos.cheio : { height: altura }]}
