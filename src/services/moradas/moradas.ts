@@ -1,7 +1,7 @@
 import { lerDadosMorada, type DadosMorada, type FavoritoDoServidor } from '@/api/moradasNucleo';
 import type { CategoriaFavorito, Favorito, RepositorioFavoritos } from '@/database/repositories/favoritos';
 import type { Morada, RepositorioMoradas } from '@/database/repositories/moradas';
-import { acrescentarOperacao } from '@/sync/fila';
+import type { TipoOperacao } from '@/database/repositories/filaSaida';
 
 /**
  * Separador Moradas: os favoritos do utilizador, guardados no telemóvel para
@@ -78,6 +78,8 @@ export interface DependenciasMoradas {
   };
   gerarId: () => string;
   agora?: () => Date;
+  /** Fila unificada opcional; injetada pela composição da app. */
+  acrescentarOperacao?: (userId: string, tipo: TipoOperacao, payload: unknown) => Promise<unknown>;
 }
 
 export interface ResultadoEnvio {
@@ -185,7 +187,7 @@ export function criarServicoMoradas(deps: DependenciasMoradas) {
       };
       await deps.moradas.guardarVarias([morada]);
       await deps.favoritos.guardar(favorito);
-      await acrescentarOperacao(userId, 'create_favorite', {
+      await deps.acrescentarOperacao?.(userId, 'create_favorite', {
         address_id: morada.id,
         address: {
           latitude: morada.latitude,
