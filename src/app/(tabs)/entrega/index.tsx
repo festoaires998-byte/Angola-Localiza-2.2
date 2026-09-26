@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { dataHora, plural } from '@/components/nomes';
@@ -42,6 +42,17 @@ export default function Envios() {
   const router = useRouter();
   const estado = useEnvios();
   const [aAtualizar, setAAtualizar] = useState(false);
+  const [pesquisa, setPesquisa] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<'TODOS' | 'ATIVOS' | 'DELIVERED' | 'CANCELLED' | 'FAILED'>('TODOS');
+
+  const enviosVisiveis = (estado.envios ?? []).filter((e) => {
+    const q = pesquisa.trim().toLocaleLowerCase();
+    const correspondePesquisa = !q || [e.destinatario, e.codigo, e.morada?.codigoPostal, e.morada?.plusCode].filter(Boolean).some((v) => String(v).toLocaleLowerCase().includes(q));
+    const correspondeEstado = filtroEstado === 'TODOS'
+      || (filtroEstado === 'ATIVOS' && !['DELIVERED', 'CANCELLED'].includes(e.estado))
+      || e.estado === filtroEstado;
+    return correspondePesquisa && correspondeEstado;
+  });
 
   const ler = useCallback(async () => {
     if (!userId) return;
@@ -73,7 +84,7 @@ export default function Envios() {
   return (
     <SafeAreaView style={estilos.ecra} edges={['top', 'left', 'right']}>
       <FlatList
-        data={estado.envios}
+        data={enviosVisiveis}
         keyExtractor={(e) => e.id}
         contentContainerStyle={estilos.conteudo}
         refreshControl={online ? <RefreshControl refreshing={aAtualizar} onRefresh={() => void ler()} /> : undefined}
@@ -88,6 +99,33 @@ export default function Envios() {
               }}
             />
             {estado.aviso ? <Caixa tipo={estado.aviso.tipo}>{estado.aviso.texto}</Caixa> : null}
+            <TextInput
+              value={pesquisa}
+              onChangeText={setPesquisa}
+              placeholder="Pesquisar destinatário, rastreio ou destino"
+              placeholderTextColor={CORES.textoSuave}
+              accessibilityLabel="Pesquisar envios"
+              style={estilos.pesquisa}
+            />
+            <View style={estilos.filtros}>
+              {([
+                ['TODOS', 'Todos'],
+                ['ATIVOS', 'Ativos'],
+                ['DELIVERED', 'Entregues'],
+                ['CANCELLED', 'Cancelados'],
+                ['FAILED', 'Falhados'],
+              ] as const).map(([valor, titulo]) => (
+                <Pressable
+                  key={valor}
+                  onPress={() => setFiltroEstado(valor)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: filtroEstado === valor }}
+                  style={[estilos.filtro, filtroEstado === valor && estilos.filtroAtivo]}
+                >
+                  <Text style={[estilos.filtroTexto, filtroEstado === valor && estilos.filtroTextoAtivo]}>{titulo}</Text>
+                </Pressable>
+              ))}
+            </View>
             {online === false ? <Caixa tipo="info">Sem rede: a mostrar o que está neste telemóvel.</Caixa> : null}
             {estado.erro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${estado.erro}`}</Caixa> : null}
             {estado.porEnviar.length > 0 ? (
@@ -106,7 +144,7 @@ export default function Envios() {
         }
         ListEmptyComponent={
           <View style={estilos.vazio}>
-            <Texto>{aAtualizar ? 'A procurar os teus envios…' : 'Ainda não enviaste nada.'}</Texto>
+            <Texto>{estado.envios.length > 0 && enviosVisiveis.length === 0 ? 'Nenhum envio corresponde aos filtros.' : aAtualizar ? 'A procurar os teus envios…' : 'Ainda não enviaste nada.'}</Texto>
             <Texto suave>
               Escolhe uma das tuas moradas guardadas como destino, escreve quem vai receber e envia. Recebes um
               código de rastreio e um PIN para dares a quem recebe.
@@ -145,6 +183,12 @@ const estilos = StyleSheet.create({
   codigo: { fontSize: 17, fontWeight: '700', color: CORES.primaria },
   detalhe: { fontSize: TAMANHOS.textoPequeno, color: CORES.textoSuave },
   textoCaixa: { fontSize: TAMANHOS.textoPequeno, lineHeight: 24, color: CORES.texto, fontWeight: '600' },
+  pesquisa: { borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, paddingHorizontal: 12, paddingVertical: 10, fontSize: TAMANHOS.texto, color: CORES.texto, backgroundColor: CORES.fundo },
+  filtros: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filtro: { borderWidth: 1, borderColor: CORES.borda, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+  filtroAtivo: { backgroundColor: CORES.infoFundo, borderColor: CORES.primaria },
+  filtroTexto: { fontSize: 13, fontWeight: '700', color: CORES.textoSuave },
+  filtroTextoAtivo: { color: CORES.primaria },
   etiquetas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   etiqueta: {
     fontSize: 14,
