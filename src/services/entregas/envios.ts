@@ -73,6 +73,7 @@ function envioGuardado(linha: Entrega): Envio | null {
     criadoPor: d.criadoPor ?? null,
     estafeta: d.estafeta ?? null,
     atualizadoEm: d.atualizadoEm ?? linha.atualizado_em,
+    origem: d.origem ?? null,
     morada: d.morada ?? null,
   };
 }
