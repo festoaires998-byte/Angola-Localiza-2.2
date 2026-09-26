@@ -6,6 +6,8 @@ import { Botao, Caixa, Campo, Ecra, EcraCarregamento, Subtitulo, Texto } from '@
 import { faltaNoEnvio, MAX_INSTRUCOES, mensagemErroEnvio, type DadosEnvio } from '@/domain/entregas/envio';
 import { useMoradas } from '@/hooks/useMoradas';
 import { useOnline } from '@/hooks/useOnline';
+import { usePosicao } from '@/hooks/usePosicao';
+import { useInfoLocal } from '@/hooks/useInfoLocal';
 import { useSessao } from '@/hooks/useSessao';
 import { servicoEnvios } from '@/services/entregas/enviosApp';
 import { tituloMorada } from '@/services/moradas/moradas';
@@ -24,8 +26,24 @@ export default function NovoEnvio() {
   const userId = useSessao().utilizador?.id ?? null;
   const router = useRouter();
   const moradas = useMoradas(online);
+  const estadoPosicao = usePosicao();
+  const posicao = estadoPosicao.estado === 'ok' ? estadoPosicao.posicao : estadoPosicao.estado === 'a_procurar' ? estadoPosicao.ultima : null;
+  const infoOrigem = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao === null || posicao?.precisao === undefined ? false : posicao.precisao <= 10);
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
   const [dados, setDados] = useState<DadosEnvio>({ moradaId: null, destinatario: '', telefone: '', instrucoes: '', urgente: false });
+
+  useEffect(() => {
+    if (!posicao) return;
+    setDados((d) => ({
+      ...d,
+      origem: {
+        latitude: posicao.latitude,
+        longitude: posicao.longitude,
+        codigoPostal: infoOrigem?.codigoPostal.codigo ?? null,
+        plusCode: infoOrigem?.plusCode ?? null,
+      },
+    }));
+  }, [posicao?.latitude, posicao?.longitude, infoOrigem?.codigoPostal.codigo, infoOrigem?.plusCode]);
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -97,6 +115,20 @@ export default function NovoEnvio() {
       {verificacao === 'desconhecido' ? (
         <Caixa tipo="info">Sem rede não foi possível confirmar a tua verificação. O servidor confirma ao receber.</Caixa>
       ) : null}
+
+      <Subtitulo>De onde?</Subtitulo>
+      {posicao ? (
+        <Caixa tipo="info">
+          {`Origem: ${infoOrigem?.codigoPostal.codigo ?? infoOrigem?.plusCode ?? 'posição atual'}${infoOrigem?.local.municipio ? ` · ${infoOrigem.local.municipio}` : ''}`}
+          {posicao.precisao !== null && posicao.precisao > 10 ? '\nA posição está pouco precisa; continua a medir antes de enviar.' : ''}
+        </Caixa>
+      ) : estadoPosicao.estado === 'sem_permissao' ? (
+        <Caixa tipo="aviso">Autoriza a localização para registar o ponto de origem do envio.</Caixa>
+      ) : estadoPosicao.estado === 'gps_desligado' ? (
+        <Caixa tipo="aviso">Liga a localização do telemóvel para registar o ponto de origem.</Caixa>
+      ) : (
+        <Caixa tipo="info">A obter a localização atual…</Caixa>
+      )}
 
       <Subtitulo>Para onde?</Subtitulo>
       {destinos.length > 0 ? (
