@@ -104,6 +104,7 @@ function CartaoOndeEstou({
   info,
   online,
   children,
+  rotulos,
 }: {
   medida: CapturaGps;
   comSinal: boolean;
@@ -111,6 +112,7 @@ function CartaoOndeEstou({
   online: boolean | null;
   /** O QR Code e o "Registar", dentro do mesmo cartão (como no site). */
   children?: ReactNode;
+  rotulos: ReturnType<typeof rotulosMapa>;
 }) {
   const captura = medida.captura;
   if (!captura) {
@@ -241,14 +243,14 @@ function ResultadosPesquisa({ resultados, aoEscolher, localidade }: { resultados
           <Pressable
             key={`${r.tipo}:${r.id}`}
             accessibilityRole="button"
-            accessibilityLabel={`${nomeTipoPesquisa(r.tipo, rotulos.localidade)}: ${r.titulo}${temPonto ? '. Ver no mapa' : ''}`}
+            accessibilityLabel={`${nomeTipoPesquisa(r.tipo, localidade)}: ${r.titulo}${temPonto ? '. Ver no mapa' : ''}`}
             accessibilityState={{ disabled: !temPonto }}
             disabled={!temPonto}
             onPress={() => temPonto && aoEscolher({ latitude: r.latitude!, longitude: r.longitude!, titulo: r.titulo })}
             style={({ pressed }) => [estilos.resultado, pressed && estilos.resultadoPremido]}
           >
             <Text style={estilos.resultadoTitulo}>{r.titulo}</Text>
-            <Text style={estilos.nota}>{[nomeTipoPesquisa(r.tipo, rotulos.localidade), r.subtitulo].filter(Boolean).join(' · ')}</Text>
+            <Text style={estilos.nota}>{[nomeTipoPesquisa(r.tipo, localidade), r.subtitulo].filter(Boolean).join(' · ')}</Text>
             <Text style={estilos.resultadoAcao}>{temPonto ? 'Ver no mapa ›' : 'Ainda sem posição no mapa'}</Text>
           </Pressable>
         );
