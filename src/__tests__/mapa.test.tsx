@@ -445,7 +445,7 @@ describe('pesquisa única', () => {
   test('Plus Code sem rede: vai para o ponto no mapa, sem pedir nada ao servidor', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     desenhar();
-    fireEvent.changeText(screen.getByLabelText('Pesquisar'), PLUS.toLowerCase());
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Pesquisar'), PLUS.toLowerCase());
     expect(mockPesquisar).not.toHaveBeenCalled();
     expect(await screen.findByText(`No mapa: ${PLUS}`)).toBeTruthy();
     expect(screen.getByTestId('marcador')).toBeTruthy();
@@ -456,7 +456,7 @@ describe('pesquisa única', () => {
 
   test('código postal sem rede: explica que precisa de rede', async () => {
     desenhar();
-    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'AO-HUA-MNFQR6JW-41');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'AO-HUA-MNFQR6JW-41');
     expect(await screen.findByText(/Sem rede: sem internet só se encontram Plus Codes/)).toBeTruthy();
     expect(mockPesquisar).not.toHaveBeenCalled();
   });
@@ -469,8 +469,8 @@ describe('pesquisa única', () => {
       { tipo: 'bairro', id: 'b1', titulo: 'Bairro Novo', subtitulo: 'Bairro', latitude: null, longitude: null, codigoPostal: null, plusCode: null },
     ]);
     desenhar();
-    fireEvent.changeText(screen.getByLabelText('Pesquisar'), '  missão ');
-    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'missão');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Pesquisar'), '  missão ');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'missão');
     expect(await screen.findByText('Rua da Missão')).toBeTruthy();
     expect(mockPesquisar).toHaveBeenCalledWith('missão');
     expect(screen.getByText('Ainda sem posição no mapa')).toBeTruthy();
@@ -482,17 +482,17 @@ describe('pesquisa única', () => {
   test('sem resultados e erro do servidor', async () => {
     mockOnline = true;
     desenhar();
-    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto'); });
     expect(await screen.findByText('Sem resultados.')).toBeTruthy();
 
     mockPesquisar.mockRejectedValueOnce(new Error('Sem ligação ao servidor.'));
-    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto outra vez');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto outra vez'); });
     expect(await screen.findByText('Não foi possível pesquisar agora. Sem ligação ao servidor.')).toBeTruthy();
   });
 
   test('texto curto: pede mais letras', async () => {
     desenhar();
-    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'ab');
+    await act(async () => { fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'ab');
     expect(await screen.findByText('Escreve pelo menos 3 letras.')).toBeTruthy();
   });
 });
