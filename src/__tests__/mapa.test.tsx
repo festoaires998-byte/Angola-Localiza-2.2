@@ -558,7 +558,11 @@ describe('Mapa / Satélite', () => {
   });
 
 
-  test('o marcador de localização pesquisada usa a cor primária do site', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });\n    expect(screen.getByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();\n  });
+  test('o marcador de localização pesquisada usa a cor primária do site', () => {
+    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });
+    expect(screen.getByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();
+  });
   test('por omissão é o mapa do telemóvel', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     desenhar();
@@ -567,7 +571,13 @@ describe('Mapa / Satélite', () => {
   });
 
 
-  test('mostra ficha contextual ao selecionar um ponto', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });\n    expect(screen.getByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();\n    expect(screen.getByText('Local pesquisado')).toBeTruthy();\n    expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();\n  });
+  test('mostra ficha contextual ao selecionar um ponto', () => {
+    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });
+    expect(screen.getByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
+    expect(screen.getByText('Local pesquisado')).toBeTruthy();
+    expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();
+  });
   test('sem rede: o satélite não liga e explica porquê', () => {
     const alerta = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
@@ -707,5 +717,12 @@ describe('Guardar como favorito', () => {
     await waitFor(() => expect(screen.getAllByText(/precisas de fazer a verificação simples/)).toHaveLength(2));
     expect(screen.getByRole('button', { name: 'Guardar como favorito' })).toBeDisabled();
     expect(mockGuardarDoMapa).not.toHaveBeenCalled();
-  });\n\n  test('um gesto manual interrompe o seguimento automático do GPS', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar();\n    fireEvent(screen.getByTestId('mapa'), 'touchStart');\n    expect(screen.getByRole('button', { name: 'Centrar em mim' })).toBeTruthy();\n  });
+  });
+
+  test('um gesto manual interrompe o seguimento automático do GPS', () => {
+    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    desenhar();
+    fireEvent(screen.getByTestId('mapa'), 'touchStart');
+    expect(screen.getByRole('button', { name: 'Centrar em mim' })).toBeTruthy();
+  });
 });
