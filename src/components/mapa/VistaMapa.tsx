@@ -168,7 +168,7 @@ const estilos = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: CORES.perigo,
+    backgroundColor: CORES.primaria,
     borderWidth: 4,
     borderColor: CORES.fundo,
   },
