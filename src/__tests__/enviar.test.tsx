@@ -88,7 +88,9 @@ async function preencherEEnviar() {
     fireEvent.press(screen.getByRole('radio', { name: /Morada de destino: Casa da Maria/ }));
     fireEvent.changeText(screen.getByLabelText('Nome de quem recebe'), 'Maria João');
   });
-  await carregar('Enviar pedido');
+  await carregar('Rever e confirmar pedido');
+  expect(screen.getByText(/Confirma os dados antes de enviar:/)).toBeTruthy();
+  await carregar('Confirmar e enviar');
 }
 
 beforeEach(() => {
@@ -132,7 +134,7 @@ describe('Enviar: novo envio', () => {
     mockVerificacao = 'por_verificar';
     await desenhar('/entrega/novo');
     expect(screen.getByText('Para enviar, primeiro tens de verificar a tua identidade.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Enviar pedido' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rever e confirmar pedido' })).toBeNull();
     await carregar('Verificar a minha identidade');
     expect(r.getPathname()).toBe('/definicoes/verificacao');
   });
@@ -148,7 +150,7 @@ describe('Enviar: novo envio', () => {
     expect(screen.getByRole('radio', { name: /Casa da Maria/ })).toBeTruthy();
     expect(screen.queryByRole('radio', { name: /Ainda sem id/ })).toBeNull();
     expect(screen.getByText(/Escolher a morada de destino\./)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Enviar pedido' }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Rever e confirmar pedido' }).props.accessibilityState.disabled).toBe(true);
   });
 
   test('sem moradas guardadas: manda guardar primeiro', async () => {
