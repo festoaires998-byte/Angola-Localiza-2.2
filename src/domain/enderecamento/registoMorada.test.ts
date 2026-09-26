@@ -144,6 +144,15 @@ describe('o que falta para enviar', () => {
     expect(tipoAEnviar('Escola', 'ignorado')).toBe('Escola');
   });
 
+  test('rótulo territorial configurado: usa a gramática da localidade sem alterar o payload', () => {
+    expect(faltaParaEnviar(dados({ bairro: '' }), 'localidade')).toEqual([
+      'Escolher a localidade, escrever o nome dela ou marcar "Esta localidade não tem nome".',
+    ]);
+    expect(faltaParaEnviar(dados({ bairro: '', bairroSemNome: true }), 'localidade')).not.toContain(
+      'Escolher a localidade, escrever o nome dela ou marcar "Esta localidade não tem nome".',
+    );
+  });
+
   test('bairro obrigatório: sem ele o botão não ativa, com a frase certa', () => {
     expect(faltaParaEnviar(dados({ bairro: '' }))).toEqual(['Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".']);
     expect(faltaParaEnviar(dados({ bairro: '  ' }))).toEqual(['Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".']);
