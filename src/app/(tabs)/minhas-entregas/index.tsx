@@ -118,6 +118,7 @@ export default function Entregas() {
           <View style={estilos.cabecalho}>
             <Titulo>{visaoOrganizacao ? 'Entregas da organização' : 'As minhas entregas'}</Titulo>
             <Texto suave>{`Hoje: ${hojeEntregas.length} entregas · ${concluidasHoje} com prova · ${sucesso}% sucesso`}</Texto>
+            <Texto suave>{`${porFazer.length} por fazer`}</Texto>
             {orgErro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${orgErro}`}</Caixa> : null}
             {estado.aviso ? <Caixa tipo={estado.aviso.tipo}>{estado.aviso.texto}</Caixa> : null}
             {online === false ? <Caixa tipo="info">Offline / pendentes de sincronização.</Caixa> : null}
