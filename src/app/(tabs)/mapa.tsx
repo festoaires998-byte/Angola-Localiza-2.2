@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -300,7 +300,7 @@ export default function Mapa() {
   }, [online]);
   const estilo = satelite ? estiloSatelite : estiloBase;
 
-  const mostrarNoMapa = (p: PontoEncontrado) => {
+  const mostrarNoMapa = useCallback((p: PontoEncontrado) => {
     setAlvo(p);
     rolagem.current?.scrollTo({ y: Math.max(0, yMapa.current - 16), animated: true });
   };
@@ -316,7 +316,7 @@ export default function Mapa() {
     if (texto.length < 3) return;
     const timer = setTimeout(() => void pesquisa.procurar(texto), 400);
     return () => clearTimeout(timer);
-  }, [pesquisa.texto]);
+  }, [pesquisa.texto, pesquisa.procurar]);
 
   const escolherCamada = (c: Camada) => {
     if (c === 'mapa') return setCamada('mapa');
