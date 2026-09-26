@@ -107,17 +107,20 @@ export function montarPedidoEnvio(d: DadosEnvio): PedidoEnvio {
   const falta = faltaNoEnvio(d);
   if (falta.length > 0) throw new Error(falta[0]);
   const instrucoes = d.instrucoes.trim();
-  return {
+  const pedido: PedidoEnvio = {
     address_id: d.moradaId!,
-    origin_latitude: d.origem?.latitude ?? null,
-    origin_longitude: d.origem?.longitude ?? null,
-    origin_postal_code: d.origem?.codigoPostal ?? null,
-    origin_plus_code: d.origem?.plusCode ?? null,
     recipient_name: limparTexto(d.destinatario),
     recipient_phone: normalizarTelefone(d.telefone) ?? null,
     instructions: instrucoes === '' ? null : instrucoes,
     is_urgent: d.urgente,
   };
+  if (d.origem) {
+    pedido.origin_latitude = d.origem.latitude;
+    pedido.origin_longitude = d.origem.longitude;
+    pedido.origin_postal_code = d.origem.codigoPostal ?? null;
+    pedido.origin_plus_code = d.origem.plusCode ?? null;
+  }
+  return pedido;
 }
 
 /** Uma entrega criada pelo utilizador, como a app a mostra. */
@@ -172,6 +175,14 @@ export function lerEnvio(linha: unknown): Envio {
   const id = texto(l.id);
   if (!id) throw new Error('Resposta do servidor sem a entrega.');
   const m = (l.addresses ?? null) as Record<string, unknown> | null;
+  const origem = [l.origin_latitude, l.origin_longitude, l.origin_postal_code, l.origin_plus_code].some((v) => v !== null && v !== undefined)
+    ? {
+        latitude: numero(l.origin_latitude),
+        longitude: numero(l.origin_longitude),
+        codigoPostal: texto(l.origin_postal_code),
+        plusCode: texto(l.origin_plus_code),
+      }
+    : undefined;
   return {
     id,
     codigo: texto(l.tracking_code),
@@ -183,12 +194,7 @@ export function lerEnvio(linha: unknown): Envio {
     criadoPor: texto(l.created_by),
     estafeta: texto(l.assigned_driver),
     atualizadoEm: texto(l.updated_at) ?? texto(l.created_at),
-    origem: {
-      latitude: numero(l.origin_latitude),
-      longitude: numero(l.origin_longitude),
-      codigoPostal: texto(l.origin_postal_code),
-      plusCode: texto(l.origin_plus_code),
-    },
+    ...(origem ? { origem } : {}),
     morada: m
       ? {
           codigoPostal: texto(m.postal_code),
