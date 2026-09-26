@@ -294,6 +294,63 @@ describe('sync v8: operações e reencaminhamento', () => {
   });
 });
 
+describe('sync v9: favoritos na fila unificada', () => {
+  test('cria a morada e o favorito a partir de uma operação offline', async () => {
+    const s = cenario();
+    const [r] = await sincronizar('cidadao', {
+      operation_type: 'create_favorite',
+      payload: {
+        address_id: 'bbbbbbbb-0000-4000-8000-000000000010',
+        address: {
+          latitude: -12.7761,
+          longitude: 15.7392,
+          plus_code: '6GXV+2C',
+          postal_code: null,
+          accuracy_meters: 4,
+          visibility_level: 'PUBLIC',
+          country_code: 'AO',
+        },
+        category: 'casa',
+        label: 'Casa offline',
+      },
+    });
+    expect(r.status).toBe('SYNCED');
+    expect(linhas(s, 'addresses')).toHaveLength(3);
+    expect(linhas(s, 'favorites')[0]).toMatchObject({
+      address_id: 'bbbbbbbb-0000-4000-8000-000000000010',
+      user_id: CIDADAO,
+      category: 'casa',
+      label: 'Casa offline',
+    });
+  });
+
+  test('update_favorite só altera favorito do próprio utilizador', async () => {
+    const s = cenario();
+    const fav = linhas(s, 'favorites')[0];
+    fav.user_id = CIDADAO;
+    fav.id = 'cccccccc-0000-4000-8000-000000000001';
+    const [r] = await sincronizar('cidadao', {
+      operation_type: 'update_favorite',
+      payload: { id: fav.id, category: 'trabalho', label: 'Escritório' },
+    });
+    expect(r.status).toBe('SYNCED');
+    expect(linhas(s, 'favorites')[0]).toMatchObject({ category: 'trabalho', label: 'Escritório' });
+  });
+
+  test('remove_favorite só remove favorito do próprio utilizador', async () => {
+    const s = cenario();
+    const fav = linhas(s, 'favorites')[0];
+    fav.user_id = CIDADAO;
+    fav.id = 'cccccccc-0000-4000-8000-000000000002';
+    const [r] = await sincronizar('cidadao', {
+      operation_type: 'remove_favorite',
+      payload: { id: fav.id },
+    });
+    expect(r.status).toBe('SYNCED');
+    expect(linhas(s, 'favorites')).toHaveLength(0);
+  });
+});
+
 describe('sync v8: regras puras', () => {
   test('limparMoradaNova força PROPOSED e o dono', () => {
     const r = limparMoradaNova(MORADA_DO_SITE, CIDADAO);
