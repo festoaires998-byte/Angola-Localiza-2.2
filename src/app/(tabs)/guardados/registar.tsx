@@ -106,7 +106,9 @@ export default function RegistarMorada() {
   const labelLocalidade = nivelLocalidadeConfig?.label ?? 'Localidade';
   const pluralLocalidade = nivelLocalidadeConfig?.plural_label ?? 'Localidades';
   const localidadeMinuscula = labelLocalidade.toLocaleLowerCase('pt-PT');
-  const artigoLocalidade = /^(Ilha|Zona|Região|Secção|Localidade|Tabanca)$/i.test(labelLocalidade) ? 'da' : 'do';
+  const localidadeFeminina = /^(Ilha|Zona|Região|Secção|Localidade|Tabanca)$/i.test(labelLocalidade);
+  const artigoLocalidade = localidadeFeminina ? 'da' : 'do';
+  const outraLocalidade = localidadeFeminina ? 'Outra' : 'Outro';
   const demonstrativoLocalidade = /^(Ilha|Zona|Região|Secção|Localidade|Tabanca)$/i.test(labelLocalidade) ? 'Esta' : 'Este';
 
   useEffect(() => {
@@ -339,7 +341,7 @@ export default function RegistarMorada() {
             aoEscolher={setBairro}
             opcoes={[
               ...bairros.map((b) => ({ valor: b, nome: b })),
-              { valor: BAIRRO_NOVO, nome: `Outra ${localidadeMinuscula} (escrever à mão)` },
+              { valor: BAIRRO_NOVO, nome: `${outraLocalidade} ${localidadeMinuscula} (escrever à mão)` },
             ]}
           />
         ) : (
