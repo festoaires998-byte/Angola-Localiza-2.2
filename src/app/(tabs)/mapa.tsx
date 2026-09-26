@@ -286,11 +286,19 @@ export default function Mapa() {
 
   useEffect(() => {
     if (!userId || online === null) return;
+    let ativo = true;
     // Se nem o telemóvel responder, fica "desconhecido" (como no Registar): o servidor decide.
     servicoRegisto
       .verificacao(userId, online)
-      .then(setVerificacao)
-      .catch(() => setVerificacao('desconhecido'));
+      .then((resultado) => {
+        if (ativo) setVerificacao(resultado);
+      })
+      .catch(() => {
+        if (ativo) setVerificacao('desconhecido');
+      });
+    return () => {
+      ativo = false;
+    };
   }, [userId, online]);
 
   // Sem rede não há imagens de satélite: volta ao mapa do telemóvel.
