@@ -29,6 +29,9 @@ export const NOMES_CARGOS: Record<Cargo, string> = {
 
 export const NOMES_OPERACOES: Record<TipoOperacao, string> = {
   create_address: 'Nova morada',
+  create_favorite: 'Guardar favorito',
+  update_favorite: 'Atualizar favorito',
+  remove_favorite: 'Remover favorito',
   create_delivery: 'Novo pedido de entrega',
   field_submit: 'Levantamento de campo',
   delivery_proof: 'Prova de entrega',
