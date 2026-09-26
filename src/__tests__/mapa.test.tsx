@@ -545,7 +545,7 @@ describe('Ler QR', () => {
 describe('Mapa / Satélite', () => {
   const estiloMostrado = () => (screen.getAllByTestId('mapa-nativo')[0].props.mapStyle as { name: string }).name;
 
-  test('o mapa começa com zoom equivalente ao site e oferece controlos de zoom', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar();\n    expect(chamadasCamara[0]).toMatchObject({ metodo: 'initialViewState' });\n    expect(screen.getByRole('button', { name: 'Aumentar zoom' })).toBeTruthy();\n    expect(screen.getByRole('button', { name: 'Diminuir zoom' })).toBeTruthy();\n  });\n\n  test('por omissão é o mapa do telemóvel', () => {
+  test('o mapa começa com zoom equivalente ao site e oferece controlos de zoom', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar();\n    expect(chamadasCamara).toHaveLength(0);\n    expect(screen.getByRole('button', { name: 'Aumentar zoom' })).toBeTruthy();\n    expect(screen.getByRole('button', { name: 'Diminuir zoom' })).toBeTruthy();\n    fireEvent.press(screen.getByRole('button', { name: 'Aumentar zoom' }));\n    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [18, 250] });\n    fireEvent.press(screen.getByRole('button', { name: 'Diminuir zoom' }));\n    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [14, 250] });\n  });\n\n  test('por omissão é o mapa do telemóvel', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     desenhar();
     expect(estiloMostrado()).toBe('Angola Localiza');
