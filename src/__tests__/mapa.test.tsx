@@ -282,7 +282,7 @@ describe('separador Mapa', () => {
 
   test('botão "Obter localização" / "Atualizar localização" mede de novo', async () => {
     mockMedida = { captura: null, aMedir: false, leiturasBoas: 0, necessarias: 3, limite: 10, melhorAteAgora: null };
-    const { rerender } = desenhar();
+    const { rerender } = await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Obter localização' }));
     expect(mockMedirDeNovo).toHaveBeenCalledTimes(1);
 
@@ -711,7 +711,7 @@ describe('Guardar como favorito', () => {
 
   test('com precisão fraca ou sem posição: não deixa guardar e diz porquê', async () => {
     mockMedida = medida(POS, { captura: { ...POS, precisao: 15, leituras: 3, fraca: true } });
-    const { unmount } = desenhar();
+    const { unmount } = await desenhar();
     expect(await screen.findByText('Espera por uma precisão melhor que ±10 m.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Guardar como favorito' })).toBeDisabled();
     unmount();
