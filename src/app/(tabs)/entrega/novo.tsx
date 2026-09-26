@@ -50,6 +50,7 @@ export default function NovoEnvio() {
   const [entradaDestino, setEntradaDestino] = useState('');
   const [lerQr, setLerQr] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [confirmar, setConfirmar] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -121,6 +122,12 @@ export default function NovoEnvio() {
   };
 
   const mudar = (m: Partial<DadosEnvio>) => setDados((d) => ({ ...d, ...m }));
+
+  function pedirConfirmacao() {
+    setErro(null);
+    if (falta.length > 0) return;
+    setConfirmar(true);
+  }
 
   async function enviar() {
     if (!userId) return;
@@ -231,7 +238,29 @@ export default function NovoEnvio() {
         <Texto suave>Sem rede: o pedido fica guardado neste telemóvel e é enviado quando a rede voltar.</Texto>
       ) : null}
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
-      <Botao titulo="Enviar pedido" onPress={() => void enviar()} desativado={falta.length > 0} aCarregar={aEnviar} />
+
+      {!confirmar ? (
+        <Botao titulo="Rever e confirmar pedido" onPress={pedirConfirmacao} desativado={falta.length > 0} />
+      ) : (
+        <>
+          <Caixa tipo="info">
+            {[
+              'Confirma os dados antes de enviar:',
+              `Origem: ${dados.origem?.codigoPostal ?? dados.origem?.plusCode ?? 'posição atual'}`,
+              `Destino: ${destinos.find((d) => d.valor === dados.moradaId)?.nome ?? 'morada selecionada'}`,
+              `Destinatário: ${dados.destinatario}`,
+              dados.telefone.trim() ? `Telefone: ${dados.telefone.trim()}` : 'Telefone: não indicado',
+              dados.instrucoes.trim() ? `Instruções: ${dados.instrucoes.trim()}` : 'Instruções: não indicadas',
+              `Prioridade: ${dados.urgente ? 'Urgente' : 'Normal'}`,
+            ].join('\\n')}
+          </Caixa>
+          {online === false ? (
+            <Caixa tipo="aviso">Sem rede: ao confirmar, o pedido será guardado neste telemóvel para envio posterior.</Caixa>
+          ) : null}
+          <Botao titulo="Confirmar e enviar" onPress={() => void enviar()} desativado={aEnviar} aCarregar={aEnviar} />
+          <Botao titulo="Voltar e editar" variante="secundario" onPress={() => setConfirmar(false)} desativado={aEnviar} />
+        </>
+      )}
     </Ecra>
   );
 }
