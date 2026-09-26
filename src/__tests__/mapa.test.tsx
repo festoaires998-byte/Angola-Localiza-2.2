@@ -547,9 +547,9 @@ describe('Mapa / Satélite', () => {
     expect(screen.getByRole('button', { name: 'Aumentar zoom' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Diminuir zoom' })).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Aumentar zoom' }));
-    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [18, 250] });
+    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [18, { duration: 250 }] });
     fireEvent.press(screen.getByRole('button', { name: 'Diminuir zoom' }));
-    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [14, 250] });
+    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [14, { duration: 250 }] });
   });
 
 
@@ -717,7 +717,7 @@ describe('Guardar como favorito', () => {
   test('um gesto manual interrompe o seguimento automático do GPS', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     desenhar();
-    fireEvent(screen.getByTestId('mapa'), 'touchStart');
+    fireEvent(screen.getByTestId('vista-mapa'), 'touchStart');
     expect(screen.getByRole('button', { name: 'Centrar em mim' })).toBeTruthy();
   });
 });
