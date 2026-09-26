@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-const maybeSingle = jest.fn();
+type CountryConfigRow = {
+  country_code: string;
+  country_name: string;
+  currency_code: string;
+  phone_country_code: string;
+  address_hierarchy: string[];
+  is_active: boolean;
+};
+
+type MaybeSingleResult = { data: CountryConfigRow | null; error: { message: string } | null };
+
+const maybeSingle = jest.fn<() => Promise<MaybeSingleResult>>();
 
 jest.mock('@/api/supabase', () => ({
   supabase: {
