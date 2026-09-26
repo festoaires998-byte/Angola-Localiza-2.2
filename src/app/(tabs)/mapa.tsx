@@ -303,7 +303,7 @@ export default function Mapa() {
   const mostrarNoMapa = useCallback((p: PontoEncontrado) => {
     setAlvo(p);
     rolagem.current?.scrollTo({ y: Math.max(0, yMapa.current - 16), animated: true });
-  };
+  }, [rolagem, yMapa]);
   const pesquisa = usePesquisaMapa({
     online,
     referencia: captura ?? aoVivo ?? CENTRO_HUAMBO,
