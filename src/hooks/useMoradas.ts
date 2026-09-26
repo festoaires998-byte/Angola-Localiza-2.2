@@ -4,6 +4,7 @@ import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import type { Registo } from '@/domain/enderecamento/meusRegistos';
 import { ultimaAtualizacao, type ItemMorada } from '@/services/moradas/moradas';
 import { mudancasMoradas, servicoMoradas, servicoRegistos } from '@/services/moradas/moradasApp';
+import { acrescentarOperacao } from '@/sync/fila';
 import { eventosSync } from '@/sync/eventos';
 
 import { useSessao } from './useSessao';
@@ -77,12 +78,15 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
     void lerLocal();
     const pararA = mudancasMoradas.ouvir(() => void lerLocal());
     // Um registo feito sem rede sai pela fila: deixa de estar "à espera de rede".
-    const pararB = eventosSync.ouvir('sincronizado', () => void lerLocal());
+    const pararB = eventosSync.ouvir('sincronizado', () => {
+      if (online && userId) void atualizar();
+      else void lerLocal();
+    });
     return () => {
       pararA();
       pararB();
     };
-  }, [lerLocal]);
+  }, [lerLocal, atualizar, online, userId]);
 
   // Com rede: atualiza (ao abrir e quando a rede volta). O detalhe não precisa:
   // a lista já o fez.
@@ -93,12 +97,14 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
   const alterar = useCallback(
     async (id: string, mudancas: { nome: string; categoria: CategoriaFavorito }) => {
       await servicoMoradas.alterar(id, mudancas);
-      mudancasMoradas.avisar();
-      if (online && userId) {
-        const r = await servicoMoradas.enviarPendentes(userId).catch((e: unknown) => ({ erro: e as Error }));
-        setErro(r.erro ? frase(r.erro) : null);
-        mudancasMoradas.avisar();
+      if (userId) {
+        await acrescentarOperacao(userId, 'update_favorite', {
+          id,
+          category: mudancas.categoria,
+          label: mudancas.nome.trim() || null,
+        });
       }
+      mudancasMoradas.avisar();
     },
     [online, userId],
   );
@@ -106,12 +112,8 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
   const remover = useCallback(
     async (id: string) => {
       await servicoMoradas.remover(id);
+      if (userId) await acrescentarOperacao(userId, 'remove_favorite', { id });
       mudancasMoradas.avisar();
-      if (online && userId) {
-        const r = await servicoMoradas.enviarPendentes(userId).catch((e: unknown) => ({ erro: e as Error }));
-        setErro(r.erro ? frase(r.erro) : null);
-        mudancasMoradas.avisar();
-      }
     },
     [online, userId],
   );
