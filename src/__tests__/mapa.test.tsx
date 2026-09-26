@@ -566,6 +566,8 @@ describe('Mapa / Satélite', () => {
     expect(screen.getByRole('radio', { name: 'Vista: Mapa' }).props.accessibilityState).toMatchObject({ selected: true });
   });
 
+
+  test('mostra ficha contextual ao selecionar um ponto', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });\n    expect(screen.getByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();\n    expect(screen.getByText('Local pesquisado')).toBeTruthy();\n    expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();\n  });
   test('sem rede: o satélite não liga e explica porquê', () => {
     const alerta = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
