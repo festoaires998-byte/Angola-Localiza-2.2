@@ -45,8 +45,14 @@ jest.mock('@/hooks/useSessao', () => ({
 }));
 
 let mockVerificacao = 'verificado';
+let resolverVerificacao: ((valor: string) => void) | undefined;
 jest.mock('@/services/moradas/registoApp', () => ({
-  servicoRegisto: { verificacao: async () => mockVerificacao },
+  servicoRegisto: {
+    verificacao: () =>
+      new Promise<string>((resolve) => {
+        resolverVerificacao = resolve;
+      }),
+  },
 }));
 
 const mockGuardarDoMapa = jest.fn(async (..._a: unknown[]) => ({}));
@@ -106,17 +112,23 @@ function medida(p: typeof POS, extra: Record<string, unknown> = {}) {
 }
 const MANIFESTO = { regiao: 'huambo', versao: '20260923', ficheiro: 'huambo-20260923.pmtiles', bytes: 12_582_912 };
 
-function desenhar() {
-  return render(
+async function desenhar() {
+  const utils = render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 400, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
       <Mapa />
     </SafeAreaProvider>,
   );
+  await act(async () => {
+    resolverVerificacao?.(mockVerificacao);
+    await Promise.resolve();
+  });
+  return utils;
 }
 
 beforeEach(() => {
   mockSeparadores = ['mapa', 'guardados', 'definicoes'];
   mockVerificacao = 'verificado';
+  resolverVerificacao = undefined;
   mockPush.mockClear();
   mockGuardarDoMapa.mockClear();
   mockEnviarPendentes.mockClear();
@@ -144,7 +156,7 @@ describe('separador Mapa', () => {
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
       local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-20T10:00:00.000Z' },
     };
-    desenhar();
+    await desenhar();
     expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
     expect(encode(POS.latitude, POS.longitude).replace('+', '')).toHaveLength(11);
     expect(screen.getByText('± 6 m (boa)')).toBeTruthy();
@@ -168,7 +180,7 @@ describe('separador Mapa', () => {
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-2-41', estado: 'confirmado', confirmadoEm: '2026-09-23T21:16:00.000Z' },
       local: { provincia: 'Huambo', municipio: 'Caála', origem: 'servidor', atualizadoEm: null },
     };
-    desenhar();
+    await desenhar();
     expect(screen.getByText('Confirmado')).toBeTruthy();
     expect(screen.getByText('Caála')).toBeTruthy();
     expect(screen.queryByText('Sem rede: a mostrar o que está neste telemóvel')).toBeNull();
@@ -180,7 +192,7 @@ describe('separador Mapa', () => {
       codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: '2026-09-23T20:16:00.000Z' },
       local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-23T20:16:00.000Z' },
     };
-    desenhar();
+    await desenhar();
     expect(screen.getByText('AO-HUA-MNFQPN2S-3-95')).toBeTruthy();
     expect(screen.getByText('Confirmado')).toBeTruthy();
     expect(screen.getByText(/Sem rede: confirmado pelo servidor a/)).toBeTruthy();
@@ -189,7 +201,7 @@ describe('separador Mapa', () => {
 
   test('código indisponível', async () => {
     mockInfo = { plusCode: '', codigoPostal: { codigo: null, estado: 'indisponivel', confirmadoEm: null }, local: { provincia: null, municipio: null, origem: null, atualizadoEm: null } };
-    desenhar();
+    await desenhar();
     expect(screen.getByText('Indisponível neste ponto.')).toBeTruthy();
     expect(screen.getByText('Sem rede e sem dados guardados desta zona.')).toBeTruthy();
   });
@@ -197,7 +209,7 @@ describe('separador Mapa', () => {
   test('com rede e sem mapa guardado: mostra o tamanho e descarrega', async () => {
     mockOnline = true;
     mockMapa = { estado: 'sem_mapa', remoto: MANIFESTO };
-    desenhar();
+    await desenhar();
     expect(screen.getByText(/\(12,0 MB\)/)).toBeTruthy();
     // Já mostra o mapa pela rede, com a atribuição do OpenStreetMap.
     expect(screen.getByTestId('mapa-nativo')).toBeTruthy();
@@ -208,7 +220,7 @@ describe('separador Mapa', () => {
 
   test('mapa guardado: abre sem rede, com "© OpenStreetMap"', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     expect(screen.getByTestId('mapa-nativo')).toBeTruthy();
     expect(screen.getByText('© OpenStreetMap')).toBeTruthy();
     expect(screen.queryByText(/Descarrega o mapa/)).toBeNull();
@@ -217,13 +229,13 @@ describe('separador Mapa', () => {
   test('a descarregar: mostra a percentagem', async () => {
     mockOnline = true;
     mockMapa = { estado: 'a_descarregar', progresso: 0.42, remoto: MANIFESTO };
-    desenhar();
+    await desenhar();
     expect(screen.getByText('42% de 12,0 MB')).toBeTruthy();
   });
 
   test('sem autorização de localização: explica e deixa pedir outra vez', async () => {
     mockGps = { estado: 'sem_permissao' };
-    desenhar();
+    await desenhar();
     expect(screen.getByText(/Sem autorização para usar a localização/)).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Autorizar localização' }));
     expect(mockTentarDeNovo).toHaveBeenCalled();
@@ -233,13 +245,13 @@ describe('separador Mapa', () => {
     const luanda = { ...POS, latitude: -8.8383, longitude: 13.2344 };
     mockGps = { estado: 'ok', posicao: luanda };
     mockMedida = medida(luanda);
-    desenhar();
+    await desenhar();
     expect(screen.getByText(/Estás fora da zona do mapa/)).toBeTruthy();
   });
 
   test('a medir pela primeira vez: mostra as leituras e ainda não mostra código', async () => {
     mockMedida = { captura: null, aMedir: true, leiturasBoas: 2, necessarias: 3, limite: 10, melhorAteAgora: 7.6 };
-    desenhar();
+    await desenhar();
     expect(screen.getByText('A medir a tua posição… leitura 2 de 3 com menos de ±10 m. Fica parado uns segundos.')).toBeTruthy();
     expect(screen.getByText('Melhor até agora: ± 8 m.')).toBeTruthy();
     expect(screen.queryByText('Plus Code')).toBeNull();
@@ -248,20 +260,20 @@ describe('separador Mapa', () => {
   test('sem sinal do GPS: pede para ir para um sítio aberto', async () => {
     mockGps = { estado: 'a_procurar', ultima: null };
     mockMedida = { captura: null, aMedir: true, leiturasBoas: 0, necessarias: 3, limite: 10, melhorAteAgora: null };
-    desenhar();
+    await desenhar();
     expect(screen.getByText(/A procurar o sinal do GPS/)).toBeTruthy();
   });
 
   test('o código usa a posição medida, não a leitura ao vivo', async () => {
     // A leitura ao vivo saltou 15 m; o código continua o da média.
     mockGps = { estado: 'ok', posicao: { ...POS, latitude: POS.latitude + 0.000135 } };
-    desenhar();
+    await desenhar();
     expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
   });
 
   test('a medir de novo: mantém o código anterior e diz que está a medir', async () => {
     mockMedida = medida(POS, { aMedir: true, leiturasBoas: 1 });
-    desenhar();
+    await desenhar();
     expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
     expect(screen.getByText('A medir de novo… leitura 1 de 3.')).toBeTruthy();
     // O botão fica a rodar enquanto mede (como o "A localizar..." do site).
@@ -290,7 +302,7 @@ describe('separador Mapa', () => {
   test('sem autorização: "Obter localização" volta a pedir a autorização', async () => {
     mockGps = { estado: 'sem_permissao' };
     mockMedida = { captura: null, aMedir: true, leiturasBoas: 0, necessarias: 3, limite: 10, melhorAteAgora: null };
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Obter localização' }));
     expect(mockTentarDeNovo).toHaveBeenCalledTimes(1);
     expect(mockMedirDeNovo).not.toHaveBeenCalled();
@@ -298,7 +310,7 @@ describe('separador Mapa', () => {
 
   test('acima de 10 m: mostra o código com "Pouco preciso" e o aviso, e continua a medir', async () => {
     mockMedida = medida(POS, { captura: { ...POS, precisao: 15, leituras: 3, fraca: true }, aMedir: true, leiturasBoas: 1 });
-    desenhar();
+    await desenhar();
     expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
     expect(screen.getByText('Pouco preciso (± 15 m)')).toBeTruthy();
     expect(screen.getByText('A tentar ter 3 leituras com menos de ±10 m… (1 de 3)')).toBeTruthy();
@@ -313,7 +325,7 @@ describe('separador Mapa', () => {
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
       local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
     };
-    desenhar();
+    await desenhar();
     expect(screen.getByText('Provisório')).toBeTruthy();
     expect(screen.getByText('Por confirmar: a precisão tem de ser melhor que ±10 m.')).toBeTruthy();
     expect(screen.queryByText('A confirmar com o servidor…')).toBeNull();
@@ -329,7 +341,7 @@ describe('separador Mapa', () => {
       codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: null },
       local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
     };
-    desenhar();
+    await desenhar();
     expect(screen.getByText(/Estás junto ao limite entre duas células do código postal \(a 2 m\)/)).toBeTruthy();
   });
 
@@ -342,7 +354,7 @@ describe('separador Mapa', () => {
       codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: null },
       local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
     };
-    desenhar();
+    await desenhar();
     expect(screen.queryByText(/junto ao limite/)).toBeNull();
   });
 });
@@ -360,7 +372,7 @@ describe('Mapa igual ao site (8 passos)', () => {
     mockOnline = true;
     mockInfo = INFO_CONFIRMADA;
     mockMapa = { estado: 'sem_mapa', remoto: MANIFESTO };
-    desenhar();
+    await desenhar();
     await screen.findByRole('button', { name: 'Registar esta casa, loja, escola...' });
     const texto = JSON.stringify(screen.toJSON());
     const posicoes = [
@@ -386,7 +398,7 @@ describe('Mapa igual ao site (8 passos)', () => {
   });
 
   test('coordenadas e QR Code com o link do Google Maps', async () => {
-    desenhar();
+    await desenhar();
     expect(screen.getByText('-12.77610, 15.73920')).toBeTruthy();
     expect(screen.getByTestId('qr').props.children).toBe(LINK);
   });
@@ -394,7 +406,7 @@ describe('Mapa igual ao site (8 passos)', () => {
   test('"Guardar" o QR abre a partilha da imagem; "Partilhar" envia os códigos e o link', async () => {
     const partilha = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     mockInfo = INFO_CONFIRMADA;
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(mockPartilharQr).toHaveBeenCalledWith('iVBORbase64', 'codigo-postal-angola-localiza.png'));
     fireEvent.press(screen.getByRole('button', { name: 'Partilhar' }));
@@ -407,20 +419,20 @@ describe('Mapa igual ao site (8 passos)', () => {
 
   test('se não der para guardar a imagem, explica porquê', async () => {
     mockPartilharQr.mockRejectedValueOnce(new Error('Este telemóvel não deixa guardar nem partilhar a imagem.'));
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Guardar' }));
     expect(await screen.findByText('Este telemóvel não deixa guardar nem partilhar a imagem.')).toBeTruthy();
   });
 
   test('"Registar esta casa, loja, escola..." abre o registo (com a verificação simples)', async () => {
-    desenhar();
+    await desenhar();
     fireEvent.press(await screen.findByRole('button', { name: 'Registar esta casa, loja, escola...' }));
     expect(mockPush).toHaveBeenCalledWith('/guardados/registar');
   });
 
   test('sem a verificação simples: explica e leva à verificação', async () => {
     mockVerificacao = 'por_verificar';
-    desenhar();
+    await desenhar();
     // No lugar do "Registar" e no "Guardar como favorito".
     expect(await screen.findAllByText(/precisas de fazer a verificação simples/)).toHaveLength(2);
     expect(screen.queryByRole('button', { name: 'Registar esta casa, loja, escola...' })).toBeNull();
@@ -430,14 +442,14 @@ describe('Mapa igual ao site (8 passos)', () => {
 
   test('verificação em revisão: diz que está em revisão (sem botão)', async () => {
     mockVerificacao = 'pendente';
-    desenhar();
+    await desenhar();
     expect((await screen.findAllByText(/está em revisão/)).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Fazer a verificação' })).toBeNull();
   });
 
   test('sem o separador Moradas (KYC por aprovar): não regista nem guarda favoritos', async () => {
     mockSeparadores = ['mapa', 'definicoes'];
-    desenhar();
+    await desenhar();
     await waitFor(() => expect(screen.getAllByText(/precisas de fazer a verificação simples/).length).toBeGreaterThan(0));
     expect(screen.queryByRole('button', { name: 'Registar esta casa, loja, escola...' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Guardar como favorito' })).toBeDisabled();
@@ -447,7 +459,7 @@ describe('Mapa igual ao site (8 passos)', () => {
 describe('pesquisa única', () => {
   test('Plus Code sem rede: vai para o ponto no mapa, sem pedir nada ao servidor', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), PLUS.toLowerCase());
     expect(mockPesquisar).not.toHaveBeenCalled();
     expect(await screen.findByText(`No mapa: ${PLUS}`)).toBeTruthy();
@@ -458,7 +470,7 @@ describe('pesquisa única', () => {
   });
 
   test('código postal sem rede: explica que precisa de rede', async () => {
-    desenhar();
+    await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'AO-HUA-MNFQR6JW-41');
     expect(await screen.findByText(/Sem rede: sem internet só se encontram Plus Codes/)).toBeTruthy();
     expect(mockPesquisar).not.toHaveBeenCalled();
@@ -471,7 +483,7 @@ describe('pesquisa única', () => {
       { tipo: 'rua', id: 'r1', titulo: 'Rua da Missão', subtitulo: 'Rua · Bairro Académico', latitude: -12.77, longitude: 15.73, codigoPostal: null, plusCode: null },
       { tipo: 'bairro', id: 'b1', titulo: 'Bairro Novo', subtitulo: 'Bairro', latitude: null, longitude: null, codigoPostal: null, plusCode: null },
     ]);
-    desenhar();
+    await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), '  missão ');
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'missão');
     expect(await screen.findByText('Rua da Missão')).toBeTruthy();
@@ -484,7 +496,7 @@ describe('pesquisa única', () => {
 
   test('sem resultados e erro do servidor', async () => {
     mockOnline = true;
-    desenhar();
+    await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto');
     expect(await screen.findByText('Sem resultados.')).toBeTruthy();
 
@@ -494,7 +506,7 @@ describe('pesquisa única', () => {
   });
 
   test('texto curto: pede mais letras', async () => {
-    desenhar();
+    await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'ab');
     expect(await screen.findByText('Escreve pelo menos 3 letras.')).toBeTruthy();
   });
@@ -502,7 +514,7 @@ describe('pesquisa única', () => {
 describe('Ler QR', () => {
   test('lê um link do Google Maps e mostra o ponto (uma só leitura)', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Ler QR' }));
     expect(screen.getByTestId('leitor-qr')).toBeTruthy();
     await act(async () => mockLerQr?.({ data: 'https://www.google.com/maps?q=-12.7800,15.7400' }));
@@ -514,7 +526,7 @@ describe('Ler QR', () => {
 
   test('um QR com outro link não abre sozinho: pergunta', async () => {
     const abrir = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Ler QR' }));
     await act(async () => mockLerQr?.({ data: 'https://exemplo.ao/cartao' }));
     expect(screen.getByText('Este QR Code tem um link: https://exemplo.ao/cartao')).toBeTruthy();
@@ -526,14 +538,14 @@ describe('Ler QR', () => {
 
   test('um QR com um código postal pesquisa no servidor', async () => {
     mockOnline = true;
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Ler QR' }));
     await act(async () => mockLerQr?.({ data: 'AO-HUA-MNFQR6JW-41' }));
     expect(mockPesquisar).toHaveBeenCalledWith('AO-HUA-MNFQR6JW-41');
   });
 
   test('"Cancelar" fecha o leitor', async () => {
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Ler QR' }));
     fireEvent.press(screen.getByRole('button', { name: 'Cancelar' }));
     expect(screen.queryByTestId('leitor-qr')).toBeNull();
@@ -545,7 +557,7 @@ describe('Mapa / Satélite', () => {
 
   test('o mapa começa com zoom equivalente ao site e oferece controlos de zoom', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     expect(chamadasCamara).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Aumentar zoom' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Diminuir zoom' })).toBeTruthy();
@@ -558,12 +570,12 @@ describe('Mapa / Satélite', () => {
 
   test('o marcador de localização pesquisada usa a cor primária do site', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     expect(screen.getByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();
   });
   test('por omissão é o mapa do telemóvel', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     expect(estiloMostrado()).toBe('Angola Localiza');
     expect(screen.getByRole('radio', { name: 'Vista: Mapa' }).props.accessibilityState).toMatchObject({ selected: true });
   });
@@ -571,7 +583,7 @@ describe('Mapa / Satélite', () => {
 
   test('mostra ficha contextual ao selecionar um ponto', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     expect(screen.getByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
     expect(screen.getByText('Local pesquisado')).toBeTruthy();
     expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();
@@ -579,7 +591,7 @@ describe('Mapa / Satélite', () => {
   test('sem rede: o satélite não liga e explica porquê', async () => {
     const alerta = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
     expect(alerta).toHaveBeenCalledWith('Sem rede', expect.stringMatching(/precisa de internet/));
     expect(estiloMostrado()).toBe('Angola Localiza');
@@ -590,7 +602,7 @@ describe('Mapa / Satélite', () => {
     const alerta = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockOnline = true;
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
     expect(alerta).toHaveBeenCalledWith('Vista de Satélite', expect.stringMatching(/gastam dados móveis/), expect.any(Array));
     expect(estiloMostrado()).toBe('Angola Localiza');
@@ -628,7 +640,7 @@ describe('Mapa / Satélite', () => {
 
   test('"Ecrã inteiro" abre o mapa sozinho e "Fechar" volta', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     fireEvent.press(screen.getByRole('button', { name: 'Ecrã inteiro' }));
     expect(screen.getAllByTestId('mapa-nativo')).toHaveLength(2);
     fireEvent.press(screen.getByRole('button', { name: 'Fechar' }));
@@ -640,7 +652,7 @@ describe('Guardar como favorito', () => {
   test('com rede: guarda com a privacidade e a categoria escolhidas e envia logo', async () => {
     mockOnline = true;
     mockInfo = INFO_CONFIRMADA;
-    desenhar();
+    await desenhar();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar como favorito' })).not.toBeDisabled());
     fireEvent.press(screen.getByRole('radio', { name: 'Privacidade: Privada (só tu e os administradores)' }));
     fireEvent.press(screen.getByRole('radio', { name: 'Categoria: Casa' }));
@@ -671,7 +683,7 @@ describe('Guardar como favorito', () => {
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
       local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-20T10:00:00.000Z' },
     };
-    desenhar();
+    await desenhar();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar como favorito' })).not.toBeDisabled());
     fireEvent.press(screen.getByRole('button', { name: 'Guardar como favorito' }));
     expect(await screen.findByText('Guardado no telemóvel. Vai para o servidor quando houver rede.')).toBeTruthy();
@@ -683,7 +695,7 @@ describe('Guardar como favorito', () => {
   test('com rede mas o envio falha: fica no telemóvel para depois', async () => {
     mockOnline = true;
     mockEnviarPendentes.mockResolvedValueOnce({ enviados: 0, erro: new Error('Sem ligação ao servidor.') });
-    desenhar();
+    await desenhar();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar como favorito' })).not.toBeDisabled());
     fireEvent.press(screen.getByRole('button', { name: 'Guardar como favorito' }));
     expect(await screen.findByText('Guardado no telemóvel. Vai para o servidor quando houver rede.')).toBeTruthy();
@@ -691,7 +703,7 @@ describe('Guardar como favorito', () => {
 
   test('se não conseguir guardar no telemóvel, mostra o erro', async () => {
     mockGuardarDoMapa.mockRejectedValueOnce(new Error('Disco cheio.'));
-    desenhar();
+    await desenhar();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar como favorito' })).not.toBeDisabled());
     fireEvent.press(screen.getByRole('button', { name: 'Guardar como favorito' }));
     expect(await screen.findByText('Disco cheio.')).toBeTruthy();
@@ -705,13 +717,13 @@ describe('Guardar como favorito', () => {
     unmount();
 
     mockMedida = { captura: null, aMedir: true, leiturasBoas: 0, necessarias: 3, limite: 10, melhorAteAgora: null };
-    desenhar();
+    await desenhar();
     expect(await screen.findByText('Espera que a tua posição seja medida.')).toBeTruthy();
   });
 
   test('sem a verificação simples: não deixa guardar', async () => {
     mockVerificacao = 'por_verificar';
-    desenhar();
+    await desenhar();
     await waitFor(() => expect(screen.getAllByText(/precisas de fazer a verificação simples/)).toHaveLength(2));
     expect(screen.getByRole('button', { name: 'Guardar como favorito' })).toBeDisabled();
     expect(mockGuardarDoMapa).not.toHaveBeenCalled();
@@ -719,7 +731,7 @@ describe('Guardar como favorito', () => {
 
   test('um gesto manual interrompe o seguimento automático do GPS', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar();
+    await desenhar();
     fireEvent(screen.getByTestId('vista-mapa'), 'touchStart');
     expect(screen.getByRole('button', { name: 'Centrar em mim' })).toBeTruthy();
   });
