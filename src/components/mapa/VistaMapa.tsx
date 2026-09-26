@@ -66,7 +66,7 @@ export function VistaMapa({
   }, [semPermissao]);
   return (
     <View
-      style={[estilos.mapa, altura === 'cheio' ? estilos.cheio : { height: altura }]}
+      testID="vista-mapa"\n      style={[estilos.mapa, altura === 'cheio' ? estilos.cheio : { height: altura }]}
       onTouchStart={() => aoTocar?.(true)}
       onTouchEnd={() => aoTocar?.(false)}
       onTouchCancel={() => aoTocar?.(false)}
