@@ -4,6 +4,8 @@ import { servicoEstafeta } from '@/services/entregas/estafetaApp';
 import { lojaEstafeta, useEstafeta, type EstadoEstafeta } from '@/state/estafeta';
 import { eventosSync } from '@/sync/eventos';
 
+import { useRealtimeEntregas } from './useRealtimeEntregas';
+
 /** Lê as entregas atribuídas e as ações na fila e guarda-as na loja partilhada. */
 export async function recarregarEstafeta(userId: string, online: boolean): Promise<void> {
   const [lista, acoes] = await Promise.all([
@@ -19,6 +21,9 @@ export async function recarregarEstafeta(userId: string, online: boolean): Promi
  */
 export function useEntregasEstafeta(userId: string | null, online: boolean | null): EstadoEstafeta {
   const estado = useEstafeta();
+  useRealtimeEntregas(userId, 'estafeta', online === true, () => {
+    if (userId) return recarregarEstafeta(userId, online === true);
+  });
   useEffect(() => {
     if (!userId) return;
     const ler = () => void recarregarEstafeta(userId, online === true).catch(() => undefined);
