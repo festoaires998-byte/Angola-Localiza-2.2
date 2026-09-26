@@ -47,6 +47,13 @@ export const MAX_INSTRUCOES = 300;
 
 /** O que a pessoa preenche no ecrã "Novo envio". */
 export interface DadosEnvio {
+  /** Posição de origem capturada no telemóvel (opcional; o servidor valida os restantes campos). */
+  origem?: {
+    latitude: number;
+    longitude: number;
+    codigoPostal?: string | null;
+    plusCode?: string | null;
+  };
   /** Id (no servidor) da morada de destino. */
   moradaId: string | null;
   destinatario: string;
@@ -58,6 +65,10 @@ export interface DadosEnvio {
 /** Corpo de deliveries?action=create (também é o payload de "create_delivery" na fila). */
 export interface PedidoEnvio {
   address_id: string;
+  origin_latitude?: number | null;
+  origin_longitude?: number | null;
+  origin_postal_code?: string | null;
+  origin_plus_code?: string | null;
   recipient_name: string;
   recipient_phone: string | null;
   instructions: string | null;
@@ -98,6 +109,10 @@ export function montarPedidoEnvio(d: DadosEnvio): PedidoEnvio {
   const instrucoes = d.instrucoes.trim();
   return {
     address_id: d.moradaId!,
+    origin_latitude: d.origem?.latitude ?? null,
+    origin_longitude: d.origem?.longitude ?? null,
+    origin_postal_code: d.origem?.codigoPostal ?? null,
+    origin_plus_code: d.origem?.plusCode ?? null,
     recipient_name: limparTexto(d.destinatario),
     recipient_phone: normalizarTelefone(d.telefone) ?? null,
     instructions: instrucoes === '' ? null : instrucoes,
