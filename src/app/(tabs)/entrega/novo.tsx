@@ -2,8 +2,10 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Opcoes, type Opcao } from '@/components/Opcoes';
+import { LeitorQr } from '@/components/mapa/LeitorQr';
 import { Botao, Caixa, Campo, Ecra, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
 import { faltaNoEnvio, MAX_INSTRUCOES, mensagemErroEnvio, type DadosEnvio } from '@/domain/entregas/envio';
+import { interpretarEntrada } from '@/domain/enderecamento/pesquisa';
 import { useMoradas } from '@/hooks/useMoradas';
 import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
@@ -45,6 +47,8 @@ export default function NovoEnvio() {
     }));
   }, [posicao?.latitude, posicao?.longitude, infoOrigem?.codigoPostal.codigo, infoOrigem?.plusCode]);
   const [aEnviar, setAEnviar] = useState(false);
+  const [entradaDestino, setEntradaDestino] = useState('');
+  const [lerQr, setLerQr] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,6 +92,34 @@ export default function NovoEnvio() {
   }
 
   const falta = faltaNoEnvio(dados);
+  const selecionarPorEntrada = (entrada: string) => {
+    const referencia = posicao
+      ? { latitude: posicao.latitude, longitude: posicao.longitude }
+      : { latitude: -12.7761, longitude: 15.7392 };
+    const r = interpretarEntrada(entrada, referencia);
+    if (r.tipo !== 'ponto') {
+      setErro(r.tipo === 'invalida' ? r.motivo : 'Este QR/link precisa de uma localização válida.');
+      return false;
+    }
+    const encontrado = (moradas.itens ?? []).find((i) => {
+      const m = i.morada;
+      if (!m || m.origem === 'local' || i.favorito.pendente === 'remover') return false;
+      if (r.tipo === 'ponto' && m.latitude !== null && m.longitude !== null) {
+        return Math.abs(m.latitude - r.latitude) < 0.00015 && Math.abs(m.longitude - r.longitude) < 0.00015;
+      }
+      return false;
+    });
+    if (!encontrado?.morada?.id) {
+      setErro('A localização foi lida, mas ainda não existe nas tuas Moradas. Guarda primeiro este ponto como morada de destino.');
+      return false;
+    }
+    mudar({ moradaId: encontrado.morada.id });
+    setEntradaDestino('');
+    setLerQr(false);
+    setErro(null);
+    return true;
+  };
+
   const mudar = (m: Partial<DadosEnvio>) => setDados((d) => ({ ...d, ...m }));
 
   async function enviar() {
@@ -133,14 +165,38 @@ export default function NovoEnvio() {
       <Subtitulo>Para onde?</Subtitulo>
       {destinos.length > 0 ? (
         <Opcoes grupo="Morada de destino" empilhadas opcoes={destinos} valor={dados.moradaId} aoEscolher={(v) => mudar({ moradaId: v })} />
-      ) : (
+      ) : null}
+
+      <Campo
+        rotulo="Código, Plus Code ou link do destino"
+        value={entradaDestino}
+        onChangeText={setEntradaDestino}
+        autoCapitalize="characters"
+        placeholder="Ex.: 6FJ4MQ66+2V ou link do mapa"
+      />
+      <Botao
+        titulo="Usar código/link"
+        variante="secundario"
+        onPress={() => selecionarPorEntrada(entradaDestino)}
+        desativado={!entradaDestino.trim()}
+      />
+      <Botao titulo="Ler QR do destino" variante="secundario" onPress={() => { setErro(null); setLerQr(true); }} />
+
+      {lerQr ? (
+        <LeitorQr
+          aoLer={(conteudo) => selecionarPorEntrada(conteudo)}
+          aoFechar={() => setLerQr(false)}
+        />
+      ) : null}
+
+      {destinos.length === 0 ? (
         <>
           <Caixa tipo="info">
-            Ainda não tens moradas guardadas. Primeiro guarda a morada de destino no separador Moradas.
+            Ainda não tens moradas guardadas. Guarda primeiro a morada de destino no separador Moradas.
           </Caixa>
           <Botao titulo="Abrir as Moradas" variante="secundario" onPress={() => router.push('/guardados')} />
         </>
-      )}
+      ) : null}
 
       <Subtitulo>Quem vai receber?</Subtitulo>
       <Campo
