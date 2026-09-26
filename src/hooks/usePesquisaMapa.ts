@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { pesquisarNoServidor } from '@/api/pesquisa';
 import { interpretarEntrada, type ResultadoPesquisa } from '@/domain/enderecamento/pesquisa';
@@ -33,7 +33,7 @@ export function usePesquisaMapa(opcoes: {
   const [estado, setEstado] = useState<EstadoPesquisa>(VAZIO);
   const pedido = useRef(0);
 
-  async function procurar(entrada: string = texto): Promise<void> {
+  const procurar = useCallback(async (entrada: string = texto): Promise<void> => {
     const n = ++pedido.current;
     const r = interpretarEntrada(entrada, opcoes.referencia);
     if (r.tipo === 'invalida') return setEstado({ ...VAZIO, erro: r.motivo });
