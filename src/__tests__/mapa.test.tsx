@@ -486,6 +486,7 @@ describe('pesquisa única', () => {
     await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), '  missão ');
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'missão');
+    fireEvent(screen.getByLabelText('Pesquisar'), 'submitEditing');
     expect(await screen.findByText('Rua da Missão')).toBeTruthy();
     expect(mockPesquisar).toHaveBeenCalledWith('missão');
     expect(screen.getByText('Ainda sem posição no mapa')).toBeTruthy();
@@ -498,16 +499,19 @@ describe('pesquisa única', () => {
     mockOnline = true;
     await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto');
+    fireEvent(screen.getByLabelText('Pesquisar'), 'submitEditing');
     expect(await screen.findByText('Sem resultados.')).toBeTruthy();
 
     mockPesquisar.mockRejectedValueOnce(new Error('Sem ligação ao servidor.'));
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto outra vez');
+    fireEvent(screen.getByLabelText('Pesquisar'), 'submitEditing');
     expect(await screen.findByText('Não foi possível pesquisar agora. Sem ligação ao servidor.')).toBeTruthy();
   });
 
   test('texto curto: pede mais letras', async () => {
     await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'ab');
+    fireEvent(screen.getByLabelText('Pesquisar'), 'submitEditing');
     expect(await screen.findByText('Escreve pelo menos 3 letras.')).toBeTruthy();
   });
 });
@@ -576,6 +580,7 @@ describe('Mapa / Satélite', () => {
     ]);
     await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'local pesquisado');
+    fireEvent(screen.getByLabelText('Pesquisar'), 'submitEditing');
     expect(await screen.findByText('Local pesquisado')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
     expect(await screen.findByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();
@@ -596,6 +601,7 @@ describe('Mapa / Satélite', () => {
     ]);
     await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'local pesquisado');
+    fireEvent(screen.getByLabelText('Pesquisar'), 'submitEditing');
     expect(await screen.findByText('Local pesquisado')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
     expect(await screen.findByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
