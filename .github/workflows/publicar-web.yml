@@ -27,8 +27,10 @@ jobs:
           cache: npm
       - name: Instalar dependências
         run: npm ci
-      - name: Preparar expo-sqlite para Web
-        run: npm install --no-save --package-lock=false expo-sqlite@57.0.0
+      - name: Verificar asset WASM do expo-sqlite
+        run: |
+          test -f node_modules/expo-sqlite/web/wa-sqlite/wa-sqlite.wasm
+          echo "wa-sqlite.wasm encontrado"
 
       - name: Exportar aplicação Web
         run: npx expo export --platform web
