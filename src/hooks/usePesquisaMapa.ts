@@ -59,7 +59,7 @@ export function usePesquisaMapa(opcoes: {
         setEstado({ ...VAZIO, erro: `Não foi possível pesquisar agora. ${e instanceof Error ? e.message : ''}`.trim() });
       }
     }
-  }
+  }, [opcoes.online, opcoes.referencia.latitude, opcoes.referencia.longitude, opcoes.aoEncontrarPonto, texto]);
 
   function limpar() {
     pedido.current++;
