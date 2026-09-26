@@ -1,6 +1,6 @@
 import { Camera, Map, Marker, NativeUserLocation, type CameraRef, type StyleSpecification } from '@maplibre/maplibre-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { PontoEncontrado } from '@/hooks/usePesquisaMapa';
 import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE } from '@/services/mapas/estiloMapa';
@@ -41,7 +41,7 @@ export function VistaMapa({
   aoTocar,
   botaoCanto,
 }: Props) {
-  const [seguir, setSeguir] = useState(alvo === null);
+  const [seguir, setSeguir] = useState(alvo === null);\n  const abrirDefinicoesLocalizacao = () => { void Linking.openSettings(); };
   const camara = useRef<CameraRef>(null);
 
   // Sem ponto encontrado, o mapa volta a seguir a pessoa.
@@ -157,7 +157,7 @@ export function VistaMapa({
         </Pressable>
       </View>
 
-      {online === false ? (
+      {semPermissao ? (\n        <View style={estilos.faixaLocalizacao} accessibilityRole="alert">\n          <Text style={estilos.textoFaixa}>Localização indisponível. Ativa a localização nas definições para centrar o mapa em ti.</Text>\n          <Pressable accessibilityRole="button" accessibilityLabel="Abrir definições de localização" onPress={abrirDefinicoesLocalizacao} style={estilos.botaoDefinicoes}>\n            <Text style={estilos.textoBotaoDefinicoes}>Abrir definições</Text>\n          </Pressable>\n        </View>\n      ) : null}\n\n      {online === false ? (
         <View style={estilos.faixaSemRede}>
           <Text style={estilos.textoFaixa}>Sem rede: a mostrar o que está neste telemóvel</Text>
         </View>
@@ -218,6 +218,6 @@ const estilos = StyleSheet.create({
     borderRadius: 24,
   },
   textoBotaoMapa: { color: CORES.sobrePrimaria, fontSize: 16, fontWeight: '700' },
-  faixaSemRede: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: CORES.avisoFundo, padding: 8 },
+  faixaLocalizacao: { position: 'absolute', top: 0, left: 0, right: 0, padding: 8, backgroundColor: CORES.avisoFundo, alignItems: 'center', gap: 6 },\n  botaoDefinicoes: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', backgroundColor: CORES.primaria, borderRadius: 20 },\n  textoBotaoDefinicoes: { color: CORES.sobrePrimaria, fontWeight: '700' },\n  faixaSemRede: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: CORES.avisoFundo, padding: 8 },
   textoFaixa: { color: CORES.avisoTexto, fontWeight: '700', textAlign: 'center', fontSize: 15 },
 });
