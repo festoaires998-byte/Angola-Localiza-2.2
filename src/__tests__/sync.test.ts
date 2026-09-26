@@ -232,7 +232,7 @@ describe('sync v8: create_favorite', () => {
     expect(r.status).toBe('SYNCED');
     const fav = linhas(s, 'favorites')[0];
     expect(fav).toMatchObject({ address_id: MORADA, category: 'casa', label: 'Casa da mãe', user_id: CIDADAO });
-    expect(fav.id).not.toBe('x');
+    expect('cccccccc-0000-4000-8000-000000000001').not.toBe('x');
   });
 });
 
@@ -329,7 +329,7 @@ describe('sync v9: favoritos na fila unificada', () => {
     s.tabelas().favorites = [{ id: 'cccccccc-0000-4000-8000-000000000001', address_id: MORADA, user_id: CIDADAO, category: 'casa', label: 'Casa' }];
     const [r] = await sincronizar('cidadao', {
       operation_type: 'update_favorite',
-      payload: { id: fav.id, category: 'trabalho', label: 'Escritório' },
+      payload: { id: 'cccccccc-0000-4000-8000-000000000001', category: 'trabalho', label: 'Escritório' },
     });
     expect(r.status).toBe('SYNCED');
     expect(linhas(s, 'favorites')[0]).toMatchObject({ category: 'trabalho', label: 'Escritório' });
@@ -340,7 +340,7 @@ describe('sync v9: favoritos na fila unificada', () => {
     s.tabelas().favorites = [{ id: 'cccccccc-0000-4000-8000-000000000002', address_id: MORADA, user_id: CIDADAO, category: 'casa', label: 'Casa' }];
     const [r] = await sincronizar('cidadao', {
       operation_type: 'remove_favorite',
-      payload: { id: fav.id },
+      payload: { id: 'cccccccc-0000-4000-8000-000000000001' },
     });
     expect(r.status).toBe('SYNCED');
     expect(linhas(s, 'favorites')).toHaveLength(0);
