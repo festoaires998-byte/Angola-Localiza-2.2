@@ -186,8 +186,10 @@ export function minimoReferencia(d: Pick<DadosRegisto, 'ruaId' | 'ruaSemNome' | 
 }
 
 /** O que falta para poder enviar (vazio = pode enviar). */
-export function faltaParaEnviar(d: DadosRegisto): string[] {
+export function faltaParaEnviar(d: DadosRegisto, localidadeLabel = 'bairro'): string[] {
   const falta: string[] = [];
+  const localidade = localidadeLabel.trim() || 'bairro';
+  const inicialMaiuscula = localidade.charAt(0).toUpperCase() + localidade.slice(1);
   if (!d.captura) falta.push('Esperar pela medição da posição.');
   else if (d.captura.fraca) falta.push('Precisão melhor que ±10 m: vai para um sítio aberto.');
   else if (situacaoLimite(d.captura.latitude, d.captura.longitude, d.captura.precisao).junto && !d.escolhaCelula) {
@@ -201,14 +203,14 @@ export function faltaParaEnviar(d: DadosRegisto): string[] {
     falta.push('Escolher a rua, escrever o nome dela ou marcar "Esta rua não tem nome".');
   }
   if (!d.bairroSemNome && d.bairro.trim().length < 2) {
-    falta.push('Escolher o bairro, escrever o nome dele ou marcar "Este bairro não tem nome".');
+    falta.push(`Escolher ${localidade}, escrever o nome dela ou marcar "Esta ${localidade} não tem nome".`);
   }
   const minimo = minimoReferencia(d);
   if (d.referencia.trim().length < minimo) {
     falta.push(
       minimo === REFERENCIA_MIN
         ? 'Escrever uma referência (ex.: portão azul).'
-        : `Sem nome de rua ou de bairro, a referência guia quem procura: escreve pelo menos ${REFERENCIA_MIN_SEM_NOME} letras (ex.: portão azul, ao lado da igreja).`,
+        : `Sem nome de rua ou de ${localidade}, a referência guia quem procura: escreve pelo menos ${REFERENCIA_MIN_SEM_NOME} letras (ex.: portão azul, ao lado da igreja).`,
     );
   }
   if (!d.foto) falta.push('Tirar a foto da fachada.');
