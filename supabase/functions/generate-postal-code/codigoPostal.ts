@@ -32,7 +32,7 @@ export const PADRAO_SIGLA_PROVINCIA = /^[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3}$/;
 /**
  * Sigla da província: as 3 primeiras letras do nome, em maiúsculas (como no
  * esquema 1); "XXX" se o nome não veio. Nota: nomes com acento na 2.ª ou 3.ª
- * letra (ex.: "Uíge" → "UÍG") dão uma sigla que o validate não aceita.
+ * letra (ex.: "Uíge" → "UÍG") são aceites pelo validador.
  */
 export function siglaProvincia(nome: string | null | undefined): string {
   return nome ? nome.substring(0, 3).toUpperCase() : SIGLA_DESCONHECIDA;
