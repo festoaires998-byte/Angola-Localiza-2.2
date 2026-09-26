@@ -41,7 +41,8 @@ export function VistaMapa({
   aoTocar,
   botaoCanto,
 }: Props) {
-  const [seguir, setSeguir] = useState(alvo === null);\n  const abrirDefinicoesLocalizacao = () => { void Linking.openSettings(); };
+  const [seguir, setSeguir] = useState(alvo === null);
+  const abrirDefinicoesLocalizacao = () => { void Linking.openSettings(); };
   const camara = useRef<CameraRef>(null);
 
   // Sem ponto encontrado, o mapa volta a seguir a pessoa.
@@ -54,7 +55,15 @@ export function VistaMapa({
     camara.current?.flyTo({ center: [alvo.longitude, alvo.latitude], zoom: 17, duration: 800 });
   }, [alvo?.latitude, alvo?.longitude]);
 
-  const centro = alvo ?? posicao;\n  const aoMoverMapa = () => {\n    // Qualquer gesto manual assume intenção de exploração; nunca recentramos sem ação explícita.\n    setSeguir(false);\n  };\n\n  useEffect(() => {\n    if (semPermissao) setSeguir(false);\n  }, [semPermissao]);
+  const centro = alvo ?? posicao;
+  const aoMoverMapa = () => {
+    // Qualquer gesto manual assume intenção de exploração; nunca recentramos sem ação explícita.
+    setSeguir(false);
+  };
+
+  useEffect(() => {
+    if (semPermissao) setSeguir(false);
+  }, [semPermissao]);
   return (
     <View
       style={[estilos.mapa, altura === 'cheio' ? estilos.cheio : { height: altura }]}
@@ -157,7 +166,16 @@ export function VistaMapa({
         </Pressable>
       </View>
 
-      {semPermissao ? (\n        <View style={estilos.faixaLocalizacao} accessibilityRole="alert">\n          <Text style={estilos.textoFaixa}>Localização indisponível. Ativa a localização nas definições para centrar o mapa em ti.</Text>\n          <Pressable accessibilityRole="button" accessibilityLabel="Abrir definições de localização" onPress={abrirDefinicoesLocalizacao} style={estilos.botaoDefinicoes}>\n            <Text style={estilos.textoBotaoDefinicoes}>Abrir definições</Text>\n          </Pressable>\n        </View>\n      ) : null}\n\n      {online === false ? (
+      {semPermissao ? (
+        <View style={estilos.faixaLocalizacao} accessibilityRole="alert">
+          <Text style={estilos.textoFaixa}>Localização indisponível. Ativa a localização nas definições para centrar o mapa em ti.</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Abrir definições de localização" onPress={abrirDefinicoesLocalizacao} style={estilos.botaoDefinicoes}>
+            <Text style={estilos.textoBotaoDefinicoes}>Abrir definições</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {online === false ? (
         <View style={estilos.faixaSemRede}>
           <Text style={estilos.textoFaixa}>Sem rede: a mostrar o que está neste telemóvel</Text>
         </View>
@@ -218,6 +236,9 @@ const estilos = StyleSheet.create({
     borderRadius: 24,
   },
   textoBotaoMapa: { color: CORES.sobrePrimaria, fontSize: 16, fontWeight: '700' },
-  faixaLocalizacao: { position: 'absolute', top: 0, left: 0, right: 0, padding: 8, backgroundColor: CORES.avisoFundo, alignItems: 'center', gap: 6 },\n  botaoDefinicoes: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', backgroundColor: CORES.primaria, borderRadius: 20 },\n  textoBotaoDefinicoes: { color: CORES.sobrePrimaria, fontWeight: '700' },\n  faixaSemRede: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: CORES.avisoFundo, padding: 8 },
+  faixaLocalizacao: { position: 'absolute', top: 0, left: 0, right: 0, padding: 8, backgroundColor: CORES.avisoFundo, alignItems: 'center', gap: 6 },
+  botaoDefinicoes: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', backgroundColor: CORES.primaria, borderRadius: 20 },
+  textoBotaoDefinicoes: { color: CORES.sobrePrimaria, fontWeight: '700' },
+  faixaSemRede: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: CORES.avisoFundo, padding: 8 },
   textoFaixa: { color: CORES.avisoTexto, fontWeight: '700', textAlign: 'center', fontSize: 15 },
 });
