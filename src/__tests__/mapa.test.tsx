@@ -568,7 +568,7 @@ describe('Mapa / Satélite', () => {
 
   test('mostra ficha contextual ao selecionar um ponto', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });
+    desenhar();
     expect(screen.getByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
     expect(screen.getByText('Local pesquisado')).toBeTruthy();
     expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();
