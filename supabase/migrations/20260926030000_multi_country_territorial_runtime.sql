@@ -81,7 +81,6 @@ values
 ('CV','zone','Zona','Zonas',4,true),
 ('GW','region','Região','Regiões',1,false),
 ('GW','sector','Sector','Sectores',2,false),
-('GW','sector','Sector','Sectores',2,false),
 ('GW','section','Secção','Secções',3,false),
 ('GW','tabanca','Tabanca','Tabancas',4,true),
 ('ST','district','Distrito','Distritos',1,false),
