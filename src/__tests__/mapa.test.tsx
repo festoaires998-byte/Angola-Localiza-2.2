@@ -557,6 +557,8 @@ describe('Mapa / Satélite', () => {
     expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [14, 250] });
   });
 
+
+  test('o marcador de localização pesquisada usa a cor primária do site', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar({ alvo: { latitude: -12.5, longitude: 13.4, titulo: 'Local pesquisado' } });\n    expect(screen.getByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();\n  });
   test('por omissão é o mapa do telemóvel', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     desenhar();
