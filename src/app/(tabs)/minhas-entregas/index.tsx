@@ -56,6 +56,7 @@ export default function Entregas() {
   const [orgErro, setOrgErro] = useState<string | null>(null);
   const [pesquisa, setPesquisa] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'em_curso' | 'falhadas' | 'concluidas'>('todas');
+  const [ordemSugerida, setOrdemSugerida] = useState(false);
 
   useEffect(() => {
     if (!visaoOrganizacao || !orgCarregando) return;
@@ -86,7 +87,10 @@ export default function Entregas() {
     return true;
   };
   const correspondePesquisa = (e: Envio) => !termo || [e.codigo, e.destinatario].some((v) => v?.toLocaleLowerCase().includes(termo));
-  const lista = [...porFazer, ...feitas].filter((e) => correspondeFiltro(e) && correspondePesquisa(e));
+  const baseLista = [...porFazer, ...feitas].filter((e) => correspondeFiltro(e) && correspondePesquisa(e));
+  const lista = ordemSugerida
+    ? [...baseLista].sort((a, b) => Number(b.urgente) - Number(a.urgente))
+    : baseLista;
   const hoje = new Date().toISOString().slice(0, 10);
   const hojeEntregas = estado.entregas.filter((e) => e.atualizadoEm?.slice(0, 10) === hoje);
   const concluidasHoje = hojeEntregas.filter((e) => estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes)) === 'DELIVERED').length;
@@ -123,6 +127,7 @@ export default function Entregas() {
             {estado.aviso ? <Caixa tipo={estado.aviso.tipo}>{estado.aviso.texto}</Caixa> : null}
             {online === false ? <Caixa tipo="info">Offline / pendentes de sincronização.</Caixa> : null}
             <TextInput value={pesquisa} onChangeText={setPesquisa} placeholder="Procurar por código ou nome..." placeholderTextColor={CORES.textoSuave} style={estilos.pesquisa} />
+            {eEstafeta && porFazer.length > 1 ? <Pressable onPress={() => setOrdemSugerida((v) => !v)} style={[estilos.ordem, ordemSugerida && estilos.filtroAtivo]}><Text style={estilos.filtroTexto}>{ordemSugerida ? '✓ Ordem sugerida' : '🧭 Sugerir ordem'}</Text></Pressable> : null}
             <View style={estilos.filtros}>{(['todas', 'em_curso', 'falhadas', 'concluidas'] as const).map((f) => <Pressable key={f} onPress={() => setFiltro(f)} style={[estilos.filtro, filtro === f && estilos.filtroAtivo]}><Text style={estilos.filtroTexto}>{f === 'todas' ? 'Todas' : f === 'em_curso' ? 'Em curso' : f === 'falhadas' ? 'Falhadas' : 'Concluídas'}</Text></Pressable>)}</View>
             {estado.erro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${estado.erro}`}</Caixa> : null}
           </View>
@@ -164,6 +169,7 @@ const estilos = StyleSheet.create({
   titulo: { fontSize: TAMANHOS.subtitulo, fontWeight: '700', color: CORES.texto },
   codigo: { fontSize: 17, fontWeight: '700', color: CORES.primaria },
   pesquisa: { borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, paddingHorizontal: 12, paddingVertical: 10, color: CORES.texto, backgroundColor: CORES.fundo },
+  ordem: { alignSelf: 'flex-start', borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, paddingHorizontal: 12, paddingVertical: 9 },
   filtros: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   filtro: { borderWidth: 1, borderColor: CORES.borda, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   filtroAtivo: { backgroundColor: CORES.infoFundo, borderColor: CORES.primaria },
