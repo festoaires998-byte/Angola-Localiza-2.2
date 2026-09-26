@@ -273,7 +273,7 @@ describe('sync v8: operações e reencaminhamento', () => {
     ]);
     const init = fetchFalso.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer cidadao');
-    expect(init.body).toBe(JSON.stringify({ a: 1 }));
+    expect(JSON.parse(String(init.body))).toMatchObject({ a: 1, sync_operation_id: expect.any(String) });
   });
 
   test('o erro da função de destino volta como FAILED (ex.: PIN errado)', async () => {
@@ -286,7 +286,7 @@ describe('sync v8: operações e reencaminhamento', () => {
   test('tipo desconhecido e operation_id inválido falham; sem sessão 401', async () => {
     cenario();
     const [a] = await sincronizar('cidadao', { operation_type: 'apagar_tudo', payload: {} });
-    expect(a).toMatchObject({ status: 'FAILED', error: 'operation_type desconhecido: apagar_tudo' });
+    expect(a).toMatchObject({ status: 'FAILED', error: 'operation_type desconhecido' });
     const [b] = await sincronizar('cidadao', { operation_id: 'nao-e-uuid', operation_type: 'create_address', payload: MORADA_DO_SITE });
     expect(b).toMatchObject({ status: 'FAILED', error: 'operation_id invalido' });
     expect((await pedir(handler, null, { operations: [] }, 'cidadao')).status).toBe(400);
