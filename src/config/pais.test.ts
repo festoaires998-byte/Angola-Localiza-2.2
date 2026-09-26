@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { limparCacheConfigPais, obterConfigPais, paisTemNivel, CONFIG_AO_OFFLINE_TESTE } from './pais';
 
 type CountryConfigRow = {
   country_code: string;
@@ -28,10 +29,9 @@ jest.mock('@/api/supabase', () => ({
 }));
 
 describe('configuração de país', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     mockMaybeSingle.mockReset();
-    const modulo = await import('./pais');
-    modulo.limparCacheConfigPais();
+    limparCacheConfigPais();
   });
 
   it('carrega Angola a partir de country_configs', async () => {
@@ -47,7 +47,6 @@ describe('configuração de país', () => {
       error: null,
     });
 
-    const { obterConfigPais } = await import('./pais');
     await expect(obterConfigPais('AO')).resolves.toMatchObject({
       country_code: 'AO',
       country_name: 'Angola',
@@ -63,7 +62,6 @@ describe('configuração de país', () => {
       error: { message: 'offline' },
     });
 
-    const { obterConfigPais } = await import('./pais');
     await expect(obterConfigPais('AO')).resolves.toMatchObject({
       country_code: 'AO',
       country_name: 'Angola',
@@ -77,12 +75,10 @@ describe('configuração de país', () => {
       error: null,
     });
 
-    const { obterConfigPais } = await import('./pais');
     await expect(obterConfigPais('MZ')).rejects.toThrow('Não existe uma configuração ativa para o país MZ.');
   });
 
   it('identifica níveis territoriais configurados', async () => {
-    const { CONFIG_AO_OFFLINE_TESTE, paisTemNivel } = await import('./pais');
     expect(paisTemNivel(CONFIG_AO_OFFLINE_TESTE, 'province')).toBe(true);
     expect(paisTemNivel(CONFIG_AO_OFFLINE_TESTE, 'district')).toBe(false);
   });
