@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
 
 import { listarDaOrganizacao } from '@/api/entregas';
-import { abrirBaseDados } from '@/database/client';
-import { criarRepositorioEntregas } from '@/database/repositories/entregas';
 import { servicoEstafeta } from '@/services/entregas/estafetaApp';
 import { lojaEstafeta, useEstafeta, type EstadoEstafeta } from '@/state/estafeta';
 import { eventosSync } from '@/sync/eventos';
@@ -21,8 +19,6 @@ export async function recarregarEstafeta(userId: string, online: boolean): Promi
 /** Carrega a visão administrativa das entregas da organização. */
 export async function recarregarEntregasOrganizacao(): Promise<void> {
   const entregas = await listarDaOrganizacao();
-  const db = await abrirBaseDados();
-  await criarRepositorioEntregas(db).guardarVarias(entregas);
   lojaEstafeta.definir((e) => ({ ...e, entregas, doServidor: true, erro: null, acoes: [] }));
 }
 
