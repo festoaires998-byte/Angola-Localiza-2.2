@@ -310,6 +310,14 @@ export default function Mapa() {
     aoEncontrarPonto: mostrarNoMapa,
   });
 
+  // O site pesquisa automaticamente após 3 caracteres; no mobile usamos debounce para evitar pedidos a cada tecla.
+  useEffect(() => {
+    const texto = pesquisa.texto.trim();
+    if (texto.length < 3) return;
+    const timer = setTimeout(() => void pesquisa.procurar(texto), 400);
+    return () => clearTimeout(timer);
+  }, [pesquisa.texto]);
+
   const escolherCamada = (c: Camada) => {
     if (c === 'mapa') return setCamada('mapa');
     if (!online) {
@@ -428,7 +436,6 @@ export default function Mapa() {
           autoCorrect={false}
           maxLength={200}
         />
-        <Botao titulo="Procurar" variante="secundario" onPress={() => void pesquisa.procurar()} aCarregar={pesquisa.estado.aProcurar} />
         {pesquisa.estado.erro ? <Caixa tipo="erro">{pesquisa.estado.erro}</Caixa> : null}
         {pesquisa.estado.link ? (
           <Caixa tipo="info">
