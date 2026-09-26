@@ -104,6 +104,7 @@ export default function RegistarMorada() {
   }, []);
   const nivelLocalidadeConfig = nivelLocalidade(configPais);
   const labelLocalidade = nivelLocalidadeConfig?.label ?? 'Localidade';
+  const pluralLocalidade = nivelLocalidadeConfig?.plural_label ?? 'Localidades';
   const localidadeMinuscula = labelLocalidade.toLocaleLowerCase('pt-PT');
   const artigoLocalidade = /^(Ilha|Zona|Região|Secção|Localidade|Tabanca)$/i.test(labelLocalidade) ? 'da' : 'do';
   const demonstrativoLocalidade = /^(Ilha|Zona|Região|Secção|Localidade|Tabanca)$/i.test(labelLocalidade) ? 'Esta' : 'Este';
