@@ -6,6 +6,8 @@ import { criarRepositorioFavoritos } from '@/database/repositories/favoritos';
 import { criarRepositorioMoradas } from '@/database/repositories/moradas';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 
+jest.mock('@/services/cofre/idDispositivo', () => ({ obterIdDispositivo: jest.fn(async () => 'teste-device') }));
+
 import { criarServicoMoradas, ultimaAtualizacao, type NovoFavoritoComMorada } from '../moradas';
 
 const EU = 'user-1';
