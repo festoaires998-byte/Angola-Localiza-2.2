@@ -570,8 +570,15 @@ describe('Mapa / Satélite', () => {
 
   test('o marcador de localização pesquisada usa a cor primária do site', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    mockOnline = true;
+    mockPesquisar.mockResolvedValueOnce([
+      { tipo: 'rua', id: 'r1', titulo: 'Local pesquisado', subtitulo: 'Rua', latitude: -12.5, longitude: 13.4, codigoPostal: null, plusCode: null },
+    ]);
     await desenhar();
-    expect(screen.getByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'local pesquisado');
+    expect(await screen.findByText('Local pesquisado')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
+    expect(await screen.findByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();
   });
   test('por omissão é o mapa do telemóvel', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
@@ -583,8 +590,15 @@ describe('Mapa / Satélite', () => {
 
   test('mostra ficha contextual ao selecionar um ponto', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    mockOnline = true;
+    mockPesquisar.mockResolvedValueOnce([
+      { tipo: 'rua', id: 'r1', titulo: 'Local pesquisado', subtitulo: 'Rua', latitude: -12.5, longitude: 13.4, codigoPostal: null, plusCode: null },
+    ]);
     await desenhar();
-    expect(screen.getByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'local pesquisado');
+    expect(await screen.findByText('Local pesquisado')).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
+    expect(await screen.findByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
     expect(screen.getByText('Local pesquisado')).toBeTruthy();
     expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();
   });
@@ -731,8 +745,15 @@ describe('Guardar como favorito', () => {
 
   test('um gesto manual interrompe o seguimento automático do GPS', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    mockOnline = true;
+    mockPesquisar.mockResolvedValueOnce([
+      { tipo: 'rua', id: 'r1', titulo: 'Local pesquisado', subtitulo: 'Rua', latitude: -12.5, longitude: 13.4, codigoPostal: null, plusCode: null },
+    ]);
     await desenhar();
+    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'local pesquisado');
+    fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
+    expect(await screen.findByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
     fireEvent(screen.getByTestId('vista-mapa'), 'touchStart');
-    expect(screen.getByRole('button', { name: 'Centrar em mim' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Centrar em mim' })).toBeTruthy();
   });
 });
