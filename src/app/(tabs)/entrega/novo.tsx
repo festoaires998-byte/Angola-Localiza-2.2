@@ -33,6 +33,7 @@ export default function NovoEnvio() {
   const infoOrigem = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao === null || posicao?.precisao === undefined ? false : posicao.precisao <= 10);
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
   const [dados, setDados] = useState<DadosEnvio>({ moradaId: null, destinatario: '', telefone: '', instrucoes: '', urgente: false });
+  const [modoOrigem, setModoOrigem] = useState<'gps' | 'guardado'>('gps');
 
   useEffect(() => {
     if (!posicao || modoOrigem !== 'gps') return;
@@ -51,7 +52,6 @@ export default function NovoEnvio() {
   const [lerQr, setLerQr] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmar, setConfirmar] = useState(false);
-  const [modoOrigem, setModoOrigem] = useState<'gps' | 'guardado'>('gps');
 
   useEffect(() => {
     if (!userId) return;
