@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CORES, TAMANHOS } from '@/components/tema';
@@ -8,6 +8,7 @@ import { Caixa, EcraCarregamento, Ecra, Texto, Titulo } from '@/components/ui';
 import { entregaTerminada, nomeEstadoEntrega, type Envio } from '@/domain/entregas/envio';
 import { estadoEfetivo } from '@/domain/entregas/estafeta';
 import { recarregarEntregasOrganizacao, recarregarEstafeta, useEntregasEstafeta } from '@/hooks/useEntregasEstafeta';
+import { useRealtimeEntregas } from '@/hooks/useRealtimeEntregas';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import { acoesDaEntrega, type AcaoNaFila } from '@/services/entregas/estafeta';
@@ -49,9 +50,12 @@ export default function Entregas() {
   const visaoOrganizacao = cargos.includes('operador_postal') || cargos.includes('super_admin');
   const router = useRouter();
   const estado = useEntregasEstafeta(eEstafeta ? userId : null, online);
+  useRealtimeEntregas(visaoOrganizacao ? userId : null, 'organizacao', online === true, () => recarregarEntregasOrganizacao().catch(() => undefined));
   const [aAtualizar, setAAtualizar] = useState(false);
   const [orgCarregando, setOrgCarregando] = useState(visaoOrganizacao);
   const [orgErro, setOrgErro] = useState<string | null>(null);
+  const [pesquisa, setPesquisa] = useState('');
+  const [filtro, setFiltro] = useState<'todas' | 'em_curso' | 'falhadas' | 'concluidas'>('todas');
 
   useEffect(() => {
     if (!visaoOrganizacao || !orgCarregando) return;
@@ -73,7 +77,20 @@ export default function Entregas() {
 
   const porFazer = estado.entregas.filter((e) => !entregaTerminada(estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes))));
   const feitas = estado.entregas.filter((e) => !porFazer.includes(e));
-  const lista = [...porFazer, ...feitas];
+  const termo = pesquisa.trim().toLocaleLowerCase();
+  const correspondeFiltro = (e: Envio) => {
+    const estadoAtual = estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes));
+    if (filtro === 'em_curso') return !entregaTerminada(estadoAtual) && estadoAtual !== 'FAILED';
+    if (filtro === 'falhadas') return estadoAtual === 'FAILED';
+    if (filtro === 'concluidas') return estadoAtual === 'DELIVERED' || estadoAtual === 'CANCELLED';
+    return true;
+  };
+  const correspondePesquisa = (e: Envio) => !termo || [e.codigo, e.destinatario].some((v) => v?.toLocaleLowerCase().includes(termo));
+  const lista = [...porFazer, ...feitas].filter((e) => correspondeFiltro(e) && correspondePesquisa(e));
+  const hoje = new Date().toISOString().slice(0, 10);
+  const hojeEntregas = estado.entregas.filter((e) => e.atualizadoEm?.slice(0, 10) === hoje);
+  const concluidasHoje = hojeEntregas.filter((e) => estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes)) === 'DELIVERED').length;
+  const sucesso = hojeEntregas.length ? Math.round((concluidasHoje / hojeEntregas.length) * 100) : 0;
 
   const atualizar = async () => {
     if (!userId) return;
@@ -100,16 +117,18 @@ export default function Entregas() {
         ListHeaderComponent={
           <View style={estilos.cabecalho}>
             <Titulo>{visaoOrganizacao ? 'Entregas da organização' : 'As minhas entregas'}</Titulo>
-            <Texto suave>{visaoOrganizacao ? `${estado.entregas.length} no total · ${porFazer.length} por fazer` : `${porFazer.length} por fazer`}</Texto>
+            <Texto suave>{`Hoje: ${hojeEntregas.length} entregas · ${concluidasHoje} com prova · ${sucesso}% sucesso`}</Texto>
             {orgErro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${orgErro}`}</Caixa> : null}
             {estado.aviso ? <Caixa tipo={estado.aviso.tipo}>{estado.aviso.texto}</Caixa> : null}
-            {online === false ? <Caixa tipo="info">Sem rede: a mostrar o que está neste telemóvel. Podes continuar a trabalhar.</Caixa> : null}
+            {online === false ? <Caixa tipo="info">Offline / pendentes de sincronização.</Caixa> : null}
+            <TextInput value={pesquisa} onChangeText={setPesquisa} placeholder="Procurar por código ou nome..." placeholderTextColor={CORES.textoSuave} style={estilos.pesquisa} />
+            <View style={estilos.filtros}>{(['todas', 'em_curso', 'falhadas', 'concluidas'] as const).map((f) => <Pressable key={f} onPress={() => setFiltro(f)} style={[estilos.filtro, filtro === f && estilos.filtroAtivo]}><Text style={estilos.filtroTexto}>{f === 'todas' ? 'Todas' : f === 'em_curso' ? 'Em curso' : f === 'falhadas' ? 'Falhadas' : 'Concluídas'}</Text></Pressable>)}</View>
             {estado.erro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${estado.erro}`}</Caixa> : null}
           </View>
         }
         ListEmptyComponent={
           <View style={estilos.vazio}>
-            <Texto>Não tens entregas atribuídas.</Texto>
+            <Texto>{pesquisa || filtro !== 'todas' ? 'Nenhuma entrega corresponde à pesquisa/filtro.' : 'Ainda sem entregas atribuídas.'}</Texto>
           </View>
         }
         renderItem={({ item }) => (
@@ -143,6 +162,11 @@ const estilos = StyleSheet.create({
   premido: { backgroundColor: CORES.fundoSuave },
   titulo: { fontSize: TAMANHOS.subtitulo, fontWeight: '700', color: CORES.texto },
   codigo: { fontSize: 17, fontWeight: '700', color: CORES.primaria },
+  pesquisa: { borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, paddingHorizontal: 12, paddingVertical: 10, color: CORES.texto, backgroundColor: CORES.fundo },
+  filtros: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  filtro: { borderWidth: 1, borderColor: CORES.borda, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+  filtroAtivo: { backgroundColor: CORES.infoFundo, borderColor: CORES.primaria },
+  filtroTexto: { color: CORES.texto, fontSize: 13, fontWeight: '700' },
   detalhe: { fontSize: TAMANHOS.textoPequeno, color: CORES.textoSuave },
   etiquetas: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   etiqueta: {
