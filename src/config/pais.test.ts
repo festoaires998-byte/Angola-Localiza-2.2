@@ -53,7 +53,7 @@ describe('configuração de país', () => {
     await expect(obterConfigPais('AO')).resolves.toMatchObject({
       country_code: 'AO',
       country_name: 'Angola',
-      address_hierarchy: ['province', 'municipality', 'neighborhood', 'street', 'block', 'house_number'],
+      address_hierarchy: ['province', 'municipality', 'commune', 'neighborhood'],
     });
   });
 
