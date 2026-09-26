@@ -1,11 +1,8 @@
 name: Build Android (APK de teste)
 
-# Pode ser executado manualmente e também no push para main.
+# Execução exclusivamente manual: nenhum push deve iniciar um build.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 concurrency:
   group: build-android
