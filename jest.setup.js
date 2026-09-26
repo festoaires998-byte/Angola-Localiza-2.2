@@ -1,7 +1,3 @@
-class NativeDatabaseMock {
-  constructor() {}
-}
-
 jest.mock('expo-sqlite', () => ({
-  NativeDatabase: NativeDatabaseMock,
+  NativeDatabase: jest.fn().mockImplementation(() => ({})),
 }));
