@@ -7,7 +7,7 @@ import { CORES, TAMANHOS } from '@/components/tema';
 import { Caixa, EcraCarregamento, Ecra, Texto, Titulo } from '@/components/ui';
 import { entregaTerminada, nomeEstadoEntrega, type Envio } from '@/domain/entregas/envio';
 import { estadoEfetivo } from '@/domain/entregas/estafeta';
-import { recarregarEstafeta, useEntregasEstafeta } from '@/hooks/useEntregasEstafeta';
+import { recarregarEntregasOrganizacao, recarregarEstafeta, useEntregasEstafeta } from '@/hooks/useEntregasEstafeta';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import { acoesDaEntrega, type AcaoNaFila } from '@/services/entregas/estafeta';
@@ -45,25 +45,30 @@ export default function Entregas() {
   const sessao = useSessao();
   const userId = sessao.utilizador?.id ?? null;
   const cargos = sessao.perfil?.cargos ?? [];
-  const eEstafeta = cargos.includes('estafeta') || cargos.includes('super_admin');
+  const eEstafeta = cargos.includes('estafeta');
+  const visaoOrganizacao = cargos.includes('operador_postal') || cargos.includes('super_admin');
   const router = useRouter();
   const estado = useEntregasEstafeta(eEstafeta ? userId : null, online);
   const [aAtualizar, setAAtualizar] = useState(false);
+  const [orgCarregando, setOrgCarregando] = useState(visaoOrganizacao);
+  const [orgErro, setOrgErro] = useState<string | null>(null);
 
-  if (!eEstafeta) {
+  if (visaoOrganizacao && orgCarregando && estado.entregas === null) {
+    void recarregarEntregasOrganizacao()
+      .catch((e) => setOrgErro(e instanceof Error ? e.message : String(e)))
+      .finally(() => setOrgCarregando(false));
+  }
+
+  if (!eEstafeta && !visaoOrganizacao) {
     return (
       <Ecra>
         <Titulo>Entregas</Titulo>
         <Texto>Aqui aparecem as entregas que fazes como estafeta.</Texto>
-        <Texto suave>
-          {cargos.includes('operador_postal')
-            ? 'A gestão das entregas da organização (atribuir estafetas) ainda está no site.'
-            : 'Os teus envios estão no separador Enviar.'}
-        </Texto>
+        <Texto suave>Os teus envios estão no separador Enviar.</Texto>
       </Ecra>
     );
   }
-  if (estado.entregas === null) return <EcraCarregamento texto="A abrir as entregas…" />;
+  if (estado.entregas === null || (visaoOrganizacao && orgCarregando)) return <EcraCarregamento texto="A abrir as entregas…" />;
 
   const porFazer = estado.entregas.filter((e) => !entregaTerminada(estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes))));
   const feitas = estado.entregas.filter((e) => !porFazer.includes(e));
@@ -72,7 +77,15 @@ export default function Entregas() {
   const atualizar = async () => {
     if (!userId) return;
     setAAtualizar(true);
-    await recarregarEstafeta(userId, online === true).catch(() => undefined);
+    if (visaoOrganizacao) {
+      setOrgCarregando(true);
+      setOrgErro(null);
+      await recarregarEntregasOrganizacao().catch((e) => setOrgErro(e instanceof Error ? e.message : String(e)));
+      setOrgCarregando(false);
+    } else {
+      if (!userId) return;
+      await recarregarEstafeta(userId, online === true).catch(() => undefined);
+    }
     setAAtualizar(false);
   };
 
@@ -85,8 +98,9 @@ export default function Entregas() {
         refreshControl={online ? <RefreshControl refreshing={aAtualizar} onRefresh={() => void atualizar()} /> : undefined}
         ListHeaderComponent={
           <View style={estilos.cabecalho}>
-            <Titulo>As minhas entregas</Titulo>
-            <Texto suave>{`${porFazer.length} por fazer`}</Texto>
+            <Titulo>{visaoOrganizacao ? 'Entregas da organização' : 'As minhas entregas'}</Titulo>
+            <Texto suave>{visaoOrganizacao ? `${estado.entregas.length} no total · ${porFazer.length} por fazer` : `${porFazer.length} por fazer`}</Texto>
+            {orgErro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${orgErro}`}</Caixa> : null}
             {estado.aviso ? <Caixa tipo={estado.aviso.tipo}>{estado.aviso.texto}</Caixa> : null}
             {online === false ? <Caixa tipo="info">Sem rede: a mostrar o que está neste telemóvel. Podes continuar a trabalhar.</Caixa> : null}
             {estado.erro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${estado.erro}`}</Caixa> : null}
