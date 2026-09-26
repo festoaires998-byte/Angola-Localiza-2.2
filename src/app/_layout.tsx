@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CORES } from '@/components/tema';
+import { inicializarConfigPais } from '@/config/pais';
 import { tratarLink } from '@/services/links/tratarLinks';
 import { sessao } from '@/state/sessao';
 import { iniciarSync } from '@/sync/gatilhos';
@@ -24,6 +25,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     sessao.iniciar();
+    inicializarConfigPais().catch(() => undefined);
     iniciarSync();
     registarTarefaSync().catch(() => undefined);
   }, []);

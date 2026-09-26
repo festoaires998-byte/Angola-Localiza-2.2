@@ -2,6 +2,7 @@ import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import type { NovoFavoritoComMorada } from '@/services/moradas/moradas';
 
 import { lerFavoritosDoServidor, SELECAO_FAVORITOS, type FavoritoDoServidor } from './moradasNucleo';
+import { obterConfigPais } from '@/config/pais';
 import { supabase } from './supabase';
 
 export type { DadosMorada, FavoritoDoServidor } from './moradasNucleo';
@@ -45,6 +46,7 @@ export async function removerFavorito(id: string): Promise<void> {
  */
 export async function criarFavoritoComMorada(userId: string, novo: NovoFavoritoComMorada): Promise<void> {
   const m = novo.morada;
+  const pais = await obterConfigPais();
   const { error: erroMorada } = await supabase.from('addresses').insert({
     id: m.id,
     latitude: m.latitude,
@@ -57,6 +59,7 @@ export async function criarFavoritoComMorada(userId: string, novo: NovoFavoritoC
     status: 'PROPOSED',
     source: 'app',
     created_by: userId,
+    country_code: pais.country_code,
   });
   // 23505 = já existe (envio repetido).
   if (erroMorada && erroMorada.code !== '23505') throw erro(erroMorada, 'Não foi possível guardar a morada.');

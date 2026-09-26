@@ -4,6 +4,8 @@ type Erro = { message: string; code?: string } | null;
 let mockErroInsert: Erro = null;
 let mockErroUpsert: Erro = null;
 const mockChamadas: { tabela: string; metodo: string; args: unknown[] }[] = [];
+jest.mock('@/config/pais', () => ({ obterConfigPais: async () => ({ country_code: 'AO' }) }));
+
 jest.mock('../supabase', () => ({
   supabase: {
     from: (tabela: string) => ({
@@ -60,6 +62,7 @@ describe('criarFavoritoComMorada', () => {
             status: 'PROPOSED',
             source: 'app',
             created_by: 'u-1',
+            country_code: 'AO',
           },
         ],
       },
