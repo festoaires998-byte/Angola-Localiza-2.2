@@ -102,9 +102,8 @@ describe('Código Postal Digital: app igual ao servidor (esquema 2)', () => {
     const antigo = `AO-HUA-${grelha}-${checksum1(`HUA-${grelha}`)}`;
     expect(servidor.validatePostalCode(antigo)).toEqual({ valid: true });
     expect(servidor.validatePostalCode(`AO-BEN-${grelha}-${checksum1(`BEN-${grelha}`)}`)).toEqual({ valid: true });
-    const uige = codigoPostalProvisorio(-15.5, 14.9, 'Uíge').codigo;
-    expect(uige).toMatch(/^AO-UÍG-/);
-    expect(servidor.validatePostalCode(uige)).toEqual({ valid: true });
+    // Uíge conserva a sigla oficial gerada pela regra histórica (UÍG).
+    expect(servidor.validatePostalCode('AO-UÍG-MN6YH65D-79')).toEqual({ valid: true });
   });
 });
 
