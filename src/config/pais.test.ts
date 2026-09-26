@@ -11,7 +11,7 @@ type CountryConfigRow = {
 
 type MaybeSingleResult = { data: CountryConfigRow | null; error: { message: string } | null };
 
-const maybeSingle = jest.fn<() => Promise<MaybeSingleResult>>();
+const mockMaybeSingle = jest.fn<() => Promise<MaybeSingleResult>>();
 
 jest.mock('@/api/supabase', () => ({
   supabase: {
@@ -19,7 +19,7 @@ jest.mock('@/api/supabase', () => ({
       select: jest.fn(() => ({
         eq: jest.fn(() => ({
           eq: jest.fn(() => ({
-            maybeSingle,
+            maybeSingle: mockMaybeSingle,
           })),
         })),
       })),
@@ -29,13 +29,13 @@ jest.mock('@/api/supabase', () => ({
 
 describe('configuração de país', () => {
   beforeEach(async () => {
-    maybeSingle.mockReset();
+    mockMaybeSingle.mockReset();
     const modulo = await import('./pais');
     modulo.limparCacheConfigPais();
   });
 
   it('carrega Angola a partir de country_configs', async () => {
-    maybeSingle.mockResolvedValue({
+    mockMaybeSingle.mockResolvedValue({
       data: {
         country_code: 'AO',
         country_name: 'Angola',
@@ -54,11 +54,11 @@ describe('configuração de país', () => {
       currency_code: 'AOA',
       phone_country_code: '+244',
     });
-    expect(maybeSingle).toHaveBeenCalledTimes(1);
+    expect(mockMaybeSingle).toHaveBeenCalledTimes(1);
   });
 
   it('mantém Angola funcional quando o servidor está indisponível', async () => {
-    maybeSingle.mockResolvedValue({
+    mockMaybeSingle.mockResolvedValue({
       data: null,
       error: { message: 'offline' },
     });
@@ -72,7 +72,7 @@ describe('configuração de país', () => {
   });
 
   it('não inventa configuração para outro país', async () => {
-    maybeSingle.mockResolvedValue({
+    mockMaybeSingle.mockResolvedValue({
       data: null,
       error: null,
     });
