@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { REENCAMINHADAS, eUuid, limparEdicaoMorada, limparFavorito, limparMoradaNova, podeEditarMorada } from "./regras.ts";
+import { REENCAMINHADAS, eUuid, limparEdicaoFavorito, limparEdicaoMorada, limparFavorito, limparMoradaNova, limparRemocaoFavorito, podeEditarMorada } from "./regras.ts";
 
 // Angola Localiza - Sync Service (v9)\n// Claim de operation_id protegido contra concorrência.
 // Recebe a fila feita sem rede (app e site) e aplica cada operação uma vez.
@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "nao foi possivel validar o dispositivo" }), { status: 500, headers: cors });
     }
     const allowedDeviceIds = new Set((callerDevices ?? []).map((row) => row.device_id));
-    const allowedOperationTypes = new Set(["create_address", "update_address", "create_favorite", ...Object.keys(REENCAMINHADAS)]);
+    const allowedOperationTypes = new Set(["create_address", "update_address", "create_favorite", "update_favorite", "remove_favorite", ...Object.keys(REENCAMINHADAS)]);
 
     for (const op of operations) {
       if (!op || !eUuid(op.operation_id)) {
@@ -217,7 +217,45 @@ Deno.serve(async (req: Request) => {
         } else if (op.operation_type === "create_favorite") {
           const limpa = limparFavorito(op.payload, callerId);
           if (!limpa.ok) throw new Error(limpa.erro);
-          const { error } = await supabase.from("favorites").upsert(limpa.linha, { onConflict: "user_id,address_id" });
+
+          const a = op.payload.address;
+          if (a !== undefined) {
+            if (!a || typeof a !== "object" || Array.isArray(a)) throw new Error("dados da morada invalidos");
+            const address = a as Record<string, unknown>;
+            const morada = limparMoradaNova({
+              latitude: address.latitude,
+              longitude: address.longitude,
+              plus_code: address.plus_code,
+              postal_code: address.postal_code,
+              accuracy_meters: address.accuracy_meters,
+              visibility_level: address.visibility_level,
+            }, callerId);
+            if (!morada.ok) throw new Error(morada.erro);
+
+            const { error: erroMorada } = await supabase.from("addresses").insert({
+              id: op.payload.address_id,
+              ...morada.linha,
+              country_code: typeof address.country_code === "string" ? address.country_code : "AO",
+            });
+            if (erroMorada && erroMorada.code !== "23505") throw erroMorada;
+          }
+
+          const { error } = await supabase.from("favorites").upsert(limpa.linha, { onConflict: "user_id,address_id" });          if (error) throw error;
+        } else if (op.operation_type === "update_favorite") {
+          const limpa = limparEdicaoFavorito(op.payload);
+          if (!limpa.ok) throw new Error(limpa.erro);
+          const { error } = await supabase.from("favorites")
+            .update(limpa.linha)
+            .eq("id", op.payload.id)
+            .eq("user_id", callerId);
+          if (error) throw error;
+        } else if (op.operation_type === "remove_favorite") {
+          const limpa = limparRemocaoFavorito(op.payload);
+          if (!limpa.ok) throw new Error(limpa.erro);
+          const { error } = await supabase.from("favorites")
+            .delete()
+            .eq("id", op.payload.id)
+            .eq("user_id", callerId);
           if (error) throw error;
         } else if (REENCAMINHADAS[op.operation_type]) {
           // Entregas recebem a operation_id para que o destino seja idempotente

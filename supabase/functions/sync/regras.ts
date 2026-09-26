@@ -135,6 +135,29 @@ export function limparFavorito(payload: unknown, quemPede: string): Limpeza {
   return { ok: true, linha };
 }
 
+/** Atualização segura: só o dono pode alterar nome/categoria. */
+export function limparEdicaoFavorito(payload: unknown): Limpeza {
+  const p = objeto(payload);
+  if (!p || !eUuid(p.id)) return { ok: false, erro: "id do favorito invalido" };
+  const linha: Record<string, unknown> = {};
+  if (p.category !== undefined) {
+    if (typeof p.category !== "string" || p.category.length > 100) return { ok: false, erro: "category invalido" };
+    linha.category = p.category;
+  }
+  if (p.label !== undefined) {
+    if (p.label !== null && (typeof p.label !== "string" || p.label.length > 100)) return { ok: false, erro: "label invalido" };
+    linha.label = p.label;
+  }
+  if (Object.keys(linha).length === 0) return { ok: false, erro: "nada para mudar" };
+  return { ok: true, linha };
+}
+
+export function limparRemocaoFavorito(payload: unknown): Limpeza {
+  const p = objeto(payload);
+  if (!p || !eUuid(p.id)) return { ok: false, erro: "id do favorito invalido" };
+  return { ok: true, linha: { id: p.id } };
+}
+
 /** Quem pode editar uma morada pela sync: quem a criou enquanto está por validar, ou um administrador. */
 export function podeEditarMorada(atual: { created_by: string | null; status: string }, quemPede: string, eAdmin: boolean) {
   return eAdmin || (atual.created_by === quemPede && atual.status === ESTADO_INICIAL);

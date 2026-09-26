@@ -5,6 +5,9 @@ import { marcadores, paraIso, paraJson, relogioDoSistema, type Relogio } from '.
 /** Tipos de operação aceites pela Edge Function "sync". */
 export const TIPOS_OPERACAO = [
   'create_address',
+  'create_favorite',
+  'update_favorite',
+  'remove_favorite',
   'create_delivery',
   'field_submit',
   'delivery_proof',

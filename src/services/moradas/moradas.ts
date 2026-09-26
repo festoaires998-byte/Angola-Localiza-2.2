@@ -1,6 +1,7 @@
 import { lerDadosMorada, type DadosMorada, type FavoritoDoServidor } from '@/api/moradasNucleo';
 import type { CategoriaFavorito, Favorito, RepositorioFavoritos } from '@/database/repositories/favoritos';
 import type { Morada, RepositorioMoradas } from '@/database/repositories/moradas';
+import type { TipoOperacao } from '@/database/repositories/filaSaida';
 
 /**
  * Separador Moradas: os favoritos do utilizador, guardados no telemóvel para
@@ -77,6 +78,8 @@ export interface DependenciasMoradas {
   };
   gerarId: () => string;
   agora?: () => Date;
+  /** Fila unificada opcional; injetada pela composição da app. */
+  acrescentarOperacao?: (userId: string, tipo: TipoOperacao, payload: unknown) => Promise<unknown>;
 }
 
 export interface ResultadoEnvio {
@@ -178,12 +181,26 @@ export function criarServicoMoradas(deps: DependenciasMoradas) {
         morada_id: morada.id,
         nome: (escolhas.nome ?? '').trim(),
         categoria: escolhas.categoria,
-        pendente: 'criar',
+        pendente: deps.acrescentarOperacao ? null : 'criar',
         criado_em: agora,
         atualizado_em: agora,
       };
       await deps.moradas.guardarVarias([morada]);
       await deps.favoritos.guardar(favorito);
+      await deps.acrescentarOperacao?.(userId, 'create_favorite', {
+        address_id: morada.id,
+        address: {
+          latitude: morada.latitude,
+          longitude: morada.longitude,
+          plus_code: morada.plus_code,
+          postal_code: morada.codigo_postal,
+          accuracy_meters: morada.precisao_m,
+          visibility_level: escolhas.visibilidade,
+          country_code: 'AO',
+        },
+        category: favorito.categoria,
+        label: favorito.nome.trim() || null,
+      });
       return { favorito, morada };
     },
 
@@ -203,11 +220,15 @@ export function criarServicoMoradas(deps: DependenciasMoradas) {
     },
 
     async alterar(id: string, mudancas: { nome: string; categoria: CategoriaFavorito }): Promise<void> {
-      await deps.favoritos.alterar(id, { nome: mudancas.nome.trim(), categoria: mudancas.categoria });
+      await deps.favoritos.alterar(id, { nome: mudancas.nome.trim(), categoria: mudancas.categoria, ...(deps.acrescentarOperacao ? { pendente: null } : {}) });
     },
 
     async remover(id: string): Promise<void> {
-      await deps.favoritos.marcarRemover(id);
+      if (deps.acrescentarOperacao) {
+        await deps.favoritos.apagar(id);
+      } else {
+        await deps.favoritos.marcarRemover(id);
+      }
     },
   };
 }

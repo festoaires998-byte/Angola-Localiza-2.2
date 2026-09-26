@@ -40,6 +40,7 @@ const deps: DependenciasMoradas = {
   moradas: aoAbrir(moradas, ['obter', 'guardarVarias']),
   servidor: { lerFavoritos, atualizarFavorito, removerFavorito, criarFavoritoComMorada },
   gerarId: gerarUuid,
+  acrescentarOperacao: async (userId, tipo, payload) => (await obterRepositoriosSync()).fila.adicionar(userId, tipo, payload),
 };
 
 /** Serviço das Moradas ligado à base de dados e ao Supabase (um só para a app). */
