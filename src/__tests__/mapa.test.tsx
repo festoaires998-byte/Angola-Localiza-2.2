@@ -707,5 +707,5 @@ describe('Guardar como favorito', () => {
     await waitFor(() => expect(screen.getAllByText(/precisas de fazer a verificação simples/)).toHaveLength(2));
     expect(screen.getByRole('button', { name: 'Guardar como favorito' })).toBeDisabled();
     expect(mockGuardarDoMapa).not.toHaveBeenCalled();
-  });
+  });\n\n  test('um gesto manual interrompe o seguimento automático do GPS', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar();\n    fireEvent(screen.getByTestId('mapa'), 'touchStart');\n    expect(screen.getByRole('button', { name: 'Centrar em mim' })).toBeTruthy();\n  });
 });
