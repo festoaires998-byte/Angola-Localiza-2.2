@@ -135,6 +135,12 @@ export interface Envio {
   estafeta: string | null;
   atualizadoEm: string | null;
   /** Morada de destino (códigos, referência e posição, se o servidor a deu). */
+  origem: {
+    latitude: number | null;
+    longitude: number | null;
+    codigoPostal: string | null;
+    plusCode: string | null;
+  } | null;
   morada: {
     codigoPostal: string | null;
     plusCode: string | null;
@@ -177,6 +183,12 @@ export function lerEnvio(linha: unknown): Envio {
     criadoPor: texto(l.created_by),
     estafeta: texto(l.assigned_driver),
     atualizadoEm: texto(l.updated_at) ?? texto(l.created_at),
+    origem: {
+      latitude: numero(l.origin_latitude),
+      longitude: numero(l.origin_longitude),
+      codigoPostal: texto(l.origin_postal_code),
+      plusCode: texto(l.origin_plus_code),
+    },
     morada: m
       ? {
           codigoPostal: texto(m.postal_code),
