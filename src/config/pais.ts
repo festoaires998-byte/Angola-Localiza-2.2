@@ -60,4 +60,10 @@ export function obterConfigPais(countryCode: CodigoPais = PAIS_PADRAO): Promise<
 export function inicializarConfigPais(countryCode: CodigoPais = PAIS_PADRAO): Promise<ConfigPais> { return obterConfigPais(countryCode); }
 export function limparCacheConfigPais(): void { cache = null; pedido = null; }
 export function paisTemNivel(config: ConfigPais, nivel: string): boolean { return config.address_hierarchy.includes(nivel); }
+export function nivelLocalidade(config: ConfigPais): NivelTerritorial | null {
+  return config.territorial_levels.find((nivel) => nivel.is_locality) ?? null;
+}
+export function nivelPorChave(config: ConfigPais, chave: string): NivelTerritorial | null {
+  return config.territorial_levels.find((nivel) => nivel.level_key === chave) ?? null;
+}
 export const CONFIG_AO_OFFLINE_TESTE = CONFIG_AO_OFFLINE;
