@@ -624,7 +624,7 @@ describe('Mapa / Satélite', () => {
     const alerta = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockOnline = true;
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
-    const { rerender } = desenhar();
+    const { rerender } = await desenhar();
     fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
     const botoes = alerta.mock.calls[0][2] as { text: string; onPress?: () => void }[];
     act(() => botoes.find((b) => b.text === 'Usar satélite')!.onPress!());
