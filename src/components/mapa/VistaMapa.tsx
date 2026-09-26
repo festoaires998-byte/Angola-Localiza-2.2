@@ -133,7 +133,10 @@ export function VistaMapa({
 
       <View style={estilos.botoesBaixo}>
         {estilo && !seguir && !semPermissao ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Centrar em mim" onPress={() => {\n              setSeguir(true);\n              if (posicao) camara.current?.flyTo({ center: [posicao.longitude, posicao.latitude], zoom: 16, duration: 500 });\n            }} style={estilos.botaoMapa}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Centrar em mim" onPress={() => {
+              setSeguir(true);
+              if (posicao) camara.current?.flyTo({ center: [posicao.longitude, posicao.latitude], zoom: 16, duration: 500 });
+            }} style={estilos.botaoMapa}>
             <Text style={estilos.textoBotaoMapa}>Centrar em mim</Text>
           </Pressable>
         ) : null}
