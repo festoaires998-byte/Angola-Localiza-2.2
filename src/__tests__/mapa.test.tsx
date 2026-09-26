@@ -545,7 +545,7 @@ describe('Ler QR', () => {
 describe('Mapa / Satélite', () => {
   const estiloMostrado = () => (screen.getAllByTestId('mapa-nativo')[0].props.mapStyle as { name: string }).name;
 
-  test('por omissão é o mapa do telemóvel', () => {
+  test('o mapa começa com zoom equivalente ao site e oferece controlos de zoom', () => {\n    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };\n    desenhar();\n    expect(chamadasCamara[0]).toMatchObject({ metodo: 'initialViewState' });\n    expect(screen.getByRole('button', { name: 'Aumentar zoom' })).toBeTruthy();\n    expect(screen.getByRole('button', { name: 'Diminuir zoom' })).toBeTruthy();\n  });\n\n  test('por omissão é o mapa do telemóvel', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     desenhar();
     expect(estiloMostrado()).toBe('Angola Localiza');
