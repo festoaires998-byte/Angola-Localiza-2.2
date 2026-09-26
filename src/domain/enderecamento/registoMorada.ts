@@ -189,7 +189,10 @@ export function minimoReferencia(d: Pick<DadosRegisto, 'ruaId' | 'ruaSemNome' | 
 export function faltaParaEnviar(d: DadosRegisto, localidadeLabel = 'bairro'): string[] {
   const falta: string[] = [];
   const localidade = localidadeLabel.trim() || 'bairro';
-  const inicialMaiuscula = localidade.charAt(0).toUpperCase() + localidade.slice(1);
+  const feminino = /^(localidade|zona|ilha|região|secção|tabanca)$/i.test(localidade);
+  const artigo = feminino ? 'a' : 'o';
+  const possessivo = feminino ? 'dela' : 'dele';
+  const demonstrativo = feminino ? 'Esta' : 'Este';
   if (!d.captura) falta.push('Esperar pela medição da posição.');
   else if (d.captura.fraca) falta.push('Precisão melhor que ±10 m: vai para um sítio aberto.');
   else if (situacaoLimite(d.captura.latitude, d.captura.longitude, d.captura.precisao).junto && !d.escolhaCelula) {
@@ -203,7 +206,7 @@ export function faltaParaEnviar(d: DadosRegisto, localidadeLabel = 'bairro'): st
     falta.push('Escolher a rua, escrever o nome dela ou marcar "Esta rua não tem nome".');
   }
   if (!d.bairroSemNome && d.bairro.trim().length < 2) {
-    falta.push(`Escolher ${localidade}, escrever o nome dela ou marcar "Esta ${localidade} não tem nome".`);
+    falta.push(`Escolher ${artigo} ${localidade}, escrever o nome ${possessivo} ou marcar "${demonstrativo} ${localidade} não tem nome".`);
   }
   const minimo = minimoReferencia(d);
   if (d.referencia.trim().length < minimo) {
