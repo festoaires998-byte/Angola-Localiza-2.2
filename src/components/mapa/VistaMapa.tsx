@@ -92,7 +92,18 @@ export function VistaMapa({
         </View>
       )}
 
-      {estilo ? (\n        <View style={estilos.zoom} accessibilityRole="group" accessibilityLabel="Controlos de zoom">\n          <Pressable accessibilityRole="button" accessibilityLabel="Aumentar zoom" onPress={() => camara.current?.zoomTo(18, 250)} style={estilos.zoomBotao}>\n            <Text style={estilos.zoomTexto}>+</Text>\n          </Pressable>\n          <Pressable accessibilityRole="button" accessibilityLabel="Diminuir zoom" onPress={() => camara.current?.zoomTo(14, 250)} style={estilos.zoomBotao}>\n            <Text style={estilos.zoomTexto}>−</Text>\n          </Pressable>\n        </View>\n      ) : null}\n\n      <View style={estilos.camadas} accessibilityRole="radiogroup">
+      {estilo ? (
+        <View style={estilos.zoom} accessibilityRole="group" accessibilityLabel="Controlos de zoom">
+          <Pressable accessibilityRole="button" accessibilityLabel="Aumentar zoom" onPress={() => camara.current?.zoomTo(18, 250)} style={estilos.zoomBotao}>
+            <Text style={estilos.zoomTexto}>+</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Diminuir zoom" onPress={() => camara.current?.zoomTo(14, 250)} style={estilos.zoomBotao}>
+            <Text style={estilos.zoomTexto}>−</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <View style={estilos.camadas} accessibilityRole="radiogroup">
         {(['mapa', 'satelite'] as const).map((c) => {
           const ativa = camada === c;
           const nome = c === 'mapa' ? 'Mapa' : 'Satélite';
@@ -158,7 +169,10 @@ const estilos = StyleSheet.create({
     borderWidth: 4,
     borderColor: CORES.fundo,
   },
-  zoom: { position: 'absolute', left: 8, top: 44, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: CORES.borda, backgroundColor: CORES.fundo },\n  zoomBotao: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: CORES.borda },\n  zoomTexto: { fontSize: 28, lineHeight: 30, fontWeight: '700', color: CORES.texto },\n  camadas: {
+  zoom: { position: 'absolute', left: 8, top: 44, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: CORES.borda, backgroundColor: CORES.fundo },
+  zoomBotao: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: CORES.borda },
+  zoomTexto: { fontSize: 28, lineHeight: 30, fontWeight: '700', color: CORES.texto },
+  camadas: {
     position: 'absolute',
     top: 44,
     right: 8,
