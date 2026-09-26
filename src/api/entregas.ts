@@ -59,3 +59,12 @@ export async function listarAtribuidas(userId: string): Promise<Envio[]> {
   if (error) throw new Error(`Não foi possível ler as entregas (${error.message}).`);
   return (data ?? []).map(lerEnvio);
 }
+
+/**
+ * Visão operacional da organização para Operador Postal e Super Admin.
+ * Usa a Edge Function que aplica as regras de autorização do módulo Entregas.
+ */
+export async function listarDaOrganizacao(): Promise<Envio[]> {
+  const r = await chamarFuncao<{ deliveries?: unknown[] }>('deliveries', 'list_org_deliveries');
+  return Array.isArray(r?.deliveries) ? r.deliveries.map(lerEnvio) : [];
+}
