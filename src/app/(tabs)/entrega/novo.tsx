@@ -33,9 +33,10 @@ export default function NovoEnvio() {
   const infoOrigem = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao === null || posicao?.precisao === undefined ? false : posicao.precisao <= 10);
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
   const [dados, setDados] = useState<DadosEnvio>({ moradaId: null, destinatario: '', telefone: '', instrucoes: '', urgente: false });
+  const [modoOrigem, setModoOrigem] = useState<'gps' | 'guardado'>('gps');
 
   useEffect(() => {
-    if (!posicao) return;
+    if (!posicao || modoOrigem !== 'gps') return;
     setDados((d) => ({
       ...d,
       origem: {
@@ -45,7 +46,7 @@ export default function NovoEnvio() {
         plusCode: infoOrigem?.plusCode ?? null,
       },
     }));
-  }, [posicao?.latitude, posicao?.longitude, infoOrigem?.codigoPostal.codigo, infoOrigem?.plusCode]);
+  }, [modoOrigem, posicao?.latitude, posicao?.longitude, infoOrigem?.codigoPostal.codigo, infoOrigem?.plusCode]);
   const [aEnviar, setAEnviar] = useState(false);
   const [entradaDestino, setEntradaDestino] = useState('');
   const [lerQr, setLerQr] = useState(false);
@@ -65,6 +66,13 @@ export default function NovoEnvio() {
   }, [userId, online]);
 
   // Só moradas que já existem no servidor (têm id lá).
+  const origensGuardadas = useMemo<Opcao<string>[]>(
+    () => (moradas.itens ?? [])
+      .filter((i) => i.morada && i.favorito.pendente !== 'remover' && i.morada.latitude !== null && i.morada.longitude !== null)
+      .map((i) => ({ valor: i.morada!.id, nome: tituloMorada(i), detalhe: i.morada!.codigo_postal ?? i.morada!.plus_code ?? undefined })),
+    [moradas.itens],
+  );
+
   const destinos = useMemo<Opcao<string>[]>(
     () =>
       (moradas.itens ?? [])
@@ -156,19 +164,38 @@ export default function NovoEnvio() {
       ) : null}
 
       <Subtitulo>De onde?</Subtitulo>
-      {posicao ? (
+      <Opcoes grupo="Local de recolha" opcoes={[
+        { valor: 'gps', nome: '📍 Minha localização' },
+        ...(origensGuardadas.length > 0 ? [{ valor: 'guardado', nome: '⭐ Guardados' }] : []),
+      ]} valor={modoOrigem} aoEscolher={(v) => {
+        const modo = v as 'gps' | 'guardado';
+        setModoOrigem(modo);
+        if (modo === 'gps') return;
+        const primeiro = origensGuardadas[0]?.valor;
+        const item = primeiro ? (moradas.itens ?? []).find((i) => i.morada?.id === primeiro) : undefined;
+        if (!item?.morada || item.morada.latitude === null || item.morada.longitude === null) return;
+        mudar({ origem: { latitude: item.morada.latitude, longitude: item.morada.longitude, codigoPostal: item.morada.codigo_postal, plusCode: item.morada.plus_code } });
+      }} />
+      {modoOrigem === 'guardado' ? (
+        <Opcoes grupo="Morada guardada para recolha" empilhadas opcoes={origensGuardadas}
+          valor={(moradas.itens ?? []).find((i) => i.morada?.latitude === dados.origem?.latitude && i.morada?.longitude === dados.origem?.longitude)?.morada?.id ?? null}
+          aoEscolher={(id) => {
+            const item = (moradas.itens ?? []).find((i) => i.morada?.id === id);
+            if (!item?.morada || item.morada.latitude === null || item.morada.longitude === null) return;
+            mudar({ origem: { latitude: item.morada.latitude, longitude: item.morada.longitude, codigoPostal: item.morada.codigo_postal, plusCode: item.morada.plus_code } });
+          }} />
+      ) : posicao ? (
         <Caixa tipo="info">
-          {`Origem: ${infoOrigem?.codigoPostal.codigo ?? infoOrigem?.plusCode ?? 'posição atual'}${infoOrigem?.local.municipio ? ` · ${infoOrigem.local.municipio}` : ''}`}
+          {'Origem: ' + (infoOrigem?.codigoPostal.codigo ?? infoOrigem?.plusCode ?? 'posição atual') + (infoOrigem?.local.municipio ? ' · ' + infoOrigem.local.municipio : '')}
           {posicao.precisao !== null && posicao.precisao > 10 ? '\nA posição está pouco precisa; continua a medir antes de enviar.' : ''}
         </Caixa>
       ) : estadoPosicao.estado === 'sem_permissao' ? (
         <Caixa tipo="aviso">Autoriza a localização para registar o ponto de origem do envio.</Caixa>
       ) : estadoPosicao.estado === 'gps_desligado' ? (
-        <Caixa tipo="aviso">Liga a localização do telemóvel para registar o ponto de origem.</Caixa>
+        <Caixa tipo="aviso">Liga a localização do telemóvel para registar o ponto de origem do envio.</Caixa>
       ) : (
         <Caixa tipo="info">A obter a localização atual…</Caixa>
       )}
-
       <Subtitulo>Para onde?</Subtitulo>
       {destinos.length > 0 ? (
         <Opcoes grupo="Morada de destino" empilhadas opcoes={destinos} valor={dados.moradaId} aoEscolher={(v) => mudar({ moradaId: v })} />
