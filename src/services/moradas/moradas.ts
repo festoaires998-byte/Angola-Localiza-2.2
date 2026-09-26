@@ -181,7 +181,7 @@ export function criarServicoMoradas(deps: DependenciasMoradas) {
         morada_id: morada.id,
         nome: (escolhas.nome ?? '').trim(),
         categoria: escolhas.categoria,
-        pendente: 'criar',
+        pendente: deps.acrescentarOperacao ? null : 'criar',
         criado_em: agora,
         atualizado_em: agora,
       };
@@ -220,11 +220,15 @@ export function criarServicoMoradas(deps: DependenciasMoradas) {
     },
 
     async alterar(id: string, mudancas: { nome: string; categoria: CategoriaFavorito }): Promise<void> {
-      await deps.favoritos.alterar(id, { nome: mudancas.nome.trim(), categoria: mudancas.categoria });
+      await deps.favoritos.alterar(id, { nome: mudancas.nome.trim(), categoria: mudancas.categoria, ...(deps.acrescentarOperacao ? { pendente: null } : {}) });
     },
 
     async remover(id: string): Promise<void> {
-      await deps.favoritos.marcarRemover(id);
+      if (deps.acrescentarOperacao) {
+        await deps.favoritos.apagar(id);
+      } else {
+        await deps.favoritos.marcarRemover(id);
+      }
     },
   };
 }
