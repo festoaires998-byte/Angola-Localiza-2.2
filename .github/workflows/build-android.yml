@@ -1,8 +1,11 @@
 name: Build Android (APK de teste)
 
-# Só arranca quando alguém carrega em "Run workflow" no separador Actions.
+# Pode ser executado manualmente e também no push para main.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 concurrency:
   group: build-android
