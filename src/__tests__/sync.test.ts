@@ -44,7 +44,7 @@ function cenario() {
   const s = criarSupabaseFalso({
     sessoes: { cidadao: CIDADAO, outro: OUTRO, admin: ADMIN },
     tabelas: {
-      organization_members: [{ user_id: ADMIN, role: 'admin_nacional' }],
+      organization_members: [{ user_id: ADMIN, role: 'admin_nacional' }],\n      signing_keys: [\n        { user_id: CIDADAO, device_id: 'aparelho-1' },\n        { user_id: OUTRO, device_id: 'aparelho-1' },\n        { user_id: ADMIN, device_id: 'aparelho-1' },\n      ],
       addresses: [
         { id: MORADA, status: 'PROPOSED', created_by: CIDADAO, reference: 'Antiga', updated_at: '2026-09-20T10:00:00.000Z' },
         { id: MORADA_APROVADA, status: 'APPROVED', created_by: CIDADAO, reference: 'Aprovada', updated_at: '2026-09-20T10:00:00.000Z' },
