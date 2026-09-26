@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text } from 'react-native';
+import { Alert, Share, StyleSheet, Text, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 import { dataHora } from '@/components/nomes';
 import { CORES } from '@/components/tema';
@@ -42,6 +43,17 @@ export default function DetalheEnvio() {
       setATrabalhar(null);
     }
   }
+
+  const textoPartilha = [
+    'Angola Localiza — envio',
+    envio.codigo ? `Código de rastreio: ${envio.codigo}` : null,
+    `Destinatário: ${envio.destinatario}`,
+    envio.morada?.codigoPostal ? `Destino: ${envio.morada.codigoPostal}` : null,
+  ].filter(Boolean).join('\\n');
+
+  const partilharEnvio = () => {
+    void Share.share({ message: textoPartilha }).catch(() => undefined);
+  };
 
   const mostrarPin = () => trabalhar('pin', async () => guardarPin(envio.id, await servicoEnvios.lerPin(envio.id)));
   const gerarPin = () =>
@@ -85,7 +97,19 @@ export default function DetalheEnvio() {
         ) : null}
         <Linha nome="Para" valor={envio.destinatario} />
         <Linha nome="Estado" valor={nomeEstadoEntrega(envio.estado)} />
-        {envio.codigo ? <Linha nome="Código de rastreio" valor={envio.codigo} /> : null}
+        {envio.codigo ? (
+          <>
+            <Linha nome="Código de rastreio" valor={envio.codigo} />
+            <View style={estilos.qrBloco}>
+              <Text style={estilos.qrTitulo}>QR de rastreio</Text>
+              <View style={estilos.qrCaixa}>
+                <QRCode value={`angola-localiza://rastreio/${envio.codigo}`} size={150} quietZone={8} />
+              </View>
+              <Texto suave>Lê este QR para identificar este envio.</Texto>
+            </View>
+            <Botao titulo="Partilhar envio" variante="secundario" onPress={partilharEnvio} />
+          </>
+        ) : null}
         {envio.morada?.codigoPostal || envio.morada?.plusCode ? (
           <Linha nome="Destino" valor={[envio.morada.codigoPostal, envio.morada.plusCode].filter(Boolean).join(' · ')} />
         ) : null}
@@ -138,5 +162,9 @@ export default function DetalheEnvio() {
 }
 
 const estilos = StyleSheet.create({
+  qrBloco: { gap: 8, alignItems: 'center', paddingTop: 8 },
+  qrTitulo: { fontSize: 15, fontWeight: '700', color: CORES.textoSuave },
+  qrCaixa: { padding: 4, backgroundColor: '#FFFFFF', borderRadius: 8 },
+
   pin: { fontSize: 48, fontWeight: '800', letterSpacing: 12, color: CORES.primaria, textAlign: 'center' },
 });
