@@ -326,9 +326,7 @@ describe('sync v9: favoritos na fila unificada', () => {
 
   test('update_favorite só altera favorito do próprio utilizador', async () => {
     const s = cenario();
-    const fav = linhas(s, 'favorites')[0];
-    fav.user_id = CIDADAO;
-    fav.id = 'cccccccc-0000-4000-8000-000000000001';
+    s.tabelas().favorites = [{ id: 'cccccccc-0000-4000-8000-000000000001', address_id: MORADA, user_id: CIDADAO, category: 'casa', label: 'Casa' }];
     const [r] = await sincronizar('cidadao', {
       operation_type: 'update_favorite',
       payload: { id: fav.id, category: 'trabalho', label: 'Escritório' },
@@ -339,9 +337,7 @@ describe('sync v9: favoritos na fila unificada', () => {
 
   test('remove_favorite só remove favorito do próprio utilizador', async () => {
     const s = cenario();
-    const fav = linhas(s, 'favorites')[0];
-    fav.user_id = CIDADAO;
-    fav.id = 'cccccccc-0000-4000-8000-000000000002';
+    s.tabelas().favorites = [{ id: 'cccccccc-0000-4000-8000-000000000002', address_id: MORADA, user_id: CIDADAO, category: 'casa', label: 'Casa' }];
     const [r] = await sincronizar('cidadao', {
       operation_type: 'remove_favorite',
       payload: { id: fav.id },
