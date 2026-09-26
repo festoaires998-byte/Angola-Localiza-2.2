@@ -171,7 +171,7 @@ export default function RegistarMorada() {
     duplicadoConfirmado,
     haDuplicado: !!duplicado,
   };
-  const falta = faltaParaEnviar(dados);
+  const falta = faltaParaEnviar(dados, localidadeMinuscula);
   const bloqueio = verificacao === null ? null : motivoBloqueio(verificacao);
   const bloqueado = !podeRegistar(verificacao);
 
@@ -338,7 +338,7 @@ export default function RegistarMorada() {
             aoEscolher={setBairro}
             opcoes={[
               ...bairros.map((b) => ({ valor: b, nome: b })),
-              { valor: BAIRRO_NOVO, nome: 'Outro bairro (escrever à mão)' },
+              { valor: BAIRRO_NOVO, nome: `Outra ${localidadeMinuscula} (escrever à mão)` },
             ]}
           />
         ) : (
@@ -367,7 +367,7 @@ export default function RegistarMorada() {
           maxLength={120}
         />
         {dados.ruaSemNome || dados.bairroSemNome ? (
-          <Texto suave>{`Sem nome de rua ou de bairro, a referência é a principal pista para encontrar a morada: pelo menos ${REFERENCIA_MIN_SEM_NOME} letras.`}</Texto>
+          <Texto suave>{`Sem nome de rua ou de ${localidadeMinuscula}, a referência é a principal pista para encontrar a morada: pelo menos ${REFERENCIA_MIN_SEM_NOME} letras.`}</Texto>
         ) : null}
       </Cartao>
 
