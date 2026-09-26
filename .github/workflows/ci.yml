@@ -13,7 +13,7 @@ jobs:
   verificar:
     name: Verificar projeto
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -33,3 +33,10 @@ jobs:
 
       - name: Verificar projeto Expo
         run: npx --yes expo-doctor
+
+      - name: Smoke test do build Web/PWA
+        env:
+          EXPO_NO_TELEMETRY: "1"
+        run: |
+          npx expo export --platform web
+          test -f dist/index.html
