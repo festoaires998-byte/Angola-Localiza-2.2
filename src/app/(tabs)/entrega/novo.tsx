@@ -34,9 +34,10 @@ export default function NovoEnvio() {
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
   const [dados, setDados] = useState<DadosEnvio>({ moradaId: null, destinatario: '', telefone: '', instrucoes: '', urgente: false });
   const [modoOrigem, setModoOrigem] = useState<'gps' | 'guardado'>('gps');
+  const [origemGuardadaId, setOrigemGuardadaId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!posicao || modoOrigem !== 'gps') return;
+    if (modoOrigem !== 'gps' || !posicao) return;
     setDados((d) => ({
       ...d,
       origem: {
@@ -178,10 +179,11 @@ export default function NovoEnvio() {
       }} />
       {modoOrigem === 'guardado' ? (
         <Opcoes grupo="Morada guardada para recolha" empilhadas opcoes={origensGuardadas}
-          valor={(moradas.itens ?? []).find((i) => i.morada?.latitude === dados.origem?.latitude && i.morada?.longitude === dados.origem?.longitude)?.morada?.id ?? null}
+          valor={origemGuardadaId}
           aoEscolher={(id) => {
             const item = (moradas.itens ?? []).find((i) => i.morada?.id === id);
             if (!item?.morada || !Number.isFinite(item.morada.latitude) || !Number.isFinite(item.morada.longitude)) return;
+            setOrigemGuardadaId(id);
             mudar({ origem: { latitude: item.morada.latitude, longitude: item.morada.longitude, codigoPostal: item.morada.codigo_postal, plusCode: item.morada.plus_code } });
           }} />
       ) : posicao ? (
