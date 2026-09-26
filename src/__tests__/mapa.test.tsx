@@ -97,6 +97,25 @@ jest.mock('expo-camera', () => {
 
 const Mapa = (require('@/app/(tabs)/mapa') as { default: () => React.JSX.Element }).default;
 
+describe('rótulos territoriais no mapa', () => {
+  test('usa o nível local configurado nos resultados de pesquisa', async () => {
+    jest.resetModules();
+    const mod = await import('@/config/pais');
+    jest.spyOn(mod, 'obterConfigPais').mockResolvedValue({
+      ...mod.CONFIG_AO_OFFLINE_TESTE,
+      territorial_levels: mod.CONFIG_AO_OFFLINE_TESTE.territorial_levels.map((n) =>
+        n.level_key === 'neighborhood' ? { ...n, label: 'Localidade', plural_label: 'Localidades', is_locality: true } : n,
+      ),
+    });
+    expect(mod.nivelLocalidade({
+      ...mod.CONFIG_AO_OFFLINE_TESTE,
+      territorial_levels: mod.CONFIG_AO_OFFLINE_TESTE.territorial_levels.map((n) =>
+        n.level_key === 'neighborhood' ? { ...n, label: 'Localidade', plural_label: 'Localidades', is_locality: true } : n,
+      ),
+    })?.label).toBe('Localidade');
+  });
+});
+
 const POS = { latitude: -12.7761, longitude: 15.7392, precisao: 6.2, hora: 0 };
 /** Posição medida com 3 leituras (o que o useCapturaGps devolve). */
 function medida(p: typeof POS, extra: Record<string, unknown> = {}) {
