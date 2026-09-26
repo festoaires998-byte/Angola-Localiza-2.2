@@ -26,13 +26,17 @@ export function useInfoLocal(
   useEffect(() => {
     if (lat === null || lng === null) return;
     const meu = ++pedido.current;
+    let ativo = true;
     void (async () => {
       const semRede = await infoLocal.semRede(lat, lng, { preciso }).catch(() => null);
-      if (meu === pedido.current && semRede) setInfo(semRede);
+      if (ativo && meu === pedido.current && semRede) setInfo(semRede);
       if (!online) return;
       const comRede = await infoLocal.comRede(lat, lng, { preciso }).catch(() => null);
-      if (meu === pedido.current && comRede) setInfo(comRede);
+      if (ativo && meu === pedido.current && comRede) setInfo(comRede);
     })();
+    return () => {
+      ativo = false;
+    };
     // lat/lng ficam de fora de propósito: só a mudança de célula conta.
     // (O Plus Code, que muda a cada ~3 m, é calculado no ecrã.)
   }, [celula, online, preciso]);
