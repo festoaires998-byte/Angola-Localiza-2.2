@@ -1,6 +1,7 @@
 import { lerDadosMorada, type DadosMorada, type FavoritoDoServidor } from '@/api/moradasNucleo';
 import type { CategoriaFavorito, Favorito, RepositorioFavoritos } from '@/database/repositories/favoritos';
 import type { Morada, RepositorioMoradas } from '@/database/repositories/moradas';
+import { acrescentarOperacao } from '@/sync/fila';
 
 /**
  * Separador Moradas: os favoritos do utilizador, guardados no telemóvel para
@@ -184,6 +185,20 @@ export function criarServicoMoradas(deps: DependenciasMoradas) {
       };
       await deps.moradas.guardarVarias([morada]);
       await deps.favoritos.guardar(favorito);
+      await acrescentarOperacao(userId, 'create_favorite', {
+        address_id: morada.id,
+        address: {
+          latitude: morada.latitude,
+          longitude: morada.longitude,
+          plus_code: morada.plus_code,
+          postal_code: morada.codigo_postal,
+          accuracy_meters: morada.precisao_m,
+          visibility_level: escolhas.visibilidade,
+          country_code: 'AO',
+        },
+        category: favorito.categoria,
+        label: favorito.nome.trim() || null,
+      });
       return { favorito, morada };
     },
 
