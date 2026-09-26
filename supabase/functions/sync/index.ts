@@ -219,29 +219,28 @@ Deno.serve(async (req: Request) => {
           if (!limpa.ok) throw new Error(limpa.erro);
 
           const a = op.payload.address;
-          if (!a || typeof a !== "object" || Array.isArray(a)) {
-            throw new Error("dados da morada obrigatorios para criar o favorito");
+          if (a !== undefined) {
+            if (!a || typeof a !== "object" || Array.isArray(a)) throw new Error("dados da morada invalidos");
+            const address = a as Record<string, unknown>;
+            const morada = limparMoradaNova({
+              latitude: address.latitude,
+              longitude: address.longitude,
+              plus_code: address.plus_code,
+              postal_code: address.postal_code,
+              accuracy_meters: address.accuracy_meters,
+              visibility_level: address.visibility_level,
+            }, callerId);
+            if (!morada.ok) throw new Error(morada.erro);
+
+            const { error: erroMorada } = await supabase.from("addresses").insert({
+              id: op.payload.address_id,
+              ...morada.linha,
+              country_code: typeof address.country_code === "string" ? address.country_code : "AO",
+            });
+            if (erroMorada && erroMorada.code !== "23505") throw erroMorada;
           }
-          const address = a as Record<string, unknown>;
-          const morada = limparMoradaNova({
-            latitude: address.latitude,
-            longitude: address.longitude,
-            plus_code: address.plus_code,
-            postal_code: address.postal_code,
-            accuracy_meters: address.accuracy_meters,
-            visibility_level: address.visibility_level,
-          }, callerId);
-          if (!morada.ok) throw new Error(morada.erro);
 
-          const { error: erroMorada } = await supabase.from("addresses").insert({
-            id: op.payload.address_id,
-            ...morada.linha,
-            country_code: typeof address.country_code === "string" ? address.country_code : "AO",
-          });
-          if (erroMorada && erroMorada.code !== "23505") throw erroMorada;
-
-          const { error } = await supabase.from("favorites").upsert(limpa.linha, { onConflict: "user_id,address_id" });
-          if (error) throw error;
+          const { error } = await supabase.from("favorites").upsert(limpa.linha, { onConflict: "user_id,address_id" });          if (error) throw error;
         } else if (op.operation_type === "update_favorite") {
           const limpa = limparEdicaoFavorito(op.payload);
           if (!limpa.ok) throw new Error(limpa.erro);
