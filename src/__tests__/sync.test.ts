@@ -337,13 +337,17 @@ describe('sync v9: favoritos na fila unificada', () => {
 
   test('remove_favorite só remove favorito do próprio utilizador', async () => {
     const s = cenario();
-    s.tabelas().favorites = [{ id: 'cccccccc-0000-4000-8000-000000000002', address_id: MORADA, user_id: CIDADAO, category: 'casa', label: 'Casa' }];
+    s.tabelas().favorites = [
+      { id: 'cccccccc-0000-4000-8000-000000000002', address_id: MORADA, user_id: CIDADAO, category: 'casa', label: 'Casa' },
+      { id: 'dddddddd-0000-4000-8000-000000000003', address_id: MORADA, user_id: CIDADAO, category: 'trabalho', label: 'Escritório' },
+    ];
     const [r] = await sincronizar('cidadao', {
       operation_type: 'remove_favorite',
-      payload: { id: 'cccccccc-0000-4000-8000-000000000001' },
+      payload: { id: 'cccccccc-0000-4000-8000-000000000002' },
     });
     expect(r.status).toBe('SYNCED');
-    expect(linhas(s, 'favorites')).toHaveLength(0);
+    expect(linhas(s, 'favorites')).toHaveLength(1);
+    expect(linhas(s, 'favorites')[0]).toMatchObject({ id: 'dddddddd-0000-4000-8000-000000000003' });
   });
 });
 
