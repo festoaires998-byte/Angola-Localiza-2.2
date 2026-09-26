@@ -486,6 +486,7 @@ describe('pesquisa única', () => {
     expect(await screen.findByText('Sem resultados.')).toBeTruthy();
 
     mockPesquisar.mockRejectedValueOnce(new Error('Sem ligação ao servidor.'));
+    fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'nada disto outra vez');
     expect(await screen.findByText('Não foi possível pesquisar agora. Sem ligação ao servidor.')).toBeTruthy();
   });
 
