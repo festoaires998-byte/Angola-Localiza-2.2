@@ -466,7 +466,7 @@ export default function Mapa() {
             <Botao titulo="Abrir o link" variante="secundario" onPress={() => void Linking.openURL(pesquisa.estado.link!)} />
           </Caixa>
         ) : null}
-        {pesquisa.estado.resultados ? <ResultadosPesquisa resultados={pesquisa.estado.resultados} aoEscolher={mostrarNoMapa} /> : null}
+        {pesquisa.estado.resultados ? <ResultadosPesquisa resultados={pesquisa.estado.resultados} aoEscolher={mostrarNoMapa} localidade={rotulos.localidade} /> : null}
 
         {/* 2. Obter localização + Ler QR */}
         <View style={estilos.linhaBotoes}>
