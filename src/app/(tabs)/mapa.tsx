@@ -231,7 +231,7 @@ function rotulosMapa(config: typeof CONFIG_AO_OFFLINE_TESTE) {
 }
 
 /** Passo 1: resultados da pesquisa única. */
-function ResultadosPesquisa({ resultados, aoEscolher }: { resultados: ResultadoPesquisa[]; aoEscolher(p: PontoEncontrado): void }) {
+function ResultadosPesquisa({ resultados, aoEscolher, localidade }: { resultados: ResultadoPesquisa[]; aoEscolher(p: PontoEncontrado): void; localidade: string }) {
   if (resultados.length === 0) return <Caixa tipo="info">Sem resultados.</Caixa>;
   return (
     <View style={estilos.resultados}>
