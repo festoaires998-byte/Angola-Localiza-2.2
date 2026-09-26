@@ -71,7 +71,11 @@ jest.mock('@/hooks/usePosicao', () => ({ usePosicao: () => ({ estado: 'a_procura
 jest.mock('@/hooks/useInfoLocal', () => ({ useInfoLocal: () => null }));
 jest.mock('react-native-qrcode-svg', () => () => null);
 // O Mapa pergunta pela verificação simples (base de dados do telemóvel).
-jest.mock('@/services/moradas/registoApp', () => ({ servicoRegisto: { verificacao: async () => 'verificado' } }));
+jest.mock('@/services/moradas/registoApp', () => ({
+  // Esta suite não testa a verificação simples; manter o pedido pendente evita
+  // uma atualização assíncrona irrelevante do Mapa durante testes de navegação.
+  servicoRegisto: { verificacao: () => new Promise<string>(() => undefined) },
+}));
 jest.mock('@/api/pesquisa', () => ({ pesquisarNoServidor: async () => [] }));
 jest.mock('@/services/moradas/moradasApp', () => ({
   servicoMoradas: { guardarDoMapa: async () => ({}), enviarPendentes: async () => ({ enviados: 0, erro: null }) },
