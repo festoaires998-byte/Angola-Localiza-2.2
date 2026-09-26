@@ -77,6 +77,12 @@ export default function DetalheEnvio() {
     <Ecra>
       {estado.aviso?.tipo === 'sucesso' && pin ? <Caixa tipo="sucesso">{estado.aviso.texto}</Caixa> : null}
       <Cartao>
+        {envio.origem ? (
+          <Linha
+            nome="Origem"
+            valor={[envio.origem.codigoPostal, envio.origem.plusCode].filter(Boolean).join(' · ') || 'Posição capturada'}
+          />
+        ) : null}
         <Linha nome="Para" valor={envio.destinatario} />
         <Linha nome="Estado" valor={nomeEstadoEntrega(envio.estado)} />
         {envio.codigo ? <Linha nome="Código de rastreio" valor={envio.codigo} /> : null}
