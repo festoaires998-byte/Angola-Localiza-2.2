@@ -105,7 +105,8 @@ export default function RegistarMorada() {
   const nivelLocalidadeConfig = nivelLocalidade(configPais);
   const labelLocalidade = nivelLocalidadeConfig?.label ?? 'Localidade';
   const localidadeMinuscula = labelLocalidade.toLocaleLowerCase('pt-PT');
-  const artigoLocalidade = /^(Ilha|Zona|Região|Secção)$/i.test(labelLocalidade) ? 'da' : 'do';
+  const artigoLocalidade = /^(Ilha|Zona|Região|Secção|Localidade|Tabanca)$/i.test(labelLocalidade) ? 'da' : 'do';
+  const demonstrativoLocalidade = /^(Ilha|Zona|Região|Secção|Localidade|Tabanca)$/i.test(labelLocalidade) ? 'Esta' : 'Este';
 
   useEffect(() => {
     if (userId && online !== null) void servicoRegisto.verificacao(userId, online).then(setVerificacao);
@@ -349,7 +350,7 @@ export default function RegistarMorada() {
               <Campo rotulo={`Nome ${artigoLocalidade} ${localidadeMinuscula}`} value={bairroNome} onChangeText={setBairroNome} placeholder={`Ex.: ${labelLocalidade}`} maxLength={80} />
             ) : null}
             <Marcar
-              rotulo={`Esta ${localidadeMinuscula} não tem nome`}
+              rotulo={`${demonstrativoLocalidade} ${localidadeMinuscula} não tem nome`}
               marcado={bairroSemNome}
               aoMudar={(v) => {
                 setBairroSemNome(v);
