@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 
 import { supabase } from '@/api/supabase';
 
-type PapelEntrega = 'criador' | 'estafeta';
+type PapelEntrega = 'criador' | 'estafeta' | 'organizacao';
 
 const COLUNA: Record<PapelEntrega, 'created_by' | 'assigned_driver'> = {
   criador: 'created_by',
   estafeta: 'assigned_driver',
+  organizacao: 'created_by',
 };
 
 /**
@@ -33,7 +34,7 @@ export function useRealtimeEntregas(
           event: '*',
           schema: 'public',
           table: 'deliveries',
-          filter: `${coluna}=eq.${userId}`,
+          ...(papel === 'organizacao' ? {} : { filter: `${coluna}=eq.${userId}` }),
         },
         () => {
           if (ativo) void aoMudar();
