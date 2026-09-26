@@ -135,7 +135,7 @@ export interface Envio {
   estafeta: string | null;
   atualizadoEm: string | null;
   /** Morada de destino (códigos, referência e posição, se o servidor a deu). */
-  origem: {
+  origem?: {
     latitude: number | null;
     longitude: number | null;
     codigoPostal: string | null;
