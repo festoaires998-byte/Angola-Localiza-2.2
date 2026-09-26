@@ -21,6 +21,7 @@ import { useOnline } from '@/hooks/useOnline';
 import { usePesquisaMapa, type PontoEncontrado } from '@/hooks/usePesquisaMapa';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useSessao } from '@/hooks/useSessao';
+import { CONFIG_AO_OFFLINE_TESTE, nivelLocalidade, nivelPorChave, obterConfigPais } from '@/config/pais';
 import type { InfoLocal } from '@/services/location/infoLocal';
 import { criarEstilo, criarEstiloSatelite } from '@/services/mapas/estiloMapa';
 import { mapaHuambo, type EstadoMapaOffline } from '@/services/mapas/mapaOffline';
@@ -103,6 +104,7 @@ function CartaoOndeEstou({
   info,
   online,
   children,
+  rotulos,
 }: {
   medida: CapturaGps;
   comSinal: boolean;
@@ -110,6 +112,7 @@ function CartaoOndeEstou({
   online: boolean | null;
   /** O QR Code e o "Registar", dentro do mesmo cartão (como no site). */
   children?: ReactNode;
+  rotulos: ReturnType<typeof rotulosMapa>;
 }) {
   const captura = medida.captura;
   if (!captura) {
@@ -180,8 +183,8 @@ function CartaoOndeEstou({
       </View>
 
       <Text style={estilos.rotulo}>Divisão administrativa</Text>
-      <Linha nome="Província" valor={local?.provincia ?? '—'} />
-      <Linha nome="Município" valor={local?.municipio ?? '—'} />
+      <Linha nome={rotulos.provincia} valor={local?.provincia ?? '—'} />
+      <Linha nome={rotulos.municipio} valor={local?.municipio ?? '—'} />
       {local?.origem === 'guardado' && !online ? (
         <Text style={estilos.nota}>{`Sem rede: guardado a ${dataHora(local.atualizadoEm)}.`}</Text>
       ) : null}
@@ -219,9 +222,18 @@ function CartaoOndeEstou({
 }
 
 const NOMES_TIPO: Record<ResultadoPesquisa['tipo'], string> = { morada: 'Morada', rua: 'Rua', bairro: 'Bairro' };
+function nomeTipoPesquisa(tipo: ResultadoPesquisa['tipo'], localidade: string): string { return tipo === 'bairro' ? localidade : NOMES_TIPO[tipo]; }
+function rotulosMapa(config: typeof CONFIG_AO_OFFLINE_TESTE) {
+  const localidade = nivelLocalidade(config)?.label ?? 'Bairro';
+  return {
+    localidade,
+    provincia: nivelPorChave(config, 'province')?.label ?? 'Província',
+    municipio: nivelPorChave(config, 'municipality')?.label ?? 'Município',
+  };
+}
 
 /** Passo 1: resultados da pesquisa única. */
-function ResultadosPesquisa({ resultados, aoEscolher }: { resultados: ResultadoPesquisa[]; aoEscolher(p: PontoEncontrado): void }) {
+function ResultadosPesquisa({ resultados, aoEscolher, localidade }: { resultados: ResultadoPesquisa[]; aoEscolher(p: PontoEncontrado): void; localidade: string }) {
   if (resultados.length === 0) return <Caixa tipo="info">Sem resultados.</Caixa>;
   return (
     <View style={estilos.resultados}>
@@ -231,14 +243,14 @@ function ResultadosPesquisa({ resultados, aoEscolher }: { resultados: ResultadoP
           <Pressable
             key={`${r.tipo}:${r.id}`}
             accessibilityRole="button"
-            accessibilityLabel={`${NOMES_TIPO[r.tipo]}: ${r.titulo}${temPonto ? '. Ver no mapa' : ''}`}
+            accessibilityLabel={`${nomeTipoPesquisa(r.tipo, localidade)}: ${r.titulo}${temPonto ? '. Ver no mapa' : ''}`}
             accessibilityState={{ disabled: !temPonto }}
             disabled={!temPonto}
             onPress={() => temPonto && aoEscolher({ latitude: r.latitude!, longitude: r.longitude!, titulo: r.titulo })}
             style={({ pressed }) => [estilos.resultado, pressed && estilos.resultadoPremido]}
           >
             <Text style={estilos.resultadoTitulo}>{r.titulo}</Text>
-            <Text style={estilos.nota}>{[NOMES_TIPO[r.tipo], r.subtitulo].filter(Boolean).join(' · ')}</Text>
+            <Text style={estilos.nota}>{[nomeTipoPesquisa(r.tipo, localidade), r.subtitulo].filter(Boolean).join(' · ')}</Text>
             <Text style={estilos.resultadoAcao}>{temPonto ? 'Ver no mapa ›' : 'Ainda sem posição no mapa'}</Text>
           </Pressable>
         );
@@ -250,6 +262,9 @@ function ResultadosPesquisa({ resultados, aoEscolher }: { resultados: ResultadoP
 const CENTRO_HUAMBO = { latitude: REGIAO_HUAMBO.centro[1], longitude: REGIAO_HUAMBO.centro[0] };
 
 export default function Mapa() {
+  const [configPais, setConfigPais] = useState(CONFIG_AO_OFFLINE_TESTE);
+  useEffect(() => { let ativo = true; void obterConfigPais().then((config) => { if (ativo) setConfigPais(config); }).catch(() => undefined); return () => { ativo = false; }; }, []);
+  const rotulos = useMemo(() => rotulosMapa(configPais), [configPais]);
   const router = useRouter();
   const sessao = useSessao();
   const userId = sessao.utilizador?.id ?? null;
@@ -451,7 +466,7 @@ export default function Mapa() {
             <Botao titulo="Abrir o link" variante="secundario" onPress={() => void Linking.openURL(pesquisa.estado.link!)} />
           </Caixa>
         ) : null}
-        {pesquisa.estado.resultados ? <ResultadosPesquisa resultados={pesquisa.estado.resultados} aoEscolher={mostrarNoMapa} /> : null}
+        {pesquisa.estado.resultados ? <ResultadosPesquisa resultados={pesquisa.estado.resultados} aoEscolher={mostrarNoMapa} localidade={rotulos.localidade} /> : null}
 
         {/* 2. Obter localização + Ler QR */}
         <View style={estilos.linhaBotoes}>
@@ -487,7 +502,7 @@ export default function Mapa() {
 
         {/* 3, 4 e 5. Resultados, QR Code e Registar */}
         {!semPermissao ? (
-          <CartaoOndeEstou medida={medida} comSinal={aoVivo !== null} info={info} online={online}>
+          <CartaoOndeEstou medida={medida} comSinal={aoVivo !== null} info={info} online={online} rotulos={rotulos}>
             {captura && plusCode ? (
               <>
                 <QrLocal
