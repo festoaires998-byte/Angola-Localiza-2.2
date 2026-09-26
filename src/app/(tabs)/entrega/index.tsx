@@ -12,6 +12,7 @@ import { useSessao } from '@/hooks/useSessao';
 import { servicoEnvios } from '@/services/entregas/enviosApp';
 import { definirAvisoEnvios, lojaEnvios, useEnvios } from '@/state/envios';
 import { eventosSync } from '@/sync/eventos';
+import { useRealtimeEntregas } from '@/hooks/useRealtimeEntregas';
 
 function ItemEnvio({ envio, aoAbrir }: { envio: Envio; aoAbrir(): void }) {
   const estado = nomeEstadoEntrega(envio.estado);
@@ -67,6 +68,8 @@ export default function Envios() {
       setAAtualizar(false);
     }
   }, [userId, online]);
+
+  useRealtimeEntregas(userId, 'criador', online === true, ler);
 
   useEffect(() => {
     void ler();
