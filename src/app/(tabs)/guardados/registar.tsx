@@ -9,6 +9,7 @@ import { Opcoes } from '@/components/Opcoes';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Linha, Marcar, Subtitulo, Texto } from '@/components/ui';
 import { codificarGrelha } from '@/domain/enderecamento/codigoPostal';
+import { CONFIG_AO_OFFLINE_TESTE, nivelLocalidade, obterConfigPais } from '@/config/pais';
 import { encode } from '@/domain/enderecamento/plusCode';
 import {
   codigosDasDuasCelulas,
@@ -95,6 +96,14 @@ export default function RegistarMorada() {
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviado, setEnviado] = useState<{ comRede: boolean } | null>(null);
+  const [configPais, setConfigPais] = useState(CONFIG_AO_OFFLINE_TESTE);
+  useEffect(() => {
+    let ativo = true;
+    void obterConfigPais().then((config) => { if (ativo) setConfigPais(config); }).catch(() => undefined);
+    return () => { ativo = false; };
+  }, []);
+  const nivelLocalidadeConfig = nivelLocalidade(configPais);
+  const labelLocalidade = nivelLocalidadeConfig?.label ?? 'Localidade';
 
   useEffect(() => {
     if (userId && online !== null) void servicoRegisto.verificacao(userId, online).then(setVerificacao);
@@ -317,10 +326,10 @@ export default function RegistarMorada() {
             ) : null}
           </>
         ) : null}
-        <Text style={estilos.rotulo}>Bairro</Text>
+        <Text style={estilos.rotulo}>{labelLocalidade}</Text>
         {bairros.length > 0 ? (
           <Opcoes
-            grupo="Bairro"
+            grupo={labelLocalidade}
             empilhadas
             valor={bairro}
             aoEscolher={setBairro}
@@ -335,10 +344,10 @@ export default function RegistarMorada() {
         {escreveBairro ? (
           <>
             {!bairroSemNome ? (
-              <Campo rotulo="Nome do bairro" value={bairroNome} onChangeText={setBairroNome} placeholder="Ex.: Bairro Académico" maxLength={80} />
+              <Campo rotulo={`Nome da ${labelLocalidade.toLowerCase()}`} value={bairroNome} onChangeText={setBairroNome} placeholder={`Ex.: ${labelLocalidade}`} maxLength={80} />
             ) : null}
             <Marcar
-              rotulo="Este bairro não tem nome"
+              rotulo={`Esta ${labelLocalidade.toLowerCase()} não tem nome`}
               marcado={bairroSemNome}
               aoMudar={(v) => {
                 setBairroSemNome(v);
