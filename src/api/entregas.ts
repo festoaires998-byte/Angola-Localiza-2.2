@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 
 /** Colunas que quem criou pode ler diretamente (as mesmas que o site pede). */
 const COLUNAS =
-  'id, tracking_code, status, recipient_name, recipient_phone, instructions, is_urgent, created_by, assigned_driver, created_at, updated_at, addresses(postal_code, plus_code, reference, latitude, longitude)';
+  'id, tracking_code, status, recipient_name, recipient_phone, instructions, is_urgent, created_by, assigned_driver, created_at, updated_at, origin_latitude, origin_longitude, origin_postal_code, origin_plus_code, addresses(postal_code, plus_code, reference, latitude, longitude)';
 
 /** Cria a entrega. A resposta traz o PIN, que só se mostra (não se guarda). */
 export async function criarEnvio(pedido: PedidoEnvio): Promise<{ envio: Envio; pin: PinEnvio | null }> {
