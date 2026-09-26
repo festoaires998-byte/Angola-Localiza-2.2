@@ -16,7 +16,7 @@ export const MAX_TEXTO = 80;
 export const MAX_RESULTADOS = 8;
 
 /** AO-HUA-MNFQR6JW-41, com o "-2" opcional que o servidor junta quando a célula já tem moradas. */
-const CODIGO_POSTAL = /^AO-[A-Z]{3}-[2-9A-HJ-NP-Z]{8}-\d{2}(-\d{1,3})?$/;
+const CODIGO_POSTAL = /^AO-[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3}-[2-9A-HJ-NP-Z]{8}-\d{2}(-\d{1,3})?$/;
 /** Plus Code completo (8FVC9G8F+6X) ou curto (9G8F+6X). */
 const PLUS_CODE = /^[23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{0,3}$/;
 
