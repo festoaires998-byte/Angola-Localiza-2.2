@@ -109,11 +109,11 @@ export function VistaMapa({
       ) : null}
 
       {estilo ? (
-        <View style={estilos.zoom} accessibilityRole="group" accessibilityLabel="Controlos de zoom">
-          <Pressable accessibilityRole="button" accessibilityLabel="Aumentar zoom" onPress={() => camara.current?.zoomTo(18, 250)} style={estilos.zoomBotao}>
+        <View style={estilos.zoom} accessibilityLabel="Controlos de zoom">
+          <Pressable accessibilityRole="button" accessibilityLabel="Aumentar zoom" onPress={() => camara.current?.zoomTo(18, { duration: 250 })} style={estilos.zoomBotao}>
             <Text style={estilos.zoomTexto}>+</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Diminuir zoom" onPress={() => camara.current?.zoomTo(14, 250)} style={estilos.zoomBotao}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Diminuir zoom" onPress={() => camara.current?.zoomTo(14, { duration: 250 })} style={estilos.zoomBotao}>
             <Text style={estilos.zoomTexto}>−</Text>
           </Pressable>
         </View>
@@ -198,7 +198,7 @@ const estilos = StyleSheet.create({
   },
   fichaAlvo: { position: 'absolute', left: 10, top: 10, maxWidth: '62%', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: CORES.fundo, borderWidth: 1, borderColor: CORES.borda, shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   fichaTitulo: { fontSize: 15, fontWeight: '700', color: CORES.texto },
-  fichaCoordenadas: { marginTop: 2, fontSize: 12, color: CORES.textoSecundario },
+  fichaCoordenadas: { marginTop: 2, fontSize: 12, color: CORES.textoSuave },
   zoom: { position: 'absolute', left: 8, top: 44, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: CORES.borda, backgroundColor: CORES.fundo },
   zoomBotao: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: CORES.borda },
   zoomTexto: { fontSize: 28, lineHeight: 30, fontWeight: '700', color: CORES.texto },
