@@ -4,7 +4,6 @@ import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import type { Registo } from '@/domain/enderecamento/meusRegistos';
 import { ultimaAtualizacao, type ItemMorada } from '@/services/moradas/moradas';
 import { mudancasMoradas, servicoMoradas, servicoRegistos } from '@/services/moradas/moradasApp';
-import { acrescentarOperacao } from '@/sync/fila';
 import { eventosSync } from '@/sync/eventos';
 
 import { useSessao } from './useSessao';
@@ -97,13 +96,6 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
   const alterar = useCallback(
     async (id: string, mudancas: { nome: string; categoria: CategoriaFavorito }) => {
       await servicoMoradas.alterar(id, mudancas);
-      if (userId) {
-        await acrescentarOperacao(userId, 'update_favorite', {
-          id,
-          category: mudancas.categoria,
-          label: mudancas.nome.trim() || null,
-        });
-      }
       mudancasMoradas.avisar();
     },
     [online, userId],
@@ -112,7 +104,6 @@ export function useMoradas(online: boolean | null, { atualizarAoAbrir = true } =
   const remover = useCallback(
     async (id: string) => {
       await servicoMoradas.remover(id);
-      if (userId) await acrescentarOperacao(userId, 'remove_favorite', { id });
       mudancasMoradas.avisar();
     },
     [online, userId],
