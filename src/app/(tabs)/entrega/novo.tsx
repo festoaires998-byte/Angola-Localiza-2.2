@@ -68,7 +68,7 @@ export default function NovoEnvio() {
   // Só moradas que já existem no servidor (têm id lá).
   const origensGuardadas = useMemo<Opcao<string>[]>(
     () => (moradas.itens ?? [])
-      .filter((i) => i.morada && i.favorito.pendente !== 'remover' && i.morada.latitude !== null && i.morada.longitude !== null)
+      .filter((i) => i.morada && i.favorito.pendente !== 'remover')
       .map((i) => ({ valor: i.morada!.id, nome: tituloMorada(i), detalhe: i.morada!.codigo_postal ?? i.morada!.plus_code ?? undefined })),
     [moradas.itens],
   );
@@ -173,7 +173,7 @@ export default function NovoEnvio() {
         if (modo === 'gps') return;
         const primeiro = origensGuardadas[0]?.valor;
         const item = primeiro ? (moradas.itens ?? []).find((i) => i.morada?.id === primeiro) : undefined;
-        if (!item?.morada || item.morada.latitude === null || item.morada.longitude === null) return;
+        if (!item?.morada || !Number.isFinite(item.morada.latitude) || !Number.isFinite(item.morada.longitude)) return;
         mudar({ origem: { latitude: item.morada.latitude, longitude: item.morada.longitude, codigoPostal: item.morada.codigo_postal, plusCode: item.morada.plus_code } });
       }} />
       {modoOrigem === 'guardado' ? (
@@ -181,7 +181,7 @@ export default function NovoEnvio() {
           valor={(moradas.itens ?? []).find((i) => i.morada?.latitude === dados.origem?.latitude && i.morada?.longitude === dados.origem?.longitude)?.morada?.id ?? null}
           aoEscolher={(id) => {
             const item = (moradas.itens ?? []).find((i) => i.morada?.id === id);
-            if (!item?.morada || item.morada.latitude === null || item.morada.longitude === null) return;
+            if (!item?.morada || !Number.isFinite(item.morada.latitude) || !Number.isFinite(item.morada.longitude)) return;
             mudar({ origem: { latitude: item.morada.latitude, longitude: item.morada.longitude, codigoPostal: item.morada.codigo_postal, plusCode: item.morada.plus_code } });
           }} />
       ) : posicao ? (
