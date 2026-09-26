@@ -502,7 +502,7 @@ export default function Mapa() {
 
         {/* 3, 4 e 5. Resultados, QR Code e Registar */}
         {!semPermissao ? (
-          <CartaoOndeEstou medida={medida} comSinal={aoVivo !== null} info={info} online={online}>
+          <CartaoOndeEstou medida={medida} comSinal={aoVivo !== null} info={info} online={online} rotulos={rotulos}>
             {captura && plusCode ? (
               <>
                 <QrLocal
