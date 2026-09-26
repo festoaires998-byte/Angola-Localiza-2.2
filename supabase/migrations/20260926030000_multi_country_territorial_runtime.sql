@@ -23,7 +23,6 @@ create table if not exists public.country_territorial_levels (
   is_locality boolean not null default false,
   created_at timestamptz not null default now(),
   unique(country_code, level_key),
-  unique(country_code, level_order)
 );
 
 create index if not exists idx_country_territorial_levels_country
@@ -82,7 +81,9 @@ values
 ('CV','zone','Zona','Zonas',4,true),
 ('GW','region','Região','Regiões',1,false),
 ('GW','sector','Sector','Sectores',2,false),
-('GW','tabanca','Tabanca','Tabancas',3,true),
+('GW','sector','Sector','Sectores',2,false),
+('GW','section','Secção','Secções',3,false),
+('GW','tabanca','Tabanca','Tabancas',4,true),
 ('ST','district','Distrito','Distritos',1,false),
 ('ST','autonomous_region','Região Autónoma','Regiões Autónomas',1,false),
 ('ST','locality','Localidade','Localidades',2,true)
