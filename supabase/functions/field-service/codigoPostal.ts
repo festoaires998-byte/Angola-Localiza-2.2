@@ -26,10 +26,13 @@ export const ALFABETO_GRELHA = ALFABETO_CONTROLO + "L";
 
 export const SIGLA_DESCONHECIDA = "XXX";
 
+/** Siglas de província: 3 letras latinas, incluindo acentos oficiais. */
+export const PADRAO_SIGLA_PROVINCIA = /^[A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3}$/;
+
 /**
  * Sigla da província: as 3 primeiras letras do nome, em maiúsculas (como no
  * esquema 1); "XXX" se o nome não veio. Nota: nomes com acento na 2.ª ou 3.ª
- * letra (ex.: "Uíge" → "UÍG") dão uma sigla que o validate não aceita.
+ * letra (ex.: "Uíge" → "UÍG") são aceites pelo validador.
  */
 export function siglaProvincia(nome: string | null | undefined): string {
   return nome ? nome.substring(0, 3).toUpperCase() : SIGLA_DESCONHECIDA;
@@ -76,7 +79,7 @@ export function codigoBase(latitude: number, longitude: number, provinceName?: s
 
 /** Aceita códigos do esquema 1 e 2 (a sigla só tem de ter 3 letras). */
 export function validatePostalCode(code: string): { valid: boolean; reason?: string } {
-  const match = code.match(/^AO-([A-Z]{3})-([2-9A-HJ-NP-Z]{8})(?:-(\d+))?-(\d{2})$/);
+  const match = code.match(/^AO-([A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3})-([2-9A-HJ-NP-Z]{8})(?:-(\d+))?-(\d{2})$/);
   if (!match) return { valid: false, reason: "formato invalido" };
   const [, provinceCode, gridCode, , chk] = match;
   const expected = checksum(`${provinceCode}-${gridCode}`);
