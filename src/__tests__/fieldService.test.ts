@@ -70,7 +70,7 @@ describe('field-service: a aprovação grava o plus_code', () => {
 
   test('a morada nova (approve) e a fusão (merge) levam o plus_code com 10 dígitos', () => {
     expect(fonte).toContain('const PLUS_CODE_DIGITOS = 10;');
-    const linhas = fonte.match(/plus_code: plusCode\(record\.latitude, record\.longitude, PLUS_CODE_DIGITOS\),/g) ?? [];
+    const linhas = fonte.match(/plus_code: plusCode\([^,]+\.latitude, [^,]+\.longitude, PLUS_CODE_DIGITOS\),/g) ?? [];
     expect(linhas).toHaveLength(2);
     const insert = fonte.slice(fonte.indexOf('supabase.from("addresses").insert('));
     expect(insert.slice(0, insert.indexOf('.select('))).toContain('plus_code: plusCode(');

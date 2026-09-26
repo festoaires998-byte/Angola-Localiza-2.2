@@ -1,6 +1,6 @@
 import { Camera, Map, Marker, NativeUserLocation, type CameraRef, type StyleSpecification } from '@maplibre/maplibre-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { PontoEncontrado } from '@/hooks/usePesquisaMapa';
 import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE } from '@/services/mapas/estiloMapa';
@@ -42,6 +42,7 @@ export function VistaMapa({
   botaoCanto,
 }: Props) {
   const [seguir, setSeguir] = useState(alvo === null);
+  const abrirDefinicoesLocalizacao = () => { void Linking.openSettings(); };
   const camara = useRef<CameraRef>(null);
 
   // Sem ponto encontrado, o mapa volta a seguir a pessoa.
@@ -55,8 +56,17 @@ export function VistaMapa({
   }, [alvo?.latitude, alvo?.longitude]);
 
   const centro = alvo ?? posicao;
+  const aoMoverMapa = () => {
+    // Qualquer gesto manual assume intenção de exploração; nunca recentramos sem ação explícita.
+    setSeguir(false);
+  };
+
+  useEffect(() => {
+    if (semPermissao) setSeguir(false);
+  }, [semPermissao]);
   return (
     <View
+      testID="vista-mapa"
       style={[estilos.mapa, altura === 'cheio' ? estilos.cheio : { height: altura }]}
       onTouchStart={() => aoTocar?.(true)}
       onTouchEnd={() => aoTocar?.(false)}
@@ -68,7 +78,7 @@ export function VistaMapa({
             ref={camara}
             initialViewState={{
               center: centro ? [centro.longitude, centro.latitude] : REGIAO_HUAMBO.centro,
-              zoom: alvo ? 17 : 15,
+              zoom: alvo ? 17 : 16,
             }}
             trackUserLocation={seguir && !semPermissao ? 'default' : undefined}
             onTrackUserLocationChange={(e) => {
@@ -91,6 +101,24 @@ export function VistaMapa({
           </Text>
         </View>
       )}
+
+      {alvo && estilo ? (
+        <View style={estilos.fichaAlvo} accessibilityRole="summary" accessibilityLabel={`Local selecionado: ${alvo.titulo}`}>
+          <Text numberOfLines={2} style={estilos.fichaTitulo}>{alvo.titulo}</Text>
+          <Text style={estilos.fichaCoordenadas}>{alvo.latitude.toFixed(5)}, {alvo.longitude.toFixed(5)}</Text>
+        </View>
+      ) : null}
+
+      {estilo ? (
+        <View style={estilos.zoom} accessibilityLabel="Controlos de zoom">
+          <Pressable accessibilityRole="button" accessibilityLabel="Aumentar zoom" onPress={() => camara.current?.zoomTo(18, { duration: 250 })} style={estilos.zoomBotao}>
+            <Text style={estilos.zoomTexto}>+</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Diminuir zoom" onPress={() => camara.current?.zoomTo(14, { duration: 250 })} style={estilos.zoomBotao}>
+            <Text style={estilos.zoomTexto}>−</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={estilos.camadas} accessibilityRole="radiogroup">
         {(['mapa', 'satelite'] as const).map((c) => {
@@ -122,7 +150,10 @@ export function VistaMapa({
 
       <View style={estilos.botoesBaixo}>
         {estilo && !seguir && !semPermissao ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Centrar em mim" onPress={() => setSeguir(true)} style={estilos.botaoMapa}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Centrar em mim" onPress={() => {
+              setSeguir(true);
+              if (posicao) camara.current?.flyTo({ center: [posicao.longitude, posicao.latitude], zoom: 16, duration: 500 });
+            }} style={estilos.botaoMapa}>
             <Text style={estilos.textoBotaoMapa}>Centrar em mim</Text>
           </Pressable>
         ) : null}
@@ -135,6 +166,15 @@ export function VistaMapa({
           <Text style={estilos.textoBotaoMapa}>{botaoCanto.titulo}</Text>
         </Pressable>
       </View>
+
+      {semPermissao ? (
+        <View style={estilos.faixaLocalizacao} accessibilityRole="alert">
+          <Text style={estilos.textoFaixa}>Localização indisponível. Ativa a localização nas definições para centrar o mapa em ti.</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Abrir definições de localização" onPress={abrirDefinicoesLocalizacao} style={estilos.botaoDefinicoes}>
+            <Text style={estilos.textoBotaoDefinicoes}>Abrir definições</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {online === false ? (
         <View style={estilos.faixaSemRede}>
@@ -151,17 +191,22 @@ const estilos = StyleSheet.create({
   semMapa: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   semMapaTexto: { fontSize: TAMANHOS.texto, color: CORES.texto, textAlign: 'center', fontWeight: '600' },
   marcador: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: CORES.perigo,
-    borderWidth: 4,
-    borderColor: CORES.fundo,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: CORES.primaria,
+    borderWidth: 0,
   },
+  fichaAlvo: { position: 'absolute', left: 10, top: 10, maxWidth: '62%', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: CORES.fundo, borderWidth: 1, borderColor: CORES.borda, shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  fichaTitulo: { fontSize: 15, fontWeight: '700', color: CORES.texto },
+  fichaCoordenadas: { marginTop: 2, fontSize: 12, color: CORES.textoSuave },
+  zoom: { position: 'absolute', left: 8, top: 44, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: CORES.borda, backgroundColor: CORES.fundo },
+  zoomBotao: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: CORES.borda },
+  zoomTexto: { fontSize: 28, lineHeight: 30, fontWeight: '700', color: CORES.texto },
   camadas: {
     position: 'absolute',
-    top: 44,
-    right: 8,
+    top: 10,
+    right: 10,
     flexDirection: 'row',
     borderRadius: 12,
     borderWidth: 2,
@@ -192,6 +237,9 @@ const estilos = StyleSheet.create({
     borderRadius: 24,
   },
   textoBotaoMapa: { color: CORES.sobrePrimaria, fontSize: 16, fontWeight: '700' },
+  faixaLocalizacao: { position: 'absolute', top: 0, left: 0, right: 0, padding: 8, backgroundColor: CORES.avisoFundo, alignItems: 'center', gap: 6 },
+  botaoDefinicoes: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', backgroundColor: CORES.primaria, borderRadius: 20 },
+  textoBotaoDefinicoes: { color: CORES.sobrePrimaria, fontWeight: '700' },
   faixaSemRede: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: CORES.avisoFundo, padding: 8 },
   textoFaixa: { color: CORES.avisoTexto, fontWeight: '700', textAlign: 'center', fontSize: 15 },
 });

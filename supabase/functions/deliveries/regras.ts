@@ -112,7 +112,7 @@ export function gerarPin(aleatorio: (n: number) => Uint8Array): string {
 
 /** Resposta da função SQL verificar_pin_entrega. */
 export interface ResultadoPin {
-  resultado: "OK" | "WRONG" | "LOCKED" | "EXPIRED" | "NOT_FOUND";
+  resultado: "OK" | "WRONG" | "LOCKED" | "EXPIRED" | "NOT_FOUND" | "ALREADY_VERIFIED";
   restantes?: number;
 }
 

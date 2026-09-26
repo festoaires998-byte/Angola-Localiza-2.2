@@ -18,6 +18,7 @@ export const maplibre = {
   Camera: forwardRef(function Camera(_props: object, ref) {
     useImperativeHandle(ref, () => ({
       flyTo: (...args: unknown[]) => chamadasCamara.push({ metodo: 'flyTo', args }),
+      zoomTo: (...args: unknown[]) => chamadasCamara.push({ metodo: 'zoomTo', args }),
     }));
     return null;
   }),

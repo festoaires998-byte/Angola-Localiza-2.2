@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -286,11 +286,19 @@ export default function Mapa() {
 
   useEffect(() => {
     if (!userId || online === null) return;
+    let ativo = true;
     // Se nem o telemóvel responder, fica "desconhecido" (como no Registar): o servidor decide.
     servicoRegisto
       .verificacao(userId, online)
-      .then(setVerificacao)
-      .catch(() => setVerificacao('desconhecido'));
+      .then((resultado) => {
+        if (ativo) setVerificacao(resultado);
+      })
+      .catch(() => {
+        if (ativo) setVerificacao('desconhecido');
+      });
+    return () => {
+      ativo = false;
+    };
   }, [userId, online]);
 
   // Sem rede não há imagens de satélite: volta ao mapa do telemóvel.
@@ -300,15 +308,23 @@ export default function Mapa() {
   }, [online]);
   const estilo = satelite ? estiloSatelite : estiloBase;
 
-  const mostrarNoMapa = (p: PontoEncontrado) => {
+  const mostrarNoMapa = useCallback((p: PontoEncontrado) => {
     setAlvo(p);
     rolagem.current?.scrollTo({ y: Math.max(0, yMapa.current - 16), animated: true });
-  };
+  }, [rolagem, yMapa]);
   const pesquisa = usePesquisaMapa({
     online,
     referencia: captura ?? aoVivo ?? CENTRO_HUAMBO,
     aoEncontrarPonto: mostrarNoMapa,
   });
+
+  // O site pesquisa automaticamente após 3 caracteres; no mobile usamos debounce para evitar pedidos a cada tecla.
+  useEffect(() => {
+    const texto = pesquisa.texto.trim();
+    if (texto.length < 3) return;
+    const timer = setTimeout(() => void pesquisa.procurar(texto), 400);
+    return () => clearTimeout(timer);
+  }, [pesquisa.texto, pesquisa.procurar]);
 
   const escolherCamada = (c: Camada) => {
     if (c === 'mapa') return setCamada('mapa');
@@ -428,7 +444,6 @@ export default function Mapa() {
           autoCorrect={false}
           maxLength={200}
         />
-        <Botao titulo="Procurar" variante="secundario" onPress={() => void pesquisa.procurar()} aCarregar={pesquisa.estado.aProcurar} />
         {pesquisa.estado.erro ? <Caixa tipo="erro">{pesquisa.estado.erro}</Caixa> : null}
         {pesquisa.estado.link ? (
           <Caixa tipo="info">
