@@ -434,8 +434,44 @@ Deno.serve(async (req: Request) => {
           ? { location_wkt: `SRID=4326;POINT(${proof.longitude} ${proof.latitude})` }
           : {}),
       } : null;
-
       let usageRow: Record<string, unknown> | null = null;
+      if (delivery.zone_code && (new_status === "DELIVERED" || new_status === "FAILED")) {
+        const rates = await getZoneRates(supabase, delivery.zone_code, delivery.payer_organization_id);
+        if (rates) {
+          const extras = (is_volumoso ? 500 : 0) + (is_espera_longa ? 300 : 0);
+          const baseTotal = rates.base_fee + rates.routing_fee + rates.proof_fee + extras;
+          const { total, surcharge } = aplicarSobretaxaHorario(baseTotal, new Date());
+          const attempt = Math.round(rates.base_fee * 0.3);
+          usageRow = {
+            organization_id: delivery.payer_organization_id,
+            event_type: new_status === "DELIVERED" ? "DELIVERY_POD" : "DELIVERY_FAILED_ATTEMPT",
+            zone_code: delivery.zone_code,
+            amount_total: new_status === "DELIVERED" ? total : attempt + rates.routing_fee + rates.proof_fee,
+            amount_driver: new_status === "DELIVERED" ? rates.base_fee : attempt,
+            amount_platform: new_status === "DELIVERED" ? total - rates.base_fee : rates.routing_fee + rates.proof_fee,
+            is_free_pilot: !delivery.payer_organization_id,
+            breakdown: new_status === "DELIVERED"
+              ? { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee, volumoso: is_volumoso ? 500 : 0, espera_longa: is_espera_longa ? 300 : 0, noturno_fim_de_semana: surcharge }
+              : { taxa_tentativa_estafeta: attempt, roteamento_creditado: rates.routing_fee, prova_creditado: rates.proof_fee, motivo: reason },
+          };
+        }
+      }
+
+      const rpcName = usageRow ? "aplicar_transicao_entrega_com_prova_e_cobranca" : "aplicar_transicao_entrega_com_prova";
+      const rpcArgs = usageRow
+        ? { p_delivery_id: delivery_id, p_expected_status: delivery.status, p_new_status: new_status, p_proof: proofRow, p_sync_operation_id: sync_operation_id ?? null, p_usage: usageRow }
+        : { p_delivery_id: delivery_id, p_expected_status: delivery.status, p_new_status: new_status, p_proof: proofRow, p_sync_operation_id: sync_operation_id ?? null };
+      const { data: atomicResult, error: atomicError } = await supabase.rpc(rpcName, rpcArgs);
+      if (atomicError) {
+        const msg = String(atomicError.message ?? atomicError);
+        const status = msg.includes("DELIVERY_STATE_CHANGED") || msg.includes("SYNC_OPERATION_CONFLICT") ? 409 : 500;
+        return new Response(JSON.stringify({ error: msg }), { status, headers: cors });
+      }
+      const atomicResultRow = Array.isArray(atomicResult) ? atomicResult[0] : atomicResult;
+      proofId = atomicResultRow?.proof_id ?? null;
+      if (!atomicResultRow?.applied) {
+        return new Response(JSON.stringify({ ok: true, status: atomicResultRow?.final_status ?? new_status, proof_id: proofId, idempotent_replay: true, crypto_verified: cryptoVerified }), { headers: cors });
+      }
 
       if (new_status === "DELIVERED") {
         await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_delivered_with_pod", entity_type: "delivery", entity_id: delivery_id, before: { status: delivery.status }, after: { status: new_status, has_photo: !!ficheiros.foto, has_signature: !!ficheiros.assinatura, proof_id: proofId, crypto_verified: cryptoVerified, crypto_failure_reason: assinatura?.motivo ?? null } });
