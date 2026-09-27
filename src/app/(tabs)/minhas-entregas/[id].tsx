@@ -6,6 +6,7 @@ import { CamaraFachada } from '@/components/CamaraFachada';
 import { dataHora } from '@/components/nomes';
 import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto } from '@/components/ui';
 import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
+import { CORES } from '@/components/tema';
 import { entregaTerminada, nomeEstadoEntrega } from '@/domain/entregas/envio';
 import { estadoEfetivo, mensagemErroEstafeta, podeFechar, proximoPasso, type FicheiroProva } from '@/domain/entregas/estafeta';
 import { recarregarEntregasOrganizacao, recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
@@ -234,9 +235,9 @@ export default function DetalheEntrega() {
 
 const estilos = StyleSheet.create({
   modalFundo: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalCartao: { maxHeight: '80%', padding: 20, gap: 12, backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  modalCartao: { maxHeight: '80%', padding: 20, gap: 12, backgroundColor: CORES.fundo, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   listaEstafetas: { maxHeight: 420 },
   estafetaItem: { paddingVertical: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, marginBottom: 8 },
-  estafetaNome: { fontSize: 16, fontWeight: '700', color: '#111' },
-  estafetaEmail: { marginTop: 3, fontSize: 13, color: '#666' },
+  estafetaNome: { fontSize: 16, fontWeight: '700', color: CORES.texto },
+  estafetaEmail: { marginTop: 3, fontSize: 13, color: CORES.textoSuave },
 });
