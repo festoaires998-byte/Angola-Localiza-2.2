@@ -424,23 +424,28 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
             }
           }
           if (!chaves) {
+            // Não é culpa da prova: fica pendente sem somar tentativas.
             resumo.adiadas++;
             resumo.aguardamChave++;
             mensagemAviso = mensagemAviso ?? MENSAGENS.chave;
             continue;
           }
           const { deviceId, local, noServidor }: EstadoChaves = chaves;
+          // O servidor verifica com a chave de (utilizador, device_id da prova).
           const idDaProva = dispositivoDaProva(op.payload);
           const chaveDoServidor = idDaProva ? noServidor[idDaProva] : undefined;
           if (chaveDoServidor && provaAssinadaCom(op.payload, idDaProva!, chaveDoServidor)) {
-            // Assinada com uma chave que o servidor tem: segue já.
+            // Assinada com uma chave que o servidor tem: segue já (antes de qualquer registo novo).
           } else if (local && provaAssinadaCom(op.payload, deviceId, local)) {
+            // Assinada com a chave local, que o servidor ainda não tem: registar primeiro.
             registo = registo ?? (await deps.chaveAssinatura.garantirRegistada(sessao));
             if (registo.tipo === 'sessao') {
               sessaoRecusada(sessao);
               return { ...resumo, motivo: 'precisa_entrar' };
             }
             if (registo.tipo !== 'ok') {
+              // Sem rede, erro do servidor, ou ainda há provas da chave antiga por
+              // enviar: fica pendente sem somar tentativas.
               if (registo.tipo === 'espera') esperaPelaChaveAntiga = true;
               resumo.adiadas++;
               resumo.aguardamChave++;
@@ -449,10 +454,12 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
             }
             chaves = { ...chaves, noServidor: { ...noServidor, [deviceId]: local } };
           } else {
+            // Não confere com nenhuma chave conhecida: envia-se na mesma com a
+            // assinatura original (o servidor marca crypto_verified = false) e
+            // guarda-se uma cópia local como evidência.
             aviso = AVISO_ASSINATURA_NAO_CONFERE;
           }
         }
-
         const r = await prepararFotos(op, sessao);
         if (r.tipo === 'sessao') {
           sessaoRecusada(sessao);
@@ -485,3 +492,115 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
 
       const ids = prontas.map((o) => o.operation_id);
       await deps.fila.marcarAEnviar(userId, ids);
+      const r = await pedir(
+        '/functions/v1/sync',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(paraPedidoSync(prontas)),
+        },
+        sessao.accessToken,
+      );
+
+      if (r.tipo === 'http' && r.estado === 401) {
+        // Não é culpa das operações: voltam a pendente sem somar tentativas.
+        await deps.fila.devolverAPendente(userId);
+        sessaoRecusada(sessao);
+        return { ...resumo, motivo: 'precisa_entrar' };
+      }
+      const results = (r.tipo === 'ok' ? (r.corpo as { results?: unknown })?.results : null) as
+        | ResultadoSync[]
+        | null;
+      if (r.tipo !== 'ok' || !Array.isArray(results)) {
+        const erro =
+          r.tipo === 'rede'
+            ? 'Sem ligação ao servidor.'
+            : `O servidor respondeu ${r.tipo === 'http' ? r.estado : 'sem "results"'}.`;
+        await deps.fila.registarFalhaEnvio(userId, erro);
+        resumo.adiadas += prontas.length;
+        resumo.motivo = r.tipo === 'rede' ? 'erro_rede' : 'erro_servidor';
+        mensagemAviso = r.tipo === 'rede' ? MENSAGENS.semServidor : MENSAGENS.servidor;
+        break;
+      }
+
+      await deps.fila.aplicarResultadosSync(
+        userId,
+        results.filter((x) => x && typeof x.operation_id === 'string' && typeof x.status === 'string'),
+      );
+      resumo.enviadas += prontas.length;
+      for (const id of ids) {
+        const op = await deps.fila.obter(id);
+        if (op?.estado === 'concluida') resumo.concluidas++;
+        else {
+          resumo.adiadas++;
+          mensagemAviso = mensagemAviso ?? MENSAGENS.recusadas;
+        }
+      }
+    }
+
+    // As provas da chave antiga foram enviadas nesta volta: mais uma volta para
+    // registar a chave nova e enviar as provas que ficaram à espera dela.
+    if (esperaPelaChaveAntiga && resumo.concluidas > 0) maisUmaVolta = true;
+
+    // Só agora, com as operações "concluida", se apagam as provas locais.
+    // Tem de ser antes de limparConcluidasAntigas (que desliga o ficheiro da operação).
+    await apagarFicheirosConcluidos();
+    await deps.fila.limparConcluidasAntigas();
+
+    const falouComServidor = resumo.motivo === 'ok' || resumo.motivo === 'sessao_mudou';
+    mudar({
+      ultimoErro: mensagemAviso,
+      ...(falouComServidor ? { ultimaSincronizacao: agora().toISOString() } : {}),
+    });
+    eventos.emitir('sincronizado');
+    return resumo;
+  }
+
+  async function correr(forcar: boolean): Promise<ResumoSync> {
+    mudar({ aSincronizar: true });
+    try {
+      let resumo: ResumoSync;
+      let f = forcar;
+      do {
+        maisUmaVolta = false;
+        try {
+          resumo = await volta(f);
+        } catch (erro) {
+          // Erro inesperado (ex.: base de dados): não perde nada, só avisa.
+          mudar({ ultimoErro: MENSAGENS.servidor });
+          resumo = {
+            motivo: 'erro_servidor',
+            enviadas: 0,
+            concluidas: 0,
+            adiadas: 0,
+            definitivas: 0,
+            aguardamChave: 0,
+            avisos: 0,
+          };
+          if (!maisUmaVolta) throw erro;
+        }
+        f = forcarNaProxima;
+        forcarNaProxima = false;
+      } while (maisUmaVolta);
+      return resumo;
+    } finally {
+      mudar({ aSincronizar: false });
+    }
+  }
+
+  return {
+    estado,
+    eventos,
+    sincronizar({ forcar = false } = {}) {
+      if (emCurso) {
+        maisUmaVolta = true;
+        forcarNaProxima = forcarNaProxima || forcar;
+        return emCurso;
+      }
+      emCurso = correr(forcar).finally(() => {
+        emCurso = null;
+      });
+      return emCurso;
+    },
+  };
+}
