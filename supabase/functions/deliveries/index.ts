@@ -230,6 +230,12 @@ Deno.serve(async (req: Request) => {
     if (action === "create") {
       const { address_id, recipient_name, recipient_phone, instructions, origin_latitude, origin_longitude, origin_municipality_id, origin_province_id, origin_postal_code, origin_plus_code, zone_code, payer_organization_id, is_urgent, sync_operation_id } = body;
       if (!address_id || !recipient_name) return new Response(JSON.stringify({ error: "address_id e recipient_name sao obrigatorios" }), { status: 400, headers: cors });
+      const temLat = origin_latitude !== null && origin_latitude !== undefined;
+      const temLon = origin_longitude !== null && origin_longitude !== undefined;
+      if (temLat !== temLon) return new Response(JSON.stringify({ error: "ORIGIN_COORDINATES_INCOMPLETE" }), { status: 422, headers: cors });
+      if (temLat && (!Number.isFinite(Number(origin_latitude)) || !Number.isFinite(Number(origin_longitude)) || Math.abs(Number(origin_latitude)) > 90 || Math.abs(Number(origin_longitude)) > 180 || (Number(origin_latitude) === 0 && Number(origin_longitude) === 0))) {
+        return new Response(JSON.stringify({ error: "ORIGIN_COORDINATES_INVALID" }), { status: 422, headers: cors });
+      }
       if (!contactoValido(recipient_phone)) {
         return new Response(JSON.stringify({ error: "CONTACTO_INVALID: o contacto deve ter o formato +244 9xx xxx xxx" }), { status: 422, headers: cors });
       }
