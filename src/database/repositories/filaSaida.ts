@@ -116,10 +116,10 @@ export function criarRepositorioFilaSaida(db: BaseDados, opcoes: OpcoesFilaSaida
 
   return {
     /** Põe uma operação nova do utilizador `userId` na fila e devolve-a. */
-    async adicionar(userId: string, tipo: TipoOperacao, payload: unknown): Promise<OperacaoFila> {
+    async adicionar(userId: string, tipo: TipoOperacao, payload: unknown, operationId?: string): Promise<OperacaoFila> {
       exigirUtilizador(userId);
       const operacao: OperacaoFila = {
-        operation_id: gerarId(),
+        operation_id: operationId ?? gerarId(),
         device_id: opcoes.deviceId,
         user_id: userId,
         operation_type: tipo,
