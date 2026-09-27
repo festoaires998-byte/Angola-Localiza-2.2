@@ -87,6 +87,7 @@ jest.mock('@/hooks/useLocalProva', () => ({
 let mockOnline: boolean | null = true;
 jest.mock('@/hooks/useOnline', () => ({ useOnline: () => mockOnline }));
 let mockCargos: string[] = ['estafeta'];
+const mockReagendar = jest.fn(async (_id: string) => undefined);
 jest.mock('@/hooks/useSessao', () => ({ useSessao: () => ({ utilizador: { id: EU }, perfil: { cargos: mockCargos } }) }));
 
 type Ecra = { default: () => React.JSX.Element };
@@ -97,6 +98,7 @@ const rotas = {
   'minhas-entregas/prova': (require('@/app/(tabs)/minhas-entregas/prova') as Ecra).default,
   'minhas-entregas/falha': (require('@/app/(tabs)/minhas-entregas/falha') as Ecra).default,
 };
+jest.mock('@/api/entregas', () => ({ reagendarTentativa: (id: string) => mockReagendar(id) }));
 const { lojaEstafeta, ESTADO_INICIAL_ESTAFETA } = require('@/state/estafeta') as typeof import('@/state/estafeta');
 
 let r: ReturnType<typeof renderRouter>;
@@ -122,7 +124,7 @@ beforeEach(() => {
   mockOnline = true;
   mockCargos = ['estafeta'];
   lojaEstafeta.definir(ESTADO_INICIAL_ESTAFETA);
-  [mockAvancar, mockFechar, mockFalhar, mockMarca].forEach((f) => f.mockClear());
+  [mockAvancar, mockFechar, mockFalhar, mockMarca, mockReagendar].forEach((f) => f.mockClear());
 });
 
 describe('Entregas (estafeta): lista', () => {
@@ -250,5 +252,25 @@ describe('Entregas (estafeta): não foi possível entregar', () => {
     await carregar('Registar que não foi possível');
     expect(mockFalhar).toHaveBeenCalledWith(EU, expect.objectContaining({ id: 'e1' }), 'destinatario_ausente', '', null, LOCAL);
     expect(r.getPathname()).toBe('/minhas-entregas/e1');
+  });
+});
+
+
+describe('Entregas: regressões administrativas e reagendamento', () => {
+  test('visão organizacional não fica presa no carregamento', async () => {
+    mockCargos = ['operador_postal'];
+    mockEntregas = [entrega('org1', { estafeta: 'outro', estado: 'ASSIGNED' })];
+    await desenhar();
+    expect(screen.getByText('Entregas da organização')).toBeTruthy();
+    expect(screen.getByText('Maria João')).toBeTruthy();
+  });
+
+  test('entrega falhada permite reagendar tentativa', async () => {
+    mockEntregas = [entrega('falhada', { estado: 'FAILED' })];
+    await desenhar();
+    await carregar(/^Entrega para Maria João/);
+    await carregar('🔁 Reagendar tentativa');
+    await carregar('Reagendar');
+    expect(mockReagendar).toHaveBeenCalledWith('falhada');
   });
 });
