@@ -453,6 +453,7 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
           }
         }
 
+        const r = await prepararFotos(op, sessao);
         if (r.tipo === 'sessao') {
           sessaoRecusada(sessao);
           return { ...resumo, motivo: 'precisa_entrar' };
