@@ -70,6 +70,7 @@ describe('envios: enviar', () => {
     const r = await t.servico.enviar(EU, dados, true);
     expect(r).toEqual({ tipo: 'enviado', envio: envio('e1'), pin: { pin: '4821', expiraEm: null, bloqueado: false } });
     expect(t.servidor.criar).toHaveBeenCalledWith({
+      sync_operation_id: 'cccccccc-0000-4000-8000-000000000001',
       address_id: MORADA,
       recipient_name: 'Maria',
       recipient_phone: '+244 923 456 789',
