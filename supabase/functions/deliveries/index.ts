@@ -416,53 +416,54 @@ Deno.serve(async (req: Request) => {
       const assinatura = comProva && proof ? await verificarAssinaturaProva(supabase, callerId, delivery_id, proof, ficheiros.foto, ficheiros.assinatura) : null;
       const cryptoVerified: boolean | null = assinatura ? assinatura.verified : null;
 
-      const transitionTimestamp = new Date().toISOString();
-      const updatePayload: Record<string, unknown> = { status: new_status, updated_at: transitionTimestamp };
-      if (typeof is_volumoso === "boolean") updatePayload.is_volumoso = is_volumoso;
-      if (typeof is_espera_longa === "boolean") updatePayload.is_espera_longa = is_espera_longa;
-      const { data: mudou, error: updateError } = await supabase.from("deliveries").update(updatePayload).eq("id", delivery_id).eq("status", delivery.status).select("id");
-      if (updateError) return new Response(JSON.stringify({ error: updateError.message }), { status: 400, headers: cors });
-      if (!mudou?.length) return new Response(JSON.stringify({ error: "a entrega mudou de estado entretanto - atualiza e tenta de novo" }), { status: 409, headers: cors });
-      await supabase.from("delivery_status_history").insert({ delivery_id, status: new_status });
-
       let proofId: string | null = null;
-      if (comProva && proof) {
-        const proofType = new_status === "PICKED_UP" ? "PICKUP" : new_status === "FAILED" ? "FAILED" : "POD";
-        const proofRow: Record<string, unknown> = {
-          delivery_id, proof_type: proofType,
-          observation: (new_status === "FAILED" ? `[${reason}] ` : "") + (proof.observation ?? ""),
-          photo_url: ficheiros.foto ? textoDoFicheiro(ficheiros.foto, supabaseUrl) : null,
-          signature_url: ficheiros.assinatura ? textoDoFicheiro(ficheiros.assinatura, supabaseUrl) : null,
-          created_by: callerId,
-          sync_operation_id: sync_operation_id ?? null,
-          crypto_signature: proof.crypto_signature ?? null, crypto_payload: proof.crypto_payload ?? null,
-          crypto_algorithm: proof.crypto_algorithm ?? null, crypto_device_id: proof.crypto_device_id ?? null,
-          crypto_verified: cryptoVerified, crypto_failure_reason: assinatura?.motivo ?? null,
-        };
-        if (typeof proof.latitude === "number" && typeof proof.longitude === "number") proofRow.location = `SRID=4326;POINT(${proof.longitude} ${proof.latitude})`;
-        const { data: proofData, error: proofError } = await supabase.from("delivery_proofs").insert(proofRow).select("id").single();
-        if (proofError) {
-          // Se outra tentativa ganhou a corrida, reconhecer a prova já criada.
-          if (sync_operation_id) {
-            const { data: racedProof } = await supabase
-              .from("delivery_proofs")
-              .select("id, crypto_verified")
-              .eq("sync_operation_id", sync_operation_id)
-              .maybeSingle();
-            if (racedProof) {
-              return new Response(JSON.stringify({
-                ok: true, status: new_status, crypto_verified: racedProof.crypto_verified,
-                proof_id: racedProof.id, idempotent_replay: true,
-              }), { headers: cors });
-            }
-          }
-          // Sem prova não há mudança de estado: volta ao estado anterior.
-          await supabase.from("deliveries").update({ status: delivery.status, updated_at: new Date().toISOString() }).eq("id", delivery_id).eq("status", new_status).eq("updated_at", transitionTimestamp);
-          await supabase.from("delivery_status_history").insert({ delivery_id, status: delivery.status });
-          return new Response(JSON.stringify({ error: "nao foi possivel guardar a prova - tenta de novo" }), { status: 500, headers: cors });
+      const proofType = new_status === "PICKED_UP" ? "PICKUP" : new_status === "FAILED" ? "FAILED" : "POD";
+      const proofRow: Record<string, unknown> | null = comProva && proof ? {
+        proof_type: proofType,
+        observation: (new_status === "FAILED" ? `[${reason}] ` : "") + (proof.observation ?? ""),
+        photo_url: ficheiros.foto ? textoDoFicheiro(ficheiros.foto, supabaseUrl) : null,
+        signature_url: ficheiros.assinatura ? textoDoFicheiro(ficheiros.assinatura, supabaseUrl) : null,
+        created_by: callerId,
+        crypto_signature: proof.crypto_signature ?? null,
+        crypto_payload: proof.crypto_payload ?? null,
+        crypto_algorithm: proof.crypto_algorithm ?? null,
+        crypto_device_id: proof.crypto_device_id ?? null,
+        crypto_verified: cryptoVerified,
+        crypto_failure_reason: assinatura?.motivo ?? null,
+        ...(typeof proof.latitude === "number" && typeof proof.longitude === "number"
+          ? { location_wkt: `SRID=4326;POINT(${proof.longitude} ${proof.latitude})` }
+          : {}),
+      } : null;
+
+      const { data: atomicResult, error: atomicError } = await supabase.rpc("aplicar_transicao_entrega_com_prova", {
+        p_delivery_id: delivery_id,
+        p_expected_status: delivery.status,
+        p_new_status: new_status,
+        p_proof: proofRow,
+        p_sync_operation_id: sync_operation_id ?? null,
+      });
+      if (atomicError) {
+        if (atomicError.message?.includes("DELIVERY_STATE_CHANGED")) {
+          return new Response(JSON.stringify({ error: "a entrega mudou de estado entretanto - atualiza e tenta de novo" }), { status: 409, headers: cors });
         }
-        proofId = proofData?.id ?? null;
+        if (atomicError.message?.includes("DELIVERY_NOT_FOUND")) {
+          return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
+        }
+        return new Response(JSON.stringify({ error: atomicError.message }), { status: 500, headers: cors });
       }
+
+      const resultadoAtomico = Array.isArray(atomicResult) ? atomicResult[0] : atomicResult;
+      proofId = resultadoAtomico?.proof_id ?? null;
+      if (resultadoAtomico?.applied === false) {
+        return new Response(JSON.stringify({
+          ok: true,
+          status: resultadoAtomico?.final_status ?? new_status,
+          crypto_verified: cryptoVerified,
+          proof_id: proofId,
+          idempotent_replay: true,
+        }), { headers: cors });
+      }
+
 
       if (delivery.zone_code && (new_status === "DELIVERED" || new_status === "FAILED")) {
         const rates = await getZoneRates(supabase, delivery.zone_code, delivery.payer_organization_id);
