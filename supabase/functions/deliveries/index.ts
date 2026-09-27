@@ -365,10 +365,18 @@ Deno.serve(async (req: Request) => {
       }
       const pin = pinNovo();
       const expires_at = new Date(Date.now() + VALIDADE_PIN_HORAS * 3600 * 1000).toISOString();
-      const { error } = await supabase.from("deliveries").update({ confirmation_pin: pin, confirmation_pin_expires_at: expires_at, pin_failed_attempts: 0 }).eq("id", delivery_id);
+      const { data: regenerated, error } = await supabase
+        .from("deliveries")
+        .update({ confirmation_pin: pin, confirmation_pin_expires_at: expires_at, pin_failed_attempts: 0, updated_at: new Date().toISOString() })
+        .eq("id", delivery_id)
+        .eq("created_by", callerId)
+        .not("status", "in", "(DELIVERED,CANCELLED)")
+        .select("confirmation_pin, confirmation_pin_expires_at, pin_failed_attempts")
+        .maybeSingle();
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
-      await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_pin_regenerated", entity_type: "delivery", entity_id: delivery_id, before: null, after: { expires_at } });
-      return new Response(JSON.stringify({ pin, expires_at, bloqueado: false }), { headers: cors });
+      if (!regenerated) return new Response(JSON.stringify({ error: "a entrega terminou ou foi alterada entretanto; atualiza e tenta novamente" }), { status: 409, headers: cors });
+      await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_pin_regenerated", entity_type: "delivery", entity_id: delivery_id, before: null, after: { expires_at: regenerated.confirmation_pin_expires_at } });
+      return new Response(JSON.stringify({ pin: regenerated.confirmation_pin, expires_at: regenerated.confirmation_pin_expires_at, bloqueado: (regenerated.pin_failed_attempts ?? 0) >= MAX_TENTATIVAS_PIN }), { headers: cors });
     }
 
     if (action === "proof_files") {
