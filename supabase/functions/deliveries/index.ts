@@ -94,8 +94,9 @@ async function verificarAssinaturaProva(
 ): Promise<{ verified: boolean; motivo: string | null } | null> {
   if (!proof?.crypto_signature || !proof?.crypto_payload || !proof?.crypto_device_id) return null;
   try {
-    const { data: chave } = await supabase.from("signing_keys").select("public_key_jwk").eq("user_id", userId).eq("device_id", proof.crypto_device_id).maybeSingle();
+    const { data: chave } = await supabase.from("signing_keys").select("public_key_jwk, revoked_at").eq("user_id", userId).eq("device_id", proof.crypto_device_id).maybeSingle();
     if (!chave) return { verified: false, motivo: "aparelho sem chave registada" };
+    if (chave.revoked_at) return { verified: false, motivo: "chave do aparelho revogada" };
     const publicKey = await crypto.subtle.importKey("jwk", chave.public_key_jwk as JsonWebKey, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
     const sigBytes = Uint8Array.from(atob(proof.crypto_signature), (c) => c.charCodeAt(0));
     const dataBytes = new TextEncoder().encode(proof.crypto_payload);
