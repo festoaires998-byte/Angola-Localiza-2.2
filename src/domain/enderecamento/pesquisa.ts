@@ -74,11 +74,11 @@ export function recuperarPlusCode(curto: string, referencia: Coordenada): string
   return encode(latitude, longitude, decode(completo).comprimento);
 }
 
-function lerPlusCode(texto: string, referencia: Coordenada): Coordenada | null {
+function lerPlusCode(texto: string, referencia?: Coordenada): Coordenada | null {
   const codigo = texto.replace(/\s/g, '').toUpperCase();
   if (!codigo.includes('+') || !isValid(codigo)) return null;
   if (isFull(codigo)) return decode(codigo).centro;
-  if (isShort(codigo)) return decode(recuperarPlusCode(codigo, referencia)).centro;
+  if (isShort(codigo) && referencia) return decode(recuperarPlusCode(codigo, referencia)).centro;
   return null;
 }
 
@@ -114,7 +114,7 @@ function lerLinkMapa(texto: string): Coordenada | null {
  * O que a pessoa escreveu na pesquisa (ou o que o QR tem).
  * @param referencia Para os Plus Codes curtos: onde a pessoa está (ou o centro do mapa).
  */
-export function interpretarEntrada(texto: string, referencia: Coordenada): Entrada {
+export function interpretarEntrada(texto: string, referencia?: Coordenada): Entrada {
   const t = texto.replace(/\s+/g, ' ').trim();
   if (t.length === 0) return { tipo: 'invalida', motivo: 'Escreve o que queres encontrar.' };
 
