@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking } from 'react-native';
+import { Alert, Linking } from 'react-native';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { dataHora } from '@/components/nomes';
@@ -9,6 +9,7 @@ import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
 import { entregaTerminada, nomeEstadoEntrega } from '@/domain/entregas/envio';
 import { estadoEfetivo, mensagemErroEstafeta, podeFechar, proximoPasso, type FicheiroProva } from '@/domain/entregas/estafeta';
 import { recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
+import { reagendarTentativa } from '@/api/entregas';
 import { useLocalProva } from '@/hooks/useLocalProva';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
@@ -42,6 +43,28 @@ export default function DetalheEntrega() {
   const efetivo = estadoEfetivo(entrega.estado, acoes);
   const passo = proximoPasso(efetivo);
   const m = entrega.morada;
+
+  const reagendar = () => {
+    Alert.alert('Reagendar tentativa', 'Esta entrega voltará a “Atribuída” para uma nova tentativa.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Reagendar',
+        onPress: () => void (async () => {
+          setErro(null);
+          setAEnviar(true);
+          try {
+            await reagendarTentativa(entrega.id);
+            definirAvisoEstafeta(avisoAcao(online, 'Nova tentativa reagendada.'));
+            await recarregarEstafeta(userId, online === true).catch(() => undefined);
+          } catch (e) {
+            setErro(e instanceof Error ? e.message : String(e));
+          } finally {
+            setAEnviar(false);
+          }
+        })(),
+      },
+    ]);
+  };
 
   const fotografar = async (uriCamara: string) => {
     if (!gps.local) throw new Error('Espera pela posição do GPS.');
@@ -129,6 +152,7 @@ export default function DetalheEntrega() {
         </>
       ) : null}
 
+      {efetivo === 'FAILED' ? <Botao titulo="🔁 Reagendar tentativa" variante="secundario" onPress={reagendar} aCarregar={aEnviar} /> : null}
       {entregaTerminada(efetivo) ? <Texto suave>Esta entrega já terminou.</Texto> : null}
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
     </Ecra>
