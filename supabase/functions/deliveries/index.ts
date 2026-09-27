@@ -154,21 +154,29 @@ Deno.serve(async (req: Request) => {
     if (action === "set_urgent") {
       const { delivery_id, is_urgent, sync_operation_id } = body;
       if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
-      const { data: delivery } = await supabase.from("deliveries").select("created_by").eq("id", delivery_id).maybeSingle();
+      const { data: delivery } = await supabase.from("deliveries").select("created_by, status, is_urgent").eq("id", delivery_id).maybeSingle();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
       const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
       if (delivery.created_by !== callerId && !isAdminRes) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
-      const { error } = await supabase.from("deliveries").update({ is_urgent: !!is_urgent }).eq("id", delivery_id);
-      if (error) {
-        if (sync_operation_id) {
-          const { data: already } = await supabase.from("deliveries")
-            .select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)")
-            .eq("sync_operation_id", sync_operation_id).maybeSingle();
-          if (already) return new Response(JSON.stringify(already), { headers: cors });
-        }
-        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      if (delivery.status === "DELIVERED" || delivery.status === "CANCELLED") {
+        return new Response(JSON.stringify({ error: "nao e possivel alterar urgencia de uma entrega terminada" }), { status: 409, headers: cors });
       }
-      return new Response(JSON.stringify({ ok: true, is_urgent: !!is_urgent }), { headers: cors });
+      const desiredUrgent = !!is_urgent;
+      if (delivery.is_urgent === desiredUrgent) return new Response(JSON.stringify({ ok: true, is_urgent: desiredUrgent, idempotent_replay: true }), { headers: cors });
+      const { data: updated, error } = await supabase
+        .from("deliveries")
+        .update({ is_urgent: desiredUrgent, updated_at: new Date().toISOString() })
+        .eq("id", delivery_id)
+        .eq("is_urgent", delivery.is_urgent)
+        .select("is_urgent")
+        .maybeSingle();
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      if (!updated) {
+        const { data: current } = await supabase.from("deliveries").select("is_urgent").eq("id", delivery_id).maybeSingle();
+        if (current?.is_urgent === desiredUrgent) return new Response(JSON.stringify({ ok: true, is_urgent: desiredUrgent, idempotent_replay: true }), { headers: cors });
+        return new Response(JSON.stringify({ error: "a entrega foi alterada por outra operacao; tente novamente" }), { status: 409, headers: cors });
+      }
+      return new Response(JSON.stringify({ ok: true, is_urgent: desiredUrgent }), { headers: cors });
     }
 
     if (action === "list_org_deliveries") {
