@@ -435,62 +435,7 @@ Deno.serve(async (req: Request) => {
           : {}),
       } : null;
 
-      const { data: atomicResult, error: atomicError } = await supabase.rpc("aplicar_transicao_entrega_com_prova", {
-        p_delivery_id: delivery_id,
-        p_expected_status: delivery.status,
-        p_new_status: new_status,
-        p_proof: proofRow,
-        p_sync_operation_id: sync_operation_id ?? null,
-      });
-      if (atomicError) {
-        if (atomicError.message?.includes("DELIVERY_STATE_CHANGED")) {
-          return new Response(JSON.stringify({ error: "a entrega mudou de estado entretanto - atualiza e tenta de novo" }), { status: 409, headers: cors });
-        }
-        if (atomicError.message?.includes("DELIVERY_NOT_FOUND")) {
-          return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
-        }
-        return new Response(JSON.stringify({ error: atomicError.message }), { status: 500, headers: cors });
-      }
-
-      const resultadoAtomico = Array.isArray(atomicResult) ? atomicResult[0] : atomicResult;
-      proofId = resultadoAtomico?.proof_id ?? null;
-      if (resultadoAtomico?.applied === false) {
-        return new Response(JSON.stringify({
-          ok: true,
-          status: resultadoAtomico?.final_status ?? new_status,
-          crypto_verified: cryptoVerified,
-          proof_id: proofId,
-          idempotent_replay: true,
-        }), { headers: cors });
-      }
-
-
-      if (delivery.zone_code && (new_status === "DELIVERED" || new_status === "FAILED")) {
-        const rates = await getZoneRates(supabase, delivery.zone_code, delivery.payer_organization_id);
-        if (rates) {
-          const isFreePilot = !delivery.payer_organization_id;
-          if (new_status === "DELIVERED") {
-            let extras = 0; const extrasBreakdown: Record<string, number> = {};
-            if (is_volumoso) { extras += 500; extrasBreakdown.volumoso = 500; }
-            if (is_espera_longa) { extras += 300; extrasBreakdown.espera_longa = 300; }
-            let total = rates.base_fee + rates.routing_fee + rates.proof_fee + extras;
-            const now = new Date(); const isNightWeekend = now.getHours() >= 20 || now.getHours() < 6 || now.getDay() === 0 || now.getDay() === 6;
-            let surcharge = 0; if (isNightWeekend) { surcharge = Math.round(total * 0.2); total += surcharge; }
-            await supabase.from("usage_events").insert({
-              delivery_id, organization_id: delivery.payer_organization_id, event_type: "DELIVERY_POD", zone_code: delivery.zone_code, sync_operation_id: sync_operation_id ?? null,
-              amount_total: total, amount_driver: rates.base_fee, amount_platform: total - rates.base_fee, is_free_pilot: isFreePilot,
-              breakdown: { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee, ...extrasBreakdown, noturno_fim_de_semana: surcharge || undefined },
-            });
-          } else {
-            const attemptFee = Math.round(rates.base_fee * 0.3);
-            await supabase.from("usage_events").insert({
-              delivery_id, organization_id: delivery.payer_organization_id, event_type: "DELIVERY_FAILED_ATTEMPT", zone_code: delivery.zone_code, sync_operation_id: sync_operation_id ?? null,
-              amount_total: attemptFee + rates.routing_fee + rates.proof_fee, amount_driver: attemptFee, amount_platform: rates.routing_fee + rates.proof_fee,
-              is_free_pilot: isFreePilot, breakdown: { taxa_tentativa_estafeta: attemptFee, roteamento_creditado: rates.routing_fee, prova_creditado: rates.proof_fee, motivo: reason },
-            });
-          }
-        }
-      }
+      let usageRow: Record<string, unknown> | null = null;
 
       if (new_status === "DELIVERED") {
         await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_delivered_with_pod", entity_type: "delivery", entity_id: delivery_id, before: { status: delivery.status }, after: { status: new_status, has_photo: !!ficheiros.foto, has_signature: !!ficheiros.assinatura, proof_id: proofId, crypto_verified: cryptoVerified, crypto_failure_reason: assinatura?.motivo ?? null } });
