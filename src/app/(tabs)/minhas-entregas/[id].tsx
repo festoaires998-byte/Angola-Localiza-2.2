@@ -8,7 +8,7 @@ import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto } from '@/component
 import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
 import { entregaTerminada, nomeEstadoEntrega } from '@/domain/entregas/envio';
 import { estadoEfetivo, mensagemErroEstafeta, podeFechar, proximoPasso, type FicheiroProva } from '@/domain/entregas/estafeta';
-import { recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
+import { recarregarEntregasOrganizacao, recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
 import { atribuirEstafeta, listarEstafetasDisponiveis, reagendarTentativa } from '@/api/entregas';
 import { useLocalProva } from '@/hooks/useLocalProva';
 import { useOnline } from '@/hooks/useOnline';
@@ -77,7 +77,8 @@ export default function DetalheEntrega() {
                       try {
                         await atribuirEstafeta(entrega.id, e.id);
                         definirAvisoEstafeta(avisoAcao(online, 'Estafeta atribuído com sucesso.'));
-                        await recarregarEstafeta(userId, online === true).catch(() => undefined);
+                        if (podeGerirAtribuicao) await recarregarEntregasOrganizacao().catch(() => undefined);
+                        else await recarregarEstafeta(userId, online === true).catch(() => undefined);
                       } catch (err) {
                         setErro(err instanceof Error ? err.message : String(err));
                       } finally {
