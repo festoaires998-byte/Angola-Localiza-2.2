@@ -49,6 +49,22 @@ export async function cancelarEnvio(deliveryId: string): Promise<void> {
 }
 
 /** As entregas atribuídas ao estafeta (separador Entregas), das mais recentes para as mais antigas. */
+/** Atualiza a última posição do estafeta no tracking da entrega ativa. */
+export async function atualizarTrackingEntrega(
+  deliveryId: string,
+  posicao: { latitude: number; longitude: number; precisao: number | null; hora: number },
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('atualizar_delivery_tracking', {
+    p_delivery_id: deliveryId,
+    p_latitude: posicao.latitude,
+    p_longitude: posicao.longitude,
+    p_accuracy_meters: posicao.precisao,
+    p_updated_at: new Date(posicao.hora).toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  return data === true;
+}
+
 export async function listarAtribuidas(userId: string): Promise<Envio[]> {
   const { data, error } = await supabase
     .from('deliveries')
