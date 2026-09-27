@@ -416,7 +416,11 @@ Deno.serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
         ...(delivery.organization_id ? {} : { organization_id: targetOrganizationId }),
       };
-      const { data: mudou, error } = await supabase.from("deliveries").update(updatePayload).eq("id", delivery_id).eq("status", "CREATED").eq("organization_id", delivery.organization_id).select("id");
+      let updateQuery = supabase.from("deliveries").update(updatePayload).eq("id", delivery_id).eq("status", "CREATED");
+      updateQuery = delivery.organization_id
+        ? updateQuery.eq("organization_id", delivery.organization_id)
+        : updateQuery.is("organization_id", null);
+      const { data: mudou, error } = await updateQuery.select("id");
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
       if (!mudou?.length) return new Response(JSON.stringify({ error: "a entrega mudou de estado entretanto - atualiza e tenta de novo" }), { status: 409, headers: cors });
       await supabase.from("delivery_status_history").insert({ delivery_id, status: "ASSIGNED" });
