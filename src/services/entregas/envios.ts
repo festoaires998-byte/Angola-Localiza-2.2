@@ -91,7 +91,7 @@ export function criarServicoEnvios(deps: DependenciasEnvios) {
     /** Envia o pedido (com rede) ou põe-no na fila (sem rede). */
     async enviar(userId: string, dados: DadosEnvio, online: boolean): Promise<ResultadoEnvio> {
       const operationId = gerarUuid();
-      const pedido = { ...montarPedidoEnvio(dados), sync_operation_id: operationId } as PedidoEnvio & { sync_operation_id: string };
+      const pedido: PedidoEnvio = { ...montarPedidoEnvio(dados), sync_operation_id: operationId };
       if (online) {
         try {
           const r = await deps.servidor.criar(pedido);
