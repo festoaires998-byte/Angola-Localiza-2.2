@@ -269,7 +269,7 @@ describe('Entregas: regressões administrativas e reagendamento', () => {
     mockEntregas = [entrega('falhada', { estado: 'FAILED' })];
     await desenhar();
     await carregar(/^Entrega para Maria João/);
-    await carregar('🔁 Reagendar tentativa');
+    await carregar(/Reagendar tentativa/);
     await carregar('Reagendar');
     expect(mockReagendar).toHaveBeenCalledWith('falhada');
   });
