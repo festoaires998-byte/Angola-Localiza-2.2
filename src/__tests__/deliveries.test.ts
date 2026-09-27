@@ -136,6 +136,24 @@ function cenario(entrega: Record<string, unknown> = {}) {
             .map((n, i) => `${buckets[i]}|${n}`)
             .filter((k) => OBJETOS.some((o) => `${o.bucket}|${o.nome}` === k && o.dono === utilizador)),
         ).size,
+      aplicar_transicao_entrega_com_prova: (args: any, t) => {
+        const d = t.deliveries.find((x) => x.id === args.p_delivery_id);
+        if (!d) throw new Error('DELIVERY_NOT_FOUND');
+        if (args.p_sync_operation_id) {
+          const existing = (t.delivery_proofs ?? []).find((p) => p.sync_operation_id === args.p_sync_operation_id);
+          if (existing) return [{ applied: false, proof_id: existing.id, final_status: d.status }];
+        }
+        if (d.status !== args.p_expected_status) throw new Error('DELIVERY_STATE_CHANGED');
+        d.status = args.p_new_status;
+        d.updated_at = new Date().toISOString();
+        (t.delivery_status_history ??= []).push({ id: 'history-' + Date.now() + '-' + Math.random(), delivery_id: d.id, status: args.p_new_status });
+        let proofId: string | null = null;
+        if (args.p_proof) {
+          proofId = 'proof-' + Date.now() + '-' + Math.random();
+          (t.delivery_proofs ??= []).push({ id: proofId, delivery_id: d.id, sync_operation_id: args.p_sync_operation_id ?? null, ...args.p_proof });
+        }
+        return [{ applied: true, proof_id: proofId, final_status: args.p_new_status }];
+      },
       verificar_pin_entrega: ({ p_delivery_id, p_pin }: { p_delivery_id: string; p_pin: string | null }, t) => {
         const d = t.deliveries.find((x) => x.id === p_delivery_id);
         if (!d) return { resultado: 'NOT_FOUND' };
