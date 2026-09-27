@@ -33,7 +33,7 @@ export function useEntregasEstafeta(userId: string | null, online: boolean | nul
   const ultimaEnviada = useRef(new Map<string, number>());
   useEffect(() => {
     if (!userId || online !== true || posicao.estado !== 'ok') return;
-    const ativos = estado.entregas.filter((e) => e.estafeta === userId && ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(e.estado));
+    const ativos = (estado.entregas ?? []).filter((e) => e.estafeta === userId && ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(e.estado));
     const agora = Date.now();
     for (const entrega of ativos) {
       const ultima = ultimaEnviada.current.get(entrega.id) ?? 0;
