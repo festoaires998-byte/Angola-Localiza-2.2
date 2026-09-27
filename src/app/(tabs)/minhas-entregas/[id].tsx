@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { dataHora } from '@/components/nomes';
@@ -9,7 +9,7 @@ import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
 import { entregaTerminada, nomeEstadoEntrega } from '@/domain/entregas/envio';
 import { estadoEfetivo, mensagemErroEstafeta, podeFechar, proximoPasso, type FicheiroProva } from '@/domain/entregas/estafeta';
 import { recarregarEntregasOrganizacao, recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
-import { atribuirEstafeta, listarEstafetasDisponiveis, reagendarTentativa } from '@/api/entregas';
+import { atribuirEstafeta, listarEstafetasDisponiveis, reagendarTentativa, type EstafetaDisponivel } from '@/api/entregas';
 import { useLocalProva } from '@/hooks/useLocalProva';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
@@ -33,6 +33,7 @@ export default function DetalheEntrega() {
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aAtribuir, setAAtribuir] = useState(false);
+  const [estafetasDisponiveis, setEstafetasDisponiveis] = useState<EstafetaDisponivel[] | null>(null);
 
   const entrega = estado.entregas?.find((e) => e.id === id) ?? null;
   if (!entrega || !userId) {
@@ -58,46 +59,39 @@ export default function DetalheEntrega() {
         Alert.alert('Sem estafetas disponíveis', 'Não existem estafetas disponíveis na organização desta entrega.');
         return;
       }
-      Alert.alert(
-        'Atribuir estafeta',
-        'Escolhe o estafeta que ficará responsável por esta entrega.',
-        [
-          ...estafetas.map((e) => ({
-            text: e.nome || e.email || e.id,
-            onPress: () => {
-              Alert.alert(
-                'Confirmar atribuição',
-                'Atribuir esta entrega a ' + (e.nome || e.email || 'este estafeta') + '?',
-                [
-                  { text: 'Cancelar', style: 'cancel' },
-                  {
-                    text: 'Atribuir',
-                    onPress: () => void (async () => {
-                      setAAtribuir(true);
-                      try {
-                        await atribuirEstafeta(entrega.id, e.id);
-                        definirAvisoEstafeta(avisoAcao(online, 'Estafeta atribuído com sucesso.'));
-                        if (podeGerirAtribuicao) await recarregarEntregasOrganizacao().catch(() => undefined);
-                        else await recarregarEstafeta(userId, online === true).catch(() => undefined);
-                      } catch (err) {
-                        setErro(err instanceof Error ? err.message : String(err));
-                      } finally {
-                        setAAtribuir(false);
-                      }
-                    })(),
-                  },
-                ],
-              );
-            },
-          })),
-          { text: 'Cancelar', style: 'cancel' },
-        ],
-      );
+      setEstafetasDisponiveis(estafetas);
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
       setAAtribuir(false);
     }
+  };
+
+  const confirmarAtribuicao = (estafeta: EstafetaDisponivel) => {
+    setEstafetasDisponiveis(null);
+    Alert.alert(
+      'Confirmar atribuição',
+      'Atribuir esta entrega a ' + (estafeta.nome || estafeta.email || 'este estafeta') + '?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Atribuir',
+          onPress: () => void (async () => {
+            setAAtribuir(true);
+            setErro(null);
+            try {
+              await atribuirEstafeta(entrega.id, estafeta.id);
+              definirAvisoEstafeta(avisoAcao(online, 'Estafeta atribuído com sucesso.'));
+              await recarregarEntregasOrganizacao().catch(() => undefined);
+            } catch (err) {
+              setErro(err instanceof Error ? err.message : String(err));
+            } finally {
+              setAAtribuir(false);
+            }
+          })(),
+        },
+      ],
+    );
   };
 
   const reagendar = () => {
@@ -177,6 +171,24 @@ export default function DetalheEntrega() {
         ),
       )}
 
+      <Modal visible={estafetasDisponiveis !== null} transparent animationType="slide" onRequestClose={() => setEstafetasDisponiveis(null)}>
+        <View style={estilos.modalFundo}>
+          <View style={estilos.modalCartao}>
+            <Subtitulo>Escolher estafeta</Subtitulo>
+            <Texto suave>Estafetas da organização desta entrega.</Texto>
+            <ScrollView style={estilos.listaEstafetas}>
+              {(estafetasDisponiveis ?? []).map((e) => (
+                <Pressable key={e.id} onPress={() => confirmarAtribuicao(e)} style={estilos.estafetaItem}>
+                  <Text style={estilos.estafetaNome}>{e.nome || 'Estafeta'}</Text>
+                  {e.email ? <Text style={estilos.estafetaEmail}>{e.email}</Text> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Botao titulo="Cancelar" variante="secundario" onPress={() => setEstafetasDisponiveis(null)} />
+          </View>
+        </View>
+      </Modal>
+
       {podeGerirAtribuicao && efetivo === 'CREATED' ? (
         <Botao titulo="Atribuir estafeta" variante="secundario" onPress={() => void escolherEstafeta()} aCarregar={aAtribuir} />
       ) : null}
@@ -218,3 +230,13 @@ export default function DetalheEntrega() {
     </Ecra>
   );
 }
+
+
+const estilos = StyleSheet.create({
+  modalFundo: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+  modalCartao: { maxHeight: '80%', padding: 20, gap: 12, backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  listaEstafetas: { maxHeight: 420 },
+  estafetaItem: { paddingVertical: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, marginBottom: 8 },
+  estafetaNome: { fontSize: 16, fontWeight: '700', color: '#111' },
+  estafetaEmail: { marginTop: 3, fontSize: 13, color: '#666' },
+});
