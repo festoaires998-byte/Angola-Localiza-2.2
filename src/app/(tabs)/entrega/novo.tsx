@@ -103,9 +103,7 @@ export default function NovoEnvio() {
 
   const falta = faltaNoEnvio(dados);
   const selecionarPorEntrada = (entrada: string) => {
-    const referencia = posicao
-      ? { latitude: posicao.latitude, longitude: posicao.longitude }
-      : { latitude: -12.7761, longitude: 15.7392 };
+    const referencia = posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : undefined;
     const r = interpretarEntrada(entrada, referencia);
     if (r.tipo !== 'ponto') {
       setErro(r.tipo === 'invalida' ? r.motivo : 'Este QR/link precisa de uma localização válida.');
