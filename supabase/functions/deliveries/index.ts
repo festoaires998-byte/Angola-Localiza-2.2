@@ -34,11 +34,32 @@ async function getZoneRates(supabase: ReturnType<typeof createClient>, zoneCode:
     const { data: override } = await supabase.from("organization_pricing_overrides").select("*").eq("organization_id", organizationId).eq("zone_code", zoneCode).maybeSingle();
     if (override) {
       if (override.base_fee != null) rates.base_fee = override.base_fee;
-      if (override.routing_fee != null) rates.routing_fee = override.routing_fee;
+      if (override.routing_fee != null && !override.volume_discount_threshold) rates.routing_fee = override.routing_fee;
       if (override.proof_fee != null) rates.proof_fee = override.proof_fee;
+      if (override.volume_discount_threshold && override.volume_discount_routing_fee != null) {
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        monthStart.setHours(0, 0, 0, 0);
+        const { count } = await supabase.from("deliveries")
+          .select("id", { count: "exact", head: true })
+          .eq("payer_organization_id", organizationId)
+          .gte("created_at", monthStart.toISOString());
+        if ((count ?? 0) >= override.volume_discount_threshold) {
+          rates.routing_fee = override.volume_discount_routing_fee;
+        }
+      }
     }
   }
   return rates;
+}
+
+function aplicarSobretaxaHorario(total: number, at: Date): { total: number; surcharge: number } {
+  const hour = at.getHours();
+  const day = at.getDay();
+  const isNightOrWeekend = hour >= 20 || hour < 6 || day === 0 || day === 6;
+  if (!isNightOrWeekend) return { total, surcharge: 0 };
+  const surcharge = Math.round(total * 0.2);
+  return { total: total + surcharge, surcharge };
 }
 
 /** O destino pedido é uma morada que quem cria a entrega pode ver? */
@@ -252,13 +273,20 @@ Deno.serve(async (req: Request) => {
       if (zone_code) {
         const rates = await getZoneRates(supabase, zone_code, payer_organization_id);
         if (rates) {
-          const total = rates.base_fee + rates.routing_fee + rates.proof_fee;
+          const baseTotal = rates.base_fee + rates.routing_fee + rates.proof_fee;
+          const pricing = aplicarSobretaxaHorario(baseTotal, new Date());
+          const total = pricing.total;
           await supabase.from("usage_events").insert({
             delivery_id: delivery.id, organization_id: payer_organization_id ?? null, event_type: "DELIVERY_ROUTED", zone_code,
             sync_operation_id: sync_operation_id ?? null,
-            amount_total: total, amount_driver: rates.base_fee, amount_platform: rates.routing_fee + rates.proof_fee,
+            amount_total: total, amount_driver: rates.base_fee, amount_platform: total - rates.base_fee,
             is_free_pilot: !payer_organization_id,
-            breakdown: { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee },
+            breakdown: {
+              frete: rates.base_fee,
+              roteamento: rates.routing_fee,
+              prova: rates.proof_fee,
+              ...(pricing.surcharge ? { noturno_fim_de_semana: pricing.surcharge } : {}),
+            },
           });
         }
       }
