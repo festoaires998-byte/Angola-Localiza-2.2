@@ -73,6 +73,8 @@ export interface PedidoEnvio {
   recipient_phone: string | null;
   instructions: string | null;
   is_urgent: boolean;
+  /** Identificador idempotente da operação de criação (online/offline). */
+  sync_operation_id?: string;
 }
 
 /**
