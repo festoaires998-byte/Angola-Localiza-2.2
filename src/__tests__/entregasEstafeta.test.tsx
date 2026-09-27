@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { Alert } from 'react-native';
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
 import type { Envio } from '@/domain/entregas/envio';
@@ -271,8 +272,13 @@ describe('Entregas: regressões administrativas e reagendamento', () => {
     await carregar(/^Entrega para Maria João/);
     const reagendar = screen.getAllByRole('button').find((b) => String(b.props.accessibilityLabel ?? '').includes('Reagendar tentativa'));
     expect(reagendar).toBeTruthy();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      const confirmar = buttons?.find((b) => b.text === 'Reagendar');
+      confirmar?.onPress?.();
+    });
     await act(async () => { fireEvent.press(reagendar!); });
-    await carregar('Reagendar');
+    await act(async () => undefined);
     expect(mockReagendar).toHaveBeenCalledWith('falhada');
+    alertSpy.mockRestore();
   });
 });
