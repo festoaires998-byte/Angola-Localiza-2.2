@@ -6,6 +6,7 @@ import { aplicarMigracoes } from '@/database/migrations';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 import type { DadosEnvio, Envio, PedidoEnvio } from '@/domain/entregas/envio';
 
+import { gerarUuid } from '@/database/ids';
 import { criarServicoEnvios } from './envios';
 
 const EU = 'aaaaaaaa-0000-4000-8000-000000000001';
@@ -29,6 +30,8 @@ const envio = (id: string, extra: Partial<Envio> = {}): Envio => ({
 });
 
 let contadorOps = 0;
+
+jest.mock('@/database/ids', () => ({ gerarUuid: jest.fn(() => 'cccccccc-0000-4000-8000-000000000001') }));
 
 class ErroRede extends Error {
   estado = 0;
