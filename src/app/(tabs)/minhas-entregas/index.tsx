@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -50,7 +50,8 @@ export default function Entregas() {
   const visaoOrganizacao = cargos.includes('operador_postal') || cargos.includes('super_admin');
   const router = useRouter();
   const estado = useEntregasEstafeta(eEstafeta ? userId : null, online);
-  useRealtimeEntregas(visaoOrganizacao ? userId : null, 'organizacao', online === true, () => recarregarEntregasOrganizacao().catch(() => undefined));
+  const atualizarOrganizacao = useCallback(() => recarregarEntregasOrganizacao().catch(() => undefined), []);
+  useRealtimeEntregas(visaoOrganizacao ? userId : null, 'organizacao', online === true, atualizarOrganizacao);
   const [aAtualizar, setAAtualizar] = useState(false);
   const [orgCarregando, setOrgCarregando] = useState(visaoOrganizacao);
   const [orgErro, setOrgErro] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export default function Entregas() {
       </Ecra>
     );
   }
-  if (estado.entregas === null || (visaoOrganizacao && orgCarregando)) return <EcraCarregamento texto="A abrir as entregas…" />;
+  if ((eEstafeta && estado.entregas === null) || (visaoOrganizacao && orgCarregando)) return <EcraCarregamento texto="A abrir as entregas…" />;
 
   const porFazer = estado.entregas.filter((e) => !entregaTerminada(estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes))));
   const feitas = estado.entregas.filter((e) => !porFazer.includes(e));
@@ -89,7 +90,7 @@ export default function Entregas() {
   const correspondePesquisa = (e: Envio) => !termo || [e.codigo, e.destinatario].some((v) => v?.toLocaleLowerCase().includes(termo));
   const baseLista = [...porFazer, ...feitas].filter((e) => correspondeFiltro(e) && correspondePesquisa(e));
   const lista = ordemSugerida
-    ? [...baseLista].sort((a, b) => Number(b.urgente) - Number(a.urgente))
+    ? [...porFazer.filter((e) => correspondeFiltro(e) && correspondePesquisa(e)).sort((a, b) => Number(b.urgente) - Number(a.urgente)), ...feitas.filter((e) => correspondeFiltro(e) && correspondePesquisa(e))]
     : baseLista;
   const hoje = new Date().toISOString().slice(0, 10);
   const hojeEntregas = estado.entregas.filter((e) => e.atualizadoEm?.slice(0, 10) === hoje);
