@@ -197,6 +197,49 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ deliveries: results }), { headers: cors });
     }
 
+    if (action === "list_org_drivers") {
+      const { delivery_id } = body;
+      if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
+
+      const { data: delivery } = await supabase
+        .from("deliveries")
+        .select("organization_id")
+        .eq("id", delivery_id)
+        .maybeSingle();
+      if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
+      if (!delivery.organization_id) return new Response(JSON.stringify({ drivers: [] }), { headers: cors });
+
+      const isSuper = await isSuperAdmin(supabase, callerId);
+      if (!isSuper) {
+        const { data: membership } = await supabase
+          .from("organization_members")
+          .select("organization_id")
+          .eq("user_id", callerId)
+          .eq("organization_id", delivery.organization_id)
+          .eq("role", "operador_postal")
+          .maybeSingle();
+        if (!membership) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
+      }
+
+      const { data: members, error } = await supabase
+        .from("organization_members")
+        .select("user_id")
+        .eq("organization_id", delivery.organization_id)
+        .eq("role", "estafeta");
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+
+      const drivers = [];
+      for (const member of members ?? []) {
+        const { data: user } = await supabase.auth.admin.getUserById(member.user_id);
+        drivers.push({
+          id: member.user_id,
+          email: user?.user?.email ?? null,
+          nome: user?.user?.user_metadata?.full_name ?? user?.user?.user_metadata?.name ?? null,
+        });
+      }
+      return new Response(JSON.stringify({ drivers }), { headers: cors });
+    }
+
     if (action === "delete_one") {
       if (!(await isSuperAdmin(supabase, callerId))) return new Response(JSON.stringify({ error: "apenas o super admin pode eliminar entregas" }), { status: 403, headers: cors });
       const { delivery_id } = body;
