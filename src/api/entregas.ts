@@ -85,6 +85,17 @@ export async function listarDaOrganizacao(): Promise<Envio[]> {
   return Array.isArray(r?.deliveries) ? r.deliveries.map(lerEnvio) : [];
 }
 
+export type EstafetaDisponivel = { id: string; email: string | null; nome: string | null };
+
+export async function listarEstafetasDisponiveis(deliveryId: string): Promise<EstafetaDisponivel[]> {
+  const r = await chamarFuncao<{ drivers?: EstafetaDisponivel[] }>('deliveries', 'list_org_drivers', { body: { delivery_id: deliveryId } });
+  return Array.isArray(r?.drivers) ? r.drivers : [];
+}
+
+export async function atribuirEstafeta(deliveryId: string, driverId: string): Promise<void> {
+  await chamarFuncao('deliveries', 'assign_driver', { body: { delivery_id: deliveryId, driver_id: driverId } });
+}
+
 /** Reabre uma entrega falhada para uma nova tentativa, seguindo a mesma transição usada pelo site. */
 export async function reagendarTentativa(deliveryId: string): Promise<void> {
   await chamarFuncao('deliveries', 'update_status', { body: { delivery_id: deliveryId, new_status: 'ASSIGNED' } });
