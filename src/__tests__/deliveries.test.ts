@@ -154,6 +154,29 @@ function cenario(entrega: Record<string, unknown> = {}) {
         }
         return [{ applied: true, proof_id: proofId, final_status: args.p_new_status }];
       },
+      aplicar_transicao_entrega_com_prova_e_cobranca: (args: any, t: any) => {
+        const d = t.deliveries.find((x: any) => x.id === args.p_delivery_id);
+        if (!d) throw new Error('DELIVERY_NOT_FOUND');
+        if (args.p_sync_operation_id) {
+          const existing = (t.delivery_proofs ?? []).find((p: any) => p.sync_operation_id === args.p_sync_operation_id);
+          if (existing) return [{ applied: false, proof_id: existing.id, final_status: d.status }];
+          const usageExisting = (t.usage_events ?? []).find((p: any) => p.sync_operation_id === args.p_sync_operation_id);
+          if (usageExisting) throw new Error('SYNC_OPERATION_CONFLICT');
+        }
+        if (d.status !== args.p_expected_status) throw new Error('DELIVERY_STATE_CHANGED');
+        d.status = args.p_new_status;
+        d.updated_at = new Date().toISOString();
+        (t.delivery_status_history ??= []).push({ id: 'history-' + Date.now() + '-' + Math.random(), delivery_id: d.id, status: args.p_new_status });
+        let proofId: string | null = null;
+        if (args.p_proof) {
+          proofId = 'proof-' + Date.now() + '-' + Math.random();
+          (t.delivery_proofs ??= []).push({ id: proofId, delivery_id: d.id, sync_operation_id: args.p_sync_operation_id ?? null, ...args.p_proof });
+        }
+        if (args.p_usage) {
+          (t.usage_events ??= []).push({ id: 'usage-' + Date.now() + '-' + Math.random(), delivery_id: d.id, sync_operation_id: args.p_sync_operation_id ?? null, ...args.p_usage });
+        }
+        return [{ applied: true, proof_id: proofId, final_status: args.p_new_status }];
+      },
       verificar_pin_entrega: ({ p_delivery_id, p_pin }: { p_delivery_id: string; p_pin: string | null }, t) => {
         const d = t.deliveries.find((x) => x.id === p_delivery_id);
         if (!d) return { resultado: 'NOT_FOUND' };
