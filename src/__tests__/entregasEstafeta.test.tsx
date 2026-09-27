@@ -269,7 +269,9 @@ describe('Entregas: regressões administrativas e reagendamento', () => {
     mockEntregas = [entrega('falhada', { estado: 'FAILED' })];
     await desenhar();
     await carregar(/^Entrega para Maria João/);
-    await carregar(/Reagendar tentativa/);
+    const reagendar = screen.getAllByRole('button').find((b) => String(b.props.accessibilityLabel ?? '').includes('Reagendar tentativa'));
+    expect(reagendar).toBeTruthy();
+    await act(async () => { fireEvent.press(reagendar!); });
     await carregar('Reagendar');
     expect(mockReagendar).toHaveBeenCalledWith('falhada');
   });
