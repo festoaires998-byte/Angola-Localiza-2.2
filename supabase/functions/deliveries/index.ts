@@ -356,6 +356,14 @@ Deno.serve(async (req: Request) => {
       const { delivery_id, new_status, proof, pin, reason, is_volumoso, is_espera_longa, sync_operation_id } = body;
       if (!delivery_id || !new_status) return new Response(JSON.stringify({ error: "delivery_id e new_status sao obrigatorios" }), { status: 400, headers: cors });
 
+      const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, zone_code, payer_organization_id").eq("id", delivery_id).single();
+      if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
+
+      const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
+      const isDriver = delivery.assigned_driver === callerId;
+      const isOwnerCancelling = delivery.created_by === callerId && new_status === "CANCELLED";
+      if (!isAdminRes && !isDriver && !isOwnerCancelling) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
+
       // Idempotência offline: se esta mesma operação já criou a prova,
       // devolver sucesso sem repetir transição, cobrança ou auditoria.
       if (sync_operation_id) {
@@ -374,14 +382,6 @@ Deno.serve(async (req: Request) => {
           }), { headers: cors });
         }
       }
-
-      const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, zone_code, payer_organization_id").eq("id", delivery_id).single();
-      if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
-
-      const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
-      const isDriver = delivery.assigned_driver === callerId;
-      const isOwnerCancelling = delivery.created_by === callerId && new_status === "CANCELLED";
-      if (!isAdminRes && !isDriver && !isOwnerCancelling) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
 
       const allowed = TRANSITIONS[delivery.status] || [];
       if (!allowed.includes(new_status)) return new Response(JSON.stringify({ error: `transicao invalida: ${delivery.status} -> ${new_status}` }), { status: 400, headers: cors });
