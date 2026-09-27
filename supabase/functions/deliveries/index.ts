@@ -365,12 +365,22 @@ Deno.serve(async (req: Request) => {
       }
       const pin = pinNovo();
       const expires_at = new Date(Date.now() + VALIDADE_PIN_HORAS * 3600 * 1000).toISOString();
+      const { data: currentDelivery, error: readError } = await supabase
+        .from("deliveries")
+        .select("status")
+        .eq("id", delivery_id)
+        .eq("created_by", callerId)
+        .maybeSingle();
+      if (readError) return new Response(JSON.stringify({ error: readError.message }), { status: 400, headers: cors });
+      if (!currentDelivery || currentDelivery.status === "DELIVERED" || currentDelivery.status === "CANCELLED") {
+        return new Response(JSON.stringify({ error: "a entrega terminou ou foi alterada entretanto; atualiza e tenta novamente" }), { status: 409, headers: cors });
+      }
       const { data: regenerated, error } = await supabase
         .from("deliveries")
         .update({ confirmation_pin: pin, confirmation_pin_expires_at: expires_at, pin_failed_attempts: 0, updated_at: new Date().toISOString() })
         .eq("id", delivery_id)
         .eq("created_by", callerId)
-        .not("status", "in", "(DELIVERED,CANCELLED)")
+        .eq("status", currentDelivery.status)
         .select("confirmation_pin, confirmation_pin_expires_at, pin_failed_attempts")
         .maybeSingle();
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
