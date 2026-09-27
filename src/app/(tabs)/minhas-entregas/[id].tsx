@@ -9,7 +9,7 @@ import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
 import { entregaTerminada, nomeEstadoEntrega } from '@/domain/entregas/envio';
 import { estadoEfetivo, mensagemErroEstafeta, podeFechar, proximoPasso, type FicheiroProva } from '@/domain/entregas/estafeta';
 import { recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
-import { reagendarTentativa } from '@/api/entregas';
+import { atribuirEstafeta, listarEstafetasDisponiveis, reagendarTentativa } from '@/api/entregas';
 import { useLocalProva } from '@/hooks/useLocalProva';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
@@ -23,12 +23,16 @@ export default function DetalheEntrega() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const online = useOnline();
-  const userId = useSessao().utilizador?.id ?? null;
+  const sessao = useSessao();
+  const userId = sessao.utilizador?.id ?? null;
+  const cargos = sessao.perfil?.cargos ?? [];
+  const podeGerirAtribuicao = cargos.includes('operador_postal') || cargos.includes('super_admin');
   const estado = useEstafeta();
   const gps = useLocalProva();
   const [foto, setFoto] = useState<FicheiroProva | null>(null);
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [aAtribuir, setAAtribuir] = useState(false);
 
   const entrega = estado.entregas?.find((e) => e.id === id) ?? null;
   if (!entrega || !userId) {
@@ -43,6 +47,57 @@ export default function DetalheEntrega() {
   const efetivo = estadoEfetivo(entrega.estado, acoes);
   const passo = proximoPasso(efetivo);
   const m = entrega.morada;
+
+  const escolherEstafeta = async () => {
+    if (!podeGerirAtribuicao || efetivo !== 'CREATED') return;
+    setErro(null);
+    setAAtribuir(true);
+    try {
+      const estafetas = await listarEstafetasDisponiveis(entrega.id);
+      if (estafetas.length === 0) {
+        Alert.alert('Sem estafetas disponíveis', 'Não existem estafetas disponíveis na organização desta entrega.');
+        return;
+      }
+      Alert.alert(
+        'Atribuir estafeta',
+        'Escolhe o estafeta que ficará responsável por esta entrega.',
+        [
+          ...estafetas.map((e) => ({
+            text: e.nome || e.email || e.id,
+            onPress: () => {
+              Alert.alert(
+                'Confirmar atribuição',
+                'Atribuir esta entrega a ' + (e.nome || e.email || 'este estafeta') + '?',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  {
+                    text: 'Atribuir',
+                    onPress: () => void (async () => {
+                      setAAtribuir(true);
+                      try {
+                        await atribuirEstafeta(entrega.id, e.id);
+                        definirAvisoEstafeta(avisoAcao(online, 'Estafeta atribuído com sucesso.'));
+                        await recarregarEstafeta(userId, online === true).catch(() => undefined);
+                      } catch (err) {
+                        setErro(err instanceof Error ? err.message : String(err));
+                      } finally {
+                        setAAtribuir(false);
+                      }
+                    })(),
+                  },
+                ],
+              );
+            },
+          })),
+          { text: 'Cancelar', style: 'cancel' },
+        ],
+      );
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAAtribuir(false);
+    }
+  };
 
   const reagendar = () => {
     Alert.alert('Reagendar tentativa', 'Esta entrega voltará a “Atribuída” para uma nova tentativa.', [
@@ -120,6 +175,10 @@ export default function DetalheEntrega() {
           <Caixa key={`${a.novo}-${i}`} tipo="erro">{`Recusado pelo servidor (${nomeEstadoEntrega(a.novo)}): ${mensagemErroEstafeta(a.erro)}`}</Caixa>
         ),
       )}
+
+      {podeGerirAtribuicao && efetivo === 'CREATED' ? (
+        <Botao titulo="Atribuir estafeta" variante="secundario" onPress={() => void escolherEstafeta()} aCarregar={aAtribuir} />
+      ) : null}
 
       {passo ? (
         <>
