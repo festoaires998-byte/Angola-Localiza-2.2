@@ -152,7 +152,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
 
     if (action === "set_urgent") {
-      const { delivery_id, is_urgent } = body;
+      const { delivery_id, is_urgent, sync_operation_id } = body;
       if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
       const { data: delivery } = await supabase.from("deliveries").select("created_by").eq("id", delivery_id).maybeSingle();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
