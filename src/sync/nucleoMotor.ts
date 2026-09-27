@@ -403,7 +403,8 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
       const prontas: OperacaoFila[] = [];
       for (const op of lote) {
         let aviso: string | null = null;
-        if (op.operation_type === 'delivery_proof' && provaEstaAssinada(op.payload)) {
+        const precisaRegistarDispositivo = op.operation_type === 'field_submit' || (op.operation_type === 'delivery_proof' && provaEstaAssinada(op.payload));
+        if (precisaRegistarDispositivo) {
           if (!chaves) {
             try {
               chaves = await deps.chaveAssinatura.estado(userId);
@@ -419,7 +420,24 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
             continue;
           }
           const { deviceId, local, noServidor }: EstadoChaves = chaves;
-          // O servidor verifica com a chave de (utilizador, device_id da prova).
+          // Para field_submit, o servidor exige que este device_id esteja registado.
+          // Para delivery_proof, continua a verificar a assinatura como antes.
+          if (op.operation_type === 'field_submit') {
+            registo = registo ?? (await deps.chaveAssinatura.garantirRegistada(sessao));
+            if (registo.tipo === 'sessao') {
+              sessaoRecusada(sessao);
+              return { ...resumo, motivo: 'precisa_entrar' };
+            }
+            if (registo.tipo !== 'ok') {
+              if (registo.tipo === 'espera') esperaPelaChaveAntiga = true;
+              resumo.adiadas++;
+              resumo.aguardamChave++;
+              mensagemAviso = mensagemAviso ?? MENSAGENS.chave;
+              continue;
+            }
+            chaves = { ...chaves, noServidor: { ...noServidor, [deviceId]: local ?? noServidor[deviceId] } };
+          } else {
+            // O servidor verifica com a chave de (utilizador, device_id da prova).
           const idDaProva = dispositivoDaProva(op.payload);
           const chaveDoServidor = idDaProva ? noServidor[idDaProva] : undefined;
           if (chaveDoServidor && provaAssinadaCom(op.payload, idDaProva!, chaveDoServidor)) {
