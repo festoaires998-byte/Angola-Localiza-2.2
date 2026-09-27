@@ -1,3 +1,4 @@
+import { gerarUuid } from '@/database/ids';
 import type { Entrega } from '@/database/repositories/entregas';
 import type { OperacaoFila, TipoOperacao } from '@/database/repositories/filaSaida';
 import {
@@ -31,7 +32,7 @@ export interface DependenciasEnvios {
     listar(): Promise<Entrega[]>;
   };
   fila: {
-    acrescentar(userId: string, tipo: TipoOperacao, payload: unknown): Promise<{ operation_id: string }>;
+    acrescentar(userId: string, tipo: TipoOperacao, payload: unknown, operationId?: string): Promise<{ operation_id: string }>;
     porEnviar(userId: string, tipo: TipoOperacao): Promise<OperacaoFila[]>;
   };
 }
@@ -89,7 +90,8 @@ export function criarServicoEnvios(deps: DependenciasEnvios) {
   return {
     /** Envia o pedido (com rede) ou põe-no na fila (sem rede). */
     async enviar(userId: string, dados: DadosEnvio, online: boolean): Promise<ResultadoEnvio> {
-      const pedido = montarPedidoEnvio(dados);
+      const operationId = gerarUuid();
+      const pedido = { ...montarPedidoEnvio(dados), sync_operation_id: operationId } as PedidoEnvio & { sync_operation_id: string };
       if (online) {
         try {
           const r = await deps.servidor.criar(pedido);
@@ -99,7 +101,7 @@ export function criarServicoEnvios(deps: DependenciasEnvios) {
           if (!semLigacao(e)) throw e;
         }
       }
-      const op = await deps.fila.acrescentar(userId, 'create_delivery', pedido);
+      const op = await deps.fila.acrescentar(userId, 'create_delivery', pedido, operationId);
       return { tipo: 'na_fila', operationId: op.operation_id };
     },
 
