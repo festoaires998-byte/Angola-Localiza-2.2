@@ -68,3 +68,8 @@ export async function listarDaOrganizacao(): Promise<Envio[]> {
   const r = await chamarFuncao<{ deliveries?: unknown[] }>('deliveries', 'list_org_deliveries');
   return Array.isArray(r?.deliveries) ? r.deliveries.map(lerEnvio) : [];
 }
+
+/** Reabre uma entrega falhada para uma nova tentativa, seguindo a mesma transição usada pelo site. */
+export async function reagendarTentativa(deliveryId: string): Promise<void> {
+  await chamarFuncao('deliveries', 'update_status', { body: { delivery_id: deliveryId, new_status: 'ASSIGNED' } });
+}
