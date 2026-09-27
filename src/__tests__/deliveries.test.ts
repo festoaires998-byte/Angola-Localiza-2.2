@@ -319,12 +319,13 @@ describe('deliveries: mudar de estado', () => {
   test('v19: se o estado mudou entretanto (outro pedido ao mesmo tempo), não grava e responde 409', async () => {
     const s = cenario({ status: 'IN_TRANSIT' });
     // Simula a corrida: entre a leitura e a escrita, outro pedido já mudou o estado.
-    const from = s.cliente.from;
-    let leituras = 0;
-    s.cliente.from = (t: string) => {
-      const b = from(t);
-      if (t === 'deliveries' && ++leituras === 2) entrega(s).status = 'CANCELLED';
-      return b;
+    const rpc = s.cliente.rpc;
+    s.cliente.rpc = (nome: string, args: any) => {
+      if (nome === 'aplicar_transicao_entrega_com_prova') {
+        entrega(s).status = 'CANCELLED';
+        return Promise.resolve({ data: null, error: { message: 'DELIVERY_STATE_CHANGED' } });
+      }
+      return rpc(nome, args);
     };
     const r = await pedir(handler, 'update_status', { delivery_id: ENTREGA, new_status: 'OUT_FOR_DELIVERY' }, 'estafeta');
     expect(r.status).toBe(409);
