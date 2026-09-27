@@ -337,14 +337,18 @@ Deno.serve(async (req: Request) => {
     if (action === "assign_driver") {
       const { delivery_id, driver_id } = body;
       if (!delivery_id || !driver_id) return new Response(JSON.stringify({ error: "delivery_id e driver_id sao obrigatorios" }), { status: 400, headers: cors });
-      const { data: delivery } = await supabase.from("deliveries").select("created_by, status").eq("id", delivery_id).single();
+      const { data: delivery } = await supabase.from("deliveries").select("created_by, status, organization_id").eq("id", delivery_id).single();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
       const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
       if (delivery.created_by !== callerId && !isAdminRes) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       if (delivery.status !== "CREATED") return new Response(JSON.stringify({ error: "so e possivel atribuir estafeta no estado CREATED" }), { status: 400, headers: cors });
       if (driver_id === delivery.created_by) return new Response(JSON.stringify({ error: "quem cria a entrega nao pode ser o estafeta dela" }), { status: 422, headers: cors });
-      const { data: papeis } = await supabase.from("organization_members").select("role").eq("user_id", driver_id);
-      if (!(papeis ?? []).some((m) => m.role === "estafeta")) return new Response(JSON.stringify({ error: "essa pessoa nao e estafeta" }), { status: 422, headers: cors });
+      const { data: papeis } = await supabase.from("organization_members").select("organization_id, role").eq("user_id", driver_id);
+      const memberships = papeis ?? [];
+      if (!memberships.some((m) => m.role === "estafeta")) return new Response(JSON.stringify({ error: "essa pessoa nao e estafeta" }), { status: 422, headers: cors });
+      if (delivery.organization_id && !memberships.some((m) => m.role === "estafeta" && m.organization_id === delivery.organization_id)) {
+        return new Response(JSON.stringify({ error: "ESTAFETA_FORA_DA_ORGANIZACAO" }), { status: 403, headers: cors });
+      }
       const { data: mudou, error } = await supabase.from("deliveries").update({ assigned_driver: driver_id, status: "ASSIGNED", updated_at: new Date().toISOString() }).eq("id", delivery_id).eq("status", "CREATED").select("id");
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
       if (!mudou?.length) return new Response(JSON.stringify({ error: "a entrega mudou de estado entretanto - atualiza e tenta de novo" }), { status: 409, headers: cors });
