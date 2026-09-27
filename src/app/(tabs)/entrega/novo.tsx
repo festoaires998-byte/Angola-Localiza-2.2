@@ -171,10 +171,19 @@ export default function NovoEnvio() {
       ]} valor={modoOrigem} aoEscolher={(v) => {
         const modo = v as 'gps' | 'guardado';
         setModoOrigem(modo);
-        if (modo === 'gps') return;
+        if (modo === 'gps') {
+          setOrigemGuardadaId(null);
+          mudar({ origem: undefined });
+          return;
+        }
         const primeiro = origensGuardadas[0]?.valor;
         const item = primeiro ? (moradas.itens ?? []).find((i) => i.morada?.id === primeiro) : undefined;
-        if (!item?.morada || !Number.isFinite(item.morada.latitude) || !Number.isFinite(item.morada.longitude)) return;
+        if (!item?.morada || !Number.isFinite(item.morada.latitude) || !Number.isFinite(item.morada.longitude)) {
+          setOrigemGuardadaId(null);
+          mudar({ origem: undefined });
+          return;
+        }
+        setOrigemGuardadaId(primeiro ?? null);
         mudar({ origem: { latitude: item.morada.latitude, longitude: item.morada.longitude, codigoPostal: item.morada.codigo_postal, plusCode: item.morada.plus_code } });
       }} />
       {modoOrigem === 'guardado' ? (
