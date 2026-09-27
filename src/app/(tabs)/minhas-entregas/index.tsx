@@ -77,8 +77,9 @@ export default function Entregas() {
   }
   if ((eEstafeta && estado.entregas === null) || (visaoOrganizacao && orgCarregando)) return <EcraCarregamento texto="A abrir as entregas…" />;
 
-  const porFazer = estado.entregas.filter((e) => !entregaTerminada(estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes))));
-  const feitas = estado.entregas.filter((e) => !porFazer.includes(e));
+  const entregasEstafeta = estado.entregas ?? [];
+  const porFazer = entregasEstafeta.filter((e) => !entregaTerminada(estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes))));
+  const feitas = entregasEstafeta.filter((e) => !porFazer.includes(e));
   const termo = pesquisa.trim().toLocaleLowerCase();
   const correspondeFiltro = (e: Envio) => {
     const estadoAtual = estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes));
@@ -93,7 +94,7 @@ export default function Entregas() {
     ? [...porFazer.filter((e) => correspondeFiltro(e) && correspondePesquisa(e)).sort((a, b) => Number(b.urgente) - Number(a.urgente)), ...feitas.filter((e) => correspondeFiltro(e) && correspondePesquisa(e))]
     : baseLista;
   const hoje = new Date().toISOString().slice(0, 10);
-  const hojeEntregas = estado.entregas.filter((e) => e.atualizadoEm?.slice(0, 10) === hoje);
+  const hojeEntregas = entregasEstafeta.filter((e) => e.atualizadoEm?.slice(0, 10) === hoje);
   const concluidasHoje = hojeEntregas.filter((e) => estadoEfetivo(e.estado, acoesDaEntrega(e, estado.acoes)) === 'DELIVERED').length;
   const sucesso = hojeEntregas.length ? Math.round((concluidasHoje / hojeEntregas.length) * 100) : 0;
 
