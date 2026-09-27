@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { listarDaOrganizacao } from '@/api/entregas';
+import { atualizarTrackingEntrega, listarDaOrganizacao } from '@/api/entregas';
 import { servicoEstafeta } from '@/services/entregas/estafetaApp';
 import { lojaEstafeta, useEstafeta, type EstadoEstafeta } from '@/state/estafeta';
 import { eventosSync } from '@/sync/eventos';
 
 import { useRealtimeEntregas } from './useRealtimeEntregas';
+import { usePosicao } from './usePosicao';
 
 /** Lê as entregas atribuídas e as ações na fila e guarda-as na loja partilhada. */
 export async function recarregarEstafeta(userId: string, online: boolean): Promise<void> {
@@ -28,6 +29,22 @@ export async function recarregarEntregasOrganizacao(): Promise<void> {
  */
 export function useEntregasEstafeta(userId: string | null, online: boolean | null): EstadoEstafeta {
   const estado = useEstafeta();
+  const posicao = usePosicao();
+  const ultimaEnviada = useRef(new Map<string, number>());
+  useEffect(() => {
+    if (!userId || online !== true || posicao.estado !== 'ok') return;
+    const ativos = estado.entregas.filter((e) => e.estafeta === userId && ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(e.estado));
+    const agora = Date.now();
+    for (const entrega of ativos) {
+      const ultima = ultimaEnviada.current.get(entrega.id) ?? 0;
+      if (agora - ultima < 10000) continue;
+      ultimaEnviada.current.set(entrega.id, agora);
+      void atualizarTrackingEntrega(entrega.id, posicao.posicao).catch(() => {
+        ultimaEnviada.current.delete(entrega.id);
+      });
+    }
+  }, [userId, online, posicao, estado.entregas]);
+
   useRealtimeEntregas(userId, 'estafeta', online === true, () => {
     if (userId) return recarregarEstafeta(userId, online === true);
   });
