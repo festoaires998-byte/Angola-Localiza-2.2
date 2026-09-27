@@ -344,7 +344,18 @@ Deno.serve(async (req: Request) => {
       const { data: delivery } = await supabase.from("deliveries").select("created_by, status, organization_id").eq("id", delivery_id).single();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
       const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
-      if (delivery.created_by !== callerId && !isAdminRes) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
+      let isOrgOperator = false;
+      if (!isAdminRes && delivery.organization_id) {
+        const { data: operatorMembership } = await supabase
+          .from("organization_members")
+          .select("user_id")
+          .eq("user_id", callerId)
+          .eq("organization_id", delivery.organization_id)
+          .eq("role", "operador_postal")
+          .maybeSingle();
+        isOrgOperator = !!operatorMembership;
+      }
+      if (delivery.created_by !== callerId && !isAdminRes && !isOrgOperator) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       if (delivery.status !== "CREATED") return new Response(JSON.stringify({ error: "so e possivel atribuir estafeta no estado CREATED" }), { status: 400, headers: cors });
       if (driver_id === delivery.created_by) return new Response(JSON.stringify({ error: "quem cria a entrega nao pode ser o estafeta dela" }), { status: 422, headers: cors });
       const { data: papeis } = await supabase.from("organization_members").select("organization_id, role").eq("user_id", driver_id);
