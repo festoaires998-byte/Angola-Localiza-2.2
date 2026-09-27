@@ -11,6 +11,12 @@ const targetBucket = "delivery-proofs";
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
+  const auth = req.headers.get("authorization") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!serviceKey || auth !== `Bearer ${serviceKey}`) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const { data: proofs, error } = await supabase
     .from("delivery_proofs")
     .select("id,created_by,photo_url,signature_url")
