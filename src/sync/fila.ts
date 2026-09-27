@@ -58,9 +58,10 @@ export async function acrescentarOperacao(
   userId: string,
   tipo: TipoOperacao,
   payload: unknown,
+  operationId?: string,
 ): Promise<OperacaoFila> {
   const { fila } = await obterRepositoriosSync();
-  const op = await fila.adicionar(userId, tipo, payload);
+  const op = await fila.adicionar(userId, tipo, payload, operationId);
   eventosSync.emitir('operacaoAcrescentada');
   return op;
 }
