@@ -397,8 +397,8 @@ Deno.serve(async (req: Request) => {
       const isOperatorClaimingUnassigned = !!operatorMembership && !delivery.organization_id;
       if (delivery.organization_id) {
         if (delivery.created_by !== callerId && !isAdminRes && !isOrgOperator) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
-      } else if (!isAdminRes && !isOperatorClaimingUnassigned) {
-        return new Response(JSON.stringify({ error: "entrega sem organizacao so pode ser assumida por Operador Postal ou Super Admin" }), { status: 403, headers: cors });
+      } else if (!isAdminRes && !isOperatorClaimingUnassigned && delivery.created_by !== callerId) {
+        return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       }
       if (delivery.status !== "CREATED") return new Response(JSON.stringify({ error: "so e possivel atribuir estafeta no estado CREATED" }), { status: 400, headers: cors });
       if (driver_id === delivery.created_by) return new Response(JSON.stringify({ error: "quem cria a entrega nao pode ser o estafeta dela" }), { status: 422, headers: cors });
@@ -406,8 +406,7 @@ Deno.serve(async (req: Request) => {
       const memberships = papeis ?? [];
       if (!memberships.some((m) => m.role === "estafeta")) return new Response(JSON.stringify({ error: "essa pessoa nao e estafeta" }), { status: 422, headers: cors });
       const targetOrganizationId = delivery.organization_id ?? operatorMembership?.organization_id ?? null;
-      if (!targetOrganizationId) return new Response(JSON.stringify({ error: "organizacao operacional obrigatoria para atribuir esta entrega" }), { status: 403, headers: cors });
-      if (!memberships.some((m) => m.role === "estafeta" && m.organization_id === targetOrganizationId)) {
+      if (targetOrganizationId && !memberships.some((m) => m.role === "estafeta" && m.organization_id === targetOrganizationId)) {
         return new Response(JSON.stringify({ error: "ESTAFETA_FORA_DA_ORGANIZACAO" }), { status: 403, headers: cors });
       }
       const updatePayload = {
