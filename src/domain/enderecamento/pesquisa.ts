@@ -125,6 +125,10 @@ export function interpretarEntrada(texto: string, referencia?: Coordenada): Entr
   const coordenadas = lerCoordenadas(t);
   if (coordenadas) return { tipo: 'ponto', ...coordenadas, origem: 'coordenadas' };
 
+  const codigo = t.replace(/\s/g, '').toUpperCase();
+  if (codigo.includes('+') && isValid(codigo) && isShort(codigo) && !referencia) {
+    return { tipo: 'invalida', motivo: 'Este Plus Code é curto. Ativa a localização ou fornece um código Plus Code completo.' };
+  }
   const plus = lerPlusCode(t, referencia);
   if (plus) return { tipo: 'ponto', ...plus, origem: 'plus_code' };
 
