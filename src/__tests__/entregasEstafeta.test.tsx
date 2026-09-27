@@ -98,7 +98,7 @@ const rotas = {
   'minhas-entregas/prova': (require('@/app/(tabs)/minhas-entregas/prova') as Ecra).default,
   'minhas-entregas/falha': (require('@/app/(tabs)/minhas-entregas/falha') as Ecra).default,
 };
-jest.mock('@/api/entregas', () => ({ reagendarTentativa: (id: string) => mockReagendar(id) }));
+jest.mock('@/api/entregas', () => ({ listarDaOrganizacao: async () => mockEntregas, reagendarTentativa: (id: string) => mockReagendar(id) }));
 const { lojaEstafeta, ESTADO_INICIAL_ESTAFETA } = require('@/state/estafeta') as typeof import('@/state/estafeta');
 
 let r: ReturnType<typeof renderRouter>;
