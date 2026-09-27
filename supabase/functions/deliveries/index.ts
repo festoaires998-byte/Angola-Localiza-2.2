@@ -173,20 +173,18 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list_org_deliveries") {
       const isSuper = await isSuperAdmin(supabase, callerId);
-      let driverIds: string[] = [];
+      let organizationId: string | null = null;
 
       if (!isSuper) {
         const { data: myMembership } = await supabase.from("organization_members").select("organization_id").eq("user_id", callerId).eq("role", "operador_postal").maybeSingle();
         if (!myMembership) return new Response(JSON.stringify({ error: "apenas Operador Postal ou Super Admin" }), { status: 403, headers: cors });
-        const { data: estafetasDaOrg } = await supabase.from("organization_members").select("user_id").eq("organization_id", myMembership.organization_id).eq("role", "estafeta");
-        driverIds = (estafetasDaOrg ?? []).map((m) => m.user_id);
-        if (driverIds.length === 0) return new Response(JSON.stringify({ deliveries: [] }), { headers: cors });
+        organizationId = myMembership.organization_id;
       }
 
       let query = supabase.from("deliveries")
         .select("id, tracking_code, status, recipient_name, recipient_phone, instructions, updated_at, assigned_driver, origin_postal_code, origin_plus_code, is_urgent, addresses(reference,plus_code,postal_code,house_number,streets(name),quadras(code))")
         .order("updated_at", { ascending: false }).limit(100);
-      if (!isSuper) query = query.in("assigned_driver", driverIds);
+      if (!isSuper) query = query.eq("organization_id", organizationId);
       const { data, error } = await query;
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
 
