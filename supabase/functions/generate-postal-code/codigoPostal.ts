@@ -69,17 +69,17 @@ export function checksum(input: string): string {
 }
 
 /** Código sem o "-N" (o que se obtém quando a célula ainda não tem moradas). */
-export function codigoBase(latitude: number, longitude: number, provinceName?: string | null) {
+export function codigoBase(latitude: number, longitude: number, provinceName?: string | null, countryCode = 'AO') {
   const provinceCode = siglaProvincia(provinceName);
   const gridCode = encodeGrid(latitude, longitude, GRID_LENGTH);
   const base = `${provinceCode}-${gridCode}`;
   const chk = checksum(base);
-  return { provinceCode, gridCode, base, checksum: chk, postal_code: `AO-${base}-${chk}` };
+  return { provinceCode, gridCode, base, checksum: chk, postal_code: `${countryCode.trim().toUpperCase()}-${base}-${chk}` };
 }
 
 /** Aceita códigos do esquema 1 e 2 (a sigla só tem de ter 3 letras). */
 export function validatePostalCode(code: string): { valid: boolean; reason?: string } {
-  const match = code.match(/^AO-([A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3})-([2-9A-HJ-NP-Z]{8})(?:-(\d+))?-(\d{2})$/);
+  const match = code.match(/^([A-Z]{2})-([A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3})-([2-9A-HJ-NP-Z]{8})(?:-(\d+))?-(\d{2})$/);
   if (!match) return { valid: false, reason: "formato invalido" };
   const [, provinceCode, gridCode, , chk] = match;
   const expected = checksum(`${provinceCode}-${gridCode}`);
