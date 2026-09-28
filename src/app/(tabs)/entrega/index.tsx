@@ -14,7 +14,7 @@ import { definirAvisoEnvios, lojaEnvios, useEnvios } from '@/state/envios';
 import { eventosSync } from '@/sync/eventos';
 import { useRealtimeEntregas } from '@/hooks/useRealtimeEntregas';
 
-function ItemEnvio({ envio, aoAbrir }: { envio: Envio; aoAbrir(): void }) {
+function ItemEnvio({ envio, aoAbrir, aoUrgente }: { envio: Envio; aoAbrir(): void; aoUrgente(): void }) {
   const estado = nomeEstadoEntrega(envio.estado);
   return (
     <Pressable
@@ -32,6 +32,11 @@ function ItemEnvio({ envio, aoAbrir }: { envio: Envio; aoAbrir(): void }) {
         <Text style={estilos.etiqueta}>{estado}</Text>
         {envio.urgente ? <Text style={[estilos.etiqueta, estilos.etiquetaUrgente]}>Urgente</Text> : null}
       </View>
+      {!['DELIVERED', 'CANCELLED'].includes(envio.estado) ? (
+        <Pressable onPress={aoUrgente} accessibilityRole="button" style={estilos.acaoUrgencia}>
+          <Text style={estilos.acaoUrgenciaTexto}>{envio.urgente ? 'Desmarcar urgente' : '🔴 Marcar urgente'}</Text>
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
@@ -161,6 +166,9 @@ export default function Envios() {
               definirAvisoEnvios(null);
               router.push({ pathname: '/entrega/[id]', params: { id: item.id } });
             }}
+            aoUrgente={() => {
+              void servicoEnvios.definirUrgencia(item.id, !item.urgente).then(() => void ler()).catch((e) => definirAvisoEnvios({ tipo: 'erro', texto: e instanceof Error ? e.message : 'Não foi possível alterar a urgência.' }));
+            }}
           />
         )}
       />
@@ -204,4 +212,6 @@ const estilos = StyleSheet.create({
     color: CORES.primaria,
   },
   etiquetaUrgente: { backgroundColor: CORES.avisoFundo, color: CORES.avisoTexto },
+  acaoUrgencia: { alignSelf: 'flex-start', marginTop: 6, borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, paddingHorizontal: 10, paddingVertical: 7 },
+  acaoUrgenciaTexto: { fontSize: 12, fontWeight: '700', color: CORES.textoSuave },
 });
