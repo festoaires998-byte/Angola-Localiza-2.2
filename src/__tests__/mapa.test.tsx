@@ -16,7 +16,7 @@ jest.mock('@maplibre/maplibre-react-native', () => jest.requireActual<typeof imp
 
 const mockDescarregar = jest.fn(async () => undefined);
 let mockMapa: EstadoMapaOffline = { estado: 'sem_mapa', remoto: null };
-const gestorMapaMock = {
+const mockGestorMapa = {
   estado: { obter: () => mockMapa, subscrever: () => () => undefined },
   iniciar: async () => undefined,
   verificarRemoto: async () => null,
@@ -25,7 +25,7 @@ const gestorMapaMock = {
   origemRecursos: () => ({ fontes: 'file:///f', sprite: 'file:///s' }),
 };
 jest.mock('@/services/mapas/mapaOffline', () => ({
-  criarMapaDoPais: () => gestorMapaMock,
+  criarMapaDoPais: () => mockGestorMapa,
 }));
 
 let mockOnline: boolean | null = false;
