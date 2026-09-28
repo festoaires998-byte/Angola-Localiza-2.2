@@ -5,28 +5,77 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 4 1 * *'
-  pull_request:
-    paths: [.github/workflows/mapas-paises.yml, src/services/mapas/regioes.ts]
 concurrency:
   group: mapas-paises-${{ github.ref }}
   cancel-in-progress: true
 env:
-  MAXZOOM: '13'
-  LIMITE_MB: '45'
-  SUPABASE_URL: https://qntbknegicaghnbnghyw.supabase.co
-  S3_ENDPOINT: https://qntbknegicaghnbnghyw.storage.supabase.co/storage/v1/s3
-  S3_REGIAO: eu-west-1
-  BUCKET: mapas
-  ASSETS: https://raw.githubusercontent.com/protomaps/basemaps-assets/main
+  MAXZOOM: '11'
+  LIMITE_GB: '2'
 jobs:
   mapa:
+    name: Gerar mapa ${{ matrix.pais }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {pais: AO, regiao: angola, bbox: '11.6,-18.1,24.1,-4.3'}
-          - {pais: MZ, regiao: mocambique, bbox: '30.0,-26.9,41.0,-10.4'}
-          - {pais: CV, regiao: cabo-verde, bbox: '-25.4,14.7,-22.6,17.3'}
-          - {pais: GW, regiao: guine-bissau, bbox: '-16.7,10.9,-13.6,12.7'}
-          - {pais: ST, regiao: sao-tome-principe, bbox: '6.4,-0.1,7.5,1.8'}
+          - pais: AO
+            regiao: angola
+            bbox: '11.6,-18.1,24.1,-4.3'
+          - pais: MZ
+            regiao: mocambique
+            bbox: '30.0,-26.9,41.0,-10.4'
+          - pais: CV
+            regiao: cabo-verde
+            bbox: '-25.4,14.7,-22.6,17.3'
+          - pais: GW
+            regiao: guine-bissau
+            bbox: '-16.7,10.9,-13.6,12.7'
+          - pais: ST
+            regiao: sao-tome-principe
+            bbox: '6.4,-0.1,7.5,1.8'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Instalar pmtiles
+        run: go install github.com/protomaps/go-pmtiles@latest
+      - name: Encontrar build Protomaps
+        id: build
+        run: |
+          set -euo pipefail
+          chave=$(curl -sSf https://build-metadata.protomaps.dev/builds.json | jq -r 'map(.key) | map(select(test("^[0-9]{8}\\.pmtiles$"))) | sort | last // empty')
+          test -n "$chave"
+          echo "chave=$chave" >> "$GITHUB_OUTPUT"
+          echo "versao=${chave%.pmtiles}" >> "$GITHUB_OUTPUT"
+      - name: Gerar PMTiles nacional
+        env:
+          CHAVE: ${{ steps.build.outputs.chave }}
+          VERSAO: ${{ steps.build.outputs.versao }}
+          REGIAO: ${{ matrix.regiao }}
+          PAIS: ${{ matrix.pais }}
+          BBOX: ${{ matrix.bbox }}
+        run: |
+          set -euo pipefail
+          mkdir -p "saida/$REGIAO"
+          ficheiro="$REGIAO-$VERSAO.pmtiles"
+          go-pmtiles extract "https://build.protomaps.com/$CHAVE" "saida/$REGIAO/$ficheiro" --bbox="$BBOX" --maxzoom="$MAXZOOM"
+          test -s "saida/$REGIAO/$ficheiro"
+          bytes=$(stat -c%s "saida/$REGIAO/$ficheiro")
+          max=$((2*1024*1024*1024))
+          test "$bytes" -le "$max" || { echo "::error::$PAIS excedeu 2 GB"; exit 1; }
+          md5=$(md5sum "saida/$REGIAO/$ficheiro" | cut -d' ' -f1)
+          jq -n --arg pais "$PAIS" --arg regiao "$REGIAO" --arg versao "$VERSAO" --arg ficheiro "$ficheiro" --argjson bytes "$bytes" --arg md5 "$md5" --arg gerado "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson maxzoom "$MAXZOOM" '{pais:$pais,regiao:$regiao,versao:$versao,ficheiro:$ficheiro,bytes:$bytes,md5:$md5,maxzoom:$maxzoom,gerado_em:$gerado}' > "saida/$REGIAO/manifesto.json"
+          echo "### $PAIS — $REGIAO" >> "$GITHUB_STEP_SUMMARY"
+          echo "- versão: $VERSAO" >> "$GITHUB_STEP_SUMMARY"
+          echo "- tamanho: $bytes bytes" >> "$GITHUB_STEP_SUMMARY"
+          echo "- MD5: $md5" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapa-${{ matrix.pais }}-${{ steps.build.outputs.versao }}
+          path: saida/${{ matrix.regiao }}/
+          retention-days: 30
