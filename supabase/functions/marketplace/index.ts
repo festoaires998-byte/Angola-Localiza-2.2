@@ -79,6 +79,34 @@ Deno.serve(async req=>{
    if(r.client_id!==uid){const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("owner_id",uid).eq("country_code",country).maybeSingle();if(!p)return out({error:"ACESSO_NEGADO"},403);}
    const {data:props,error:pe}=await db.from("marketplace_service_proposals").select("*").eq("request_id",r.id).order("created_at",{ascending:false});if(pe)throw pe;return out({request:r,proposals:props||[]});
   }
+  if(action==="create-payment-intent"){
+   if(typeof body.booking_id!=="string"||typeof body.idempotency_key!=="string"||body.idempotency_key.trim().length<8)return out({error:"IDEMPOTENCY_KEY_INVALIDA"},422);
+   const method=typeof body.payment_method==="string"?body.payment_method:"PROXYPAY_MULTICAIXA";
+   if(country!=="AO"||!["PROXYPAY_MULTICAIXA","PROXYPAY_GPO"].includes(method))return out({error:"PROVEDOR_DE_PAGAMENTO_AINDA_NAO_CONFIGURADO",country_code:country,payment_method:method},503);
+   const {data:existing}=await db.from("marketplace_payment_intents").select("*").eq("client_id",uid).eq("idempotency_key",body.idempotency_key.trim()).maybeSingle();if(existing)return out({payment:existing,idempotent_replay:true});
+   const {data:b,error:be}=await db.from("marketplace_service_bookings").select("id,client_id,provider_id,country_code,status,proposal_id").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
+   if(b.client_id!==uid)return out({error:"APENAS_CLIENTE_PODE_PAGAR"},403);
+   if(!["SCHEDULED","IN_PROGRESS"].includes(b.status))return out({error:"ESTADO_NAO_PERMITE_PAGAMENTO"},409);
+   const {data:proposal,error:pe}=await db.from("marketplace_service_proposals").select("amount,currency,status").eq("id",b.proposal_id).maybeSingle();if(pe)throw pe;
+   const amount=Number(proposal?.amount);if(!Number.isFinite(amount)||amount<=0)return out({error:"VALOR_DO_SERVICO_INVALIDO"},422);
+   const feeRate=0.10;const fee=Math.round(amount*feeRate*100)/100;
+   const {data:payment,error}=await db.from("marketplace_payment_intents").insert({booking_id:b.id,client_id:uid,provider_id:b.provider_id,country_code:country,currency:"AOA",amount_total:amount,platform_fee:fee,fee_rate:feeRate,payment_method:method,status:"PENDING",idempotency_key:body.idempotency_key.trim()}).select().single();if(error){if(error.code==="23505"){const {data:again}=await db.from("marketplace_payment_intents").select("*").eq("client_id",uid).eq("idempotency_key",body.idempotency_key.trim()).single();return out({payment:again,idempotent_replay:true});}throw error;}
+   await notificar(db,uid,"Pagamento preparado","O pagamento do serviço está pronto para ser iniciado.","marketplace_payment",payment.id);
+   return out({payment});
+  }
+  if(action==="create-proxypay-reference"){
+   if(typeof body.payment_intent_id!=="string")return out({error:"PAGAMENTO_INVALIDO"},422);
+   const {data:pmt,error:pe}=await db.from("marketplace_payment_intents").select("*").eq("id",body.payment_intent_id).eq("client_id",uid).eq("country_code","AO").maybeSingle();if(pe)throw pe;if(!pmt)return out({error:"PAGAMENTO_NAO_ENCONTRADO"},404);
+   if(pmt.status==="PAID")return out({payment:pmt});
+   if(!["PENDING","REQUIRES_ACTION"].includes(pmt.status))return out({error:"PAGAMENTO_NAO_DISPONIVEL"},409);
+   const token=Deno.env.get("PROXYPAY_API_TOKEN");if(!token)return out({error:"PROXYPAY_NAO_CONFIGURADO"},503);
+   const base="https://api.proxypay.co.ao";const headers={"Authorization":"Token "+token,"Accept":"application/vnd.proxypay.v2+json","Content-Type":"application/json"};
+   const rid=await fetch(base+"/reference_ids",{method:"POST",headers});if(!rid.ok)return out({error:"PROXYPAY_REFERENCE_ID_FAILED"},502);const ridText=(await rid.text()).trim();if(!/^\\d+$/.test(ridText))return out({error:"PROXYPAY_REFERENCE_ID_INVALID"},502);
+   const end=new Date(Date.now()+48*60*60*1000).toISOString();
+   const rr=await fetch(base+"/references/"+ridText,{method:"PUT",headers,body:JSON.stringify({amount:Number(pmt.amount_total).toFixed(2),end_datetime:end,custom_fields:{payment_intent_id:pmt.id,booking_id:pmt.booking_id,country_code:"AO"}})});if(!rr.ok)return out({error:"PROXYPAY_REFERENCE_FAILED",details:await rr.text()},502);
+   const {data:updated,error:ue}=await db.from("marketplace_payment_intents").update({status:"REQUIRES_ACTION",external_provider:"PROXYPAY",external_reference_id:ridText,external_reference_number:ridText,updated_at:new Date().toISOString()}).eq("id",pmt.id).eq("status",pmt.status).select().single();if(ue)throw ue;if(!updated)return out({error:"PAGAMENTO_ALTERADO_CONCORRENTEMENTE"},409);
+   return out({payment:updated,instructions:{provider:"PROXYPAY",reference:ridText,entity_id:"consultar_no_proxyPay",amount:Number(pmt.amount_total),currency:"AOA"}});
+  }
   if(action==="request-delivery"){
    if(typeof body.booking_id!=="string"||typeof body.address_id!=="string"||typeof body.recipient_name!=="string"||typeof body.recipient_phone!=="string")return out({error:"DADOS_ENTREGA_INCOMPLETOS"},422);
    const {data:b,error:be}=await db.from("marketplace_service_bookings").select("id,client_id,provider_id,country_code,status").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
