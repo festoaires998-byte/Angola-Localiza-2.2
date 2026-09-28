@@ -11,6 +11,8 @@ import { dataHora, megas, textoPrecisao } from '@/components/nomes';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
+import { abrirBaseDados } from '@/database/client';
+import { criarRepositorioHistoricoLocaliza, type ItemHistoricoLocaliza } from '@/database/repositories/historicoLocaliza';
 import { textoCoordenadas, type ResultadoPesquisa } from '@/domain/enderecamento/pesquisa';
 import { encode } from '@/domain/enderecamento/plusCode';
 import { situacaoLimite } from '@/domain/enderecamento/registoMorada';
@@ -296,6 +298,7 @@ export default function Mapa() {
   const [podeRolar, setPodeRolar] = useState(true);
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
   const [guardadoEm, setGuardadoEm] = useState<string | null>(null);
+  const [historico, setHistorico] = useState<ItemHistoricoLocaliza[]>([]);
   const rolagem = useRef<ScrollView>(null);
   const yMapa = useRef(0);
 
@@ -325,6 +328,7 @@ export default function Mapa() {
 
   const mostrarNoMapa = useCallback((p: PontoEncontrado) => {
     setAlvo(p);
+    void abrirBaseDados().then((db) => criarRepositorioHistoricoLocaliza(db).registar({ id: p.titulo + ':' + p.latitude.toFixed(5) + ':' + p.longitude.toFixed(5), titulo: p.titulo, latitude: p.latitude, longitude: p.longitude, subtitulo: null })).then(() => abrirBaseDados()).then((db) => criarRepositorioHistoricoLocaliza(db).listar()).then(setHistorico).catch(() => undefined);
     rolagem.current?.scrollTo({ y: Math.max(0, yMapa.current - 16), animated: true });
   }, [rolagem, yMapa]);
   const pesquisa = usePesquisaMapa({
@@ -467,6 +471,15 @@ export default function Mapa() {
           </Caixa>
         ) : null}
         {pesquisa.estado.resultados ? <ResultadosPesquisa resultados={pesquisa.estado.resultados} aoEscolher={mostrarNoMapa} localidade={rotulos.localidade} /> : null}
+        {historico.length > 0 ? (
+          <Cartao>
+            <View style={estilos.linhaAlvo}>
+              <Subtitulo>Histórico recente</Subtitulo>
+              <Botao titulo="Limpar" variante="secundario" onPress={() => { void abrirBaseDados().then((db) => criarRepositorioHistoricoLocaliza(db).limpar()).then(() => setHistorico([])); }} />
+            </View>
+            {historico.map((item) => <Pressable key={item.id} onPress={() => mostrarNoMapa({ latitude: item.latitude, longitude: item.longitude, titulo: item.titulo })} style={estilos.resultado} accessibilityRole="button"><Text style={estilos.resultadoTitulo}>{item.titulo}</Text><Text style={estilos.nota}>{item.latitude.toFixed(5) + ', ' + item.longitude.toFixed(5)}</Text></Pressable>)}
+          </Cartao>
+        ) : null}
 
         {/* 2. Obter localização + Ler QR */}
         <View style={estilos.linhaBotoes}>
