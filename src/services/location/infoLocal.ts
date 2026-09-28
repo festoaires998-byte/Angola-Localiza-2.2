@@ -3,6 +3,7 @@ import type { CodigoConfirmado } from '@/database/repositories/codigosConfirmado
 import type { ZonaGeocodificada } from '@/database/repositories/zonasGeocodificadas';
 import { codigoPostalProvisorio } from '@/domain/enderecamento/codigoPostal';
 import { encode } from '@/domain/enderecamento/plusCode';
+import { paisAtual } from '@/state/pais';
 
 /**
  * O que o ecrã do Mapa mostra sobre o sítio onde a pessoa está.
@@ -37,10 +38,10 @@ export interface InfoLocal {
 }
 
 /** Formato que o servidor aceita (é o regex do action=validate). */
-const CODIGO_VALIDO = /^AO-[A-Z]{3}-[2-9A-HJ-NP-Z]{8}(?:-\d+)?-\d{2}$/;
+const CODIGO_VALIDO = /^[A-Z]{2}-[A-Z]{3}-[2-9A-HJ-NP-Z]{8}(?:-\d+)?-\d{2}$/;
 
-export function codigoPostalValido(codigo: string): boolean {
-  return CODIGO_VALIDO.test(codigo);
+export function codigoPostalValido(codigo: string, countryCode = paisAtual()): boolean {
+  return codigo.toUpperCase().startsWith(`${countryCode.toUpperCase()}-`) && CODIGO_VALIDO.test(codigo);
 }
 
 /** Zona de cache: Plus Code de 8 dígitos (~275 m). */
@@ -92,13 +93,13 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
     local: InfoLocal['local'],
     preciso: boolean,
   ): Promise<InfoLocal> {
-    const provisorio = codigoPostalProvisorio(latitude, longitude, local.provincia);
+    const provisorio = codigoPostalProvisorio(latitude, longitude, local.provincia, paisAtual());
     const chave = `${provisorio.sigla}-${provisorio.grelha}`;
     const confirmado = preciso ? await deps.codigos.obter(chave).catch(() => null) : null;
     let codigoPostal: InfoLocal['codigoPostal'];
-    if (confirmado && codigoPostalValido(confirmado.codigo)) {
+    if (confirmado && codigoPostalValido(confirmado.codigo, paisAtual())) {
       codigoPostal = { codigo: confirmado.codigo, estado: 'confirmado', confirmadoEm: confirmado.confirmado_em };
-    } else if (codigoPostalValido(provisorio.codigo)) {
+    } else if (codigoPostalValido(provisorio.codigo, paisAtual())) {
       codigoPostal = { codigo: provisorio.codigo, estado: 'provisorio', confirmadoEm: null };
     } else {
       codigoPostal = { codigo: null, estado: 'indisponivel', confirmadoEm: null };
