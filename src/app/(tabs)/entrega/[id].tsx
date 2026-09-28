@@ -64,7 +64,7 @@ export default function DetalheEnvio() {
   };
   const alternarUrgencia = () => trabalhar('urgente', async () => {
     await servicoEnvios.definirUrgencia(envio.id, !envio.urgente);
-    guardarEnvio({ ...envio, urgente: !envio.urgente }, pin, null);
+    guardarEnvio({ ...envio, urgente: !envio.urgente }, pin);
   });
 
   const mostrarPin = () => trabalhar('pin', async () => guardarPin(envio.id, await servicoEnvios.lerPin(envio.id)));
