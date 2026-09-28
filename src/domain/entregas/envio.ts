@@ -61,6 +61,19 @@ export interface DadosEnvio {
   telefone: string;
   instrucoes: string;
   urgente: boolean;
+  /** Dados opcionais da carga; pedidos antigos continuam válidos. */
+  carga?: {
+    tipo: string;
+    descricao: string;
+    quantidade: number | null;
+    pesoKg: number | null;
+    comprimentoCm: number | null;
+    larguraCm: number | null;
+    alturaCm: number | null;
+    valorDeclarado: number | null;
+    tipoVeiculo: string | null;
+    capacidadeVeiculoKg: number | null;
+  };
 }
 
 /** Corpo de deliveries?action=create (também é o payload de "create_delivery" na fila). */
@@ -74,6 +87,16 @@ export interface PedidoEnvio {
   recipient_phone: string | null;
   instructions: string | null;
   is_urgent: boolean;
+  cargo_type?: string | null;
+  cargo_description?: string | null;
+  cargo_quantity?: number | null;
+  cargo_weight_kg?: number | null;
+  cargo_length_cm?: number | null;
+  cargo_width_cm?: number | null;
+  cargo_height_cm?: number | null;
+  cargo_declared_value?: number | null;
+  requested_vehicle_type?: string | null;
+  requested_vehicle_capacity_kg?: number | null;
   /** Identificador idempotente da operação de criação (online/offline). */
   sync_operation_id?: string;
 }
@@ -118,6 +141,18 @@ export function montarPedidoEnvio(d: DadosEnvio): PedidoEnvio {
     recipient_phone: normalizarTelefone(d.telefone, d.countryCode) ?? null,
     instructions: instrucoes === '' ? null : instrucoes,
     is_urgent: d.urgente,
+    ...(d.carga ? {
+      cargo_type: limparTexto(d.carga.tipo) || null,
+      cargo_description: limparTexto(d.carga.descricao) || null,
+      cargo_quantity: d.carga.quantidade ?? null,
+      cargo_weight_kg: d.carga.pesoKg ?? null,
+      cargo_length_cm: d.carga.comprimentoCm ?? null,
+      cargo_width_cm: d.carga.larguraCm ?? null,
+      cargo_height_cm: d.carga.alturaCm ?? null,
+      cargo_declared_value: d.carga.valorDeclarado ?? null,
+      requested_vehicle_type: d.carga.tipoVeiculo ?? null,
+      requested_vehicle_capacity_kg: d.carga.capacidadeVeiculoKg ?? null,
+    } : {}),
   };
   if (d.origem) {
     pedido.origin_latitude = d.origem.latitude;
@@ -196,6 +231,19 @@ export function lerEnvio(linha: unknown): Envio {
     telefone: texto(l.recipient_phone),
     instrucoes: texto(l.instructions),
     urgente: l.is_urgent === true,
+    ...(l.cargo_type || l.cargo_description || l.cargo_quantity != null || l.cargo_weight_kg != null
+      ? { carga: {
+          tipo: texto(l.cargo_type) ?? 'Outro',
+          descricao: texto(l.cargo_description) ?? '',
+          quantidade: typeof l.cargo_quantity === 'number' ? l.cargo_quantity : null,
+          pesoKg: numero(l.cargo_weight_kg),
+          comprimentoCm: numero(l.cargo_length_cm),
+          larguraCm: numero(l.cargo_width_cm),
+          alturaCm: numero(l.cargo_height_cm),
+          valorDeclarado: numero(l.cargo_declared_value),
+          tipoVeiculo: texto(l.requested_vehicle_type),
+          capacidadeVeiculoKg: numero(l.requested_vehicle_capacity_kg),
+        } } : {}),
     criadoPor: texto(l.created_by),
     estafeta: texto(l.assigned_driver),
     atualizadoEm: texto(l.updated_at) ?? texto(l.created_at),

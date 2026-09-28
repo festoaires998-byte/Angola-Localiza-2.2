@@ -164,7 +164,7 @@ describe('Enviar: novo envio', () => {
     await preencherEEnviar();
     expect(mockEnviar).toHaveBeenCalledWith(
       EU,
-      { moradaId: MORADA, destinatario: 'Maria João', telefone: '', instrucoes: '', urgente: false, countryCode: 'AO' },
+      expect.objectContaining({ moradaId: MORADA, destinatario: 'Maria João', telefone: '', instrucoes: '', urgente: false, countryCode: 'AO' }),
       true,
     );
     expect(r.getPathname()).toBe('/entrega/n1');
