@@ -102,6 +102,41 @@ export async function atribuirEstafeta(deliveryId: string, driverId: string): Pr
 }
 
 /** Permite ao próprio estafeta aceitar um pedido disponível. O servidor garante exclusividade atómica. */
+export type PedidoDisponivelEstafeta = Envio & {
+  compatibilidade: 'COMPATIVEL' | 'ALTERNATIVA';
+  motivos: string[];
+};
+
+export async function listarPedidosDisponiveisEstafeta(): Promise<{
+  pedidos: PedidoDisponivelEstafeta[];
+  estafeta: { online: boolean; status: string; vehicle_type: string | null; vehicle_capacity_kg: number | null };
+}> {
+  const r = await chamarFuncao<{
+    deliveries?: unknown[];
+    driver?: { online?: boolean; status?: string; vehicle_type?: string | null; vehicle_capacity_kg?: number | null };
+  }>('deliveries', 'list_available_for_driver');
+  const d = r?.driver ?? {};
+  return {
+    pedidos: Array.isArray(r?.deliveries)
+      ? r.deliveries.map((x) => {
+          const e = lerEnvio(x);
+          const raw = x as Record<string, unknown>;
+          return {
+            ...e,
+            compatibilidade: raw.compatibilidade === 'COMPATIVEL' ? 'COMPATIVEL' : 'ALTERNATIVA',
+            motivos: Array.isArray(raw.motivos) ? raw.motivos.filter((m): m is string => typeof m === 'string') : [],
+          };
+        })
+      : [],
+    estafeta: {
+      online: d.online === true,
+      status: d.status ?? 'PENDING',
+      vehicle_type: d.vehicle_type ?? null,
+      vehicle_capacity_kg: typeof d.vehicle_capacity_kg === 'number' ? d.vehicle_capacity_kg : null,
+    },
+  };
+}
+
 export async function aceitarEntrega(deliveryId: string): Promise<void> {
   await chamarFuncao('deliveries', 'accept_delivery', { body: { delivery_id: deliveryId } });
 }
