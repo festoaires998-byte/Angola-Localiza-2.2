@@ -608,7 +608,7 @@ describe('Mapa / Satélite', () => {
     fireEvent(screen.getByLabelText('Pesquisar'), 'submitEditing');
     expect(await screen.findByText('Local pesquisado')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
-    expect(await screen.findByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
+    expect(await screen.findByLabelText('Ponto encontrado: Local pesquisado')).toBeTruthy();
     expect(screen.getAllByText('Local pesquisado').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();
   });
