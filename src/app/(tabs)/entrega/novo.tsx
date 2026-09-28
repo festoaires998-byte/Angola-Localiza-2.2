@@ -25,14 +25,16 @@ const PRIORIDADES: readonly Opcao<'normal' | 'urgente'>[] = [
 /** Novo pedido de entrega: morada de destino (das guardadas), quem recebe e instruções. */
 export default function NovoEnvio() {
   const online = useOnline();
-  const userId = useSessao().utilizador?.id ?? null;
+  const sessao = useSessao();
+  const userId = sessao.utilizador?.id ?? null;
+  const countryCode = sessao.utilizador?.countryCode ?? 'AO';
   const router = useRouter();
   const moradas = useMoradas(online);
   const estadoPosicao = usePosicao();
   const posicao = estadoPosicao.estado === 'ok' ? estadoPosicao.posicao : estadoPosicao.estado === 'a_procurar' ? estadoPosicao.ultima : null;
   const infoOrigem = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao === null || posicao?.precisao === undefined ? false : posicao.precisao <= 10);
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
-  const [dados, setDados] = useState<DadosEnvio>({ moradaId: null, destinatario: '', telefone: '', instrucoes: '', urgente: false });
+  const [dados, setDados] = useState<DadosEnvio>({ moradaId: null, destinatario: '', telefone: '', instrucoes: '', urgente: false, countryCode });
   const [modoOrigem, setModoOrigem] = useState<'gps' | 'guardado'>('gps');
   const [origemGuardadaId, setOrigemGuardadaId] = useState<string | null>(null);
 
