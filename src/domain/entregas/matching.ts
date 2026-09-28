@@ -6,7 +6,7 @@ export interface OfertaMatching { id:string; driverId:string; tipoVeiculo:string
 export interface ResultadoMatching { ofertaId:string; driverId:string; pontuacao:number; distanciaKm:number|null; motivos:string[]; }
 
 const aliases:Record<string,TipoVeiculo>={motociclo:'moto',mota:'moto',van:'carrinha',furgoneta:'furgão',camiao:'camião',truck:'camião'};
-function tipo(v:string|null):TipoVeiculo|null { if(!v)return null; const x=v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return (TIPOS_VEICULO as readonly string[]).includes(x)?x as TipoVeiculo:aliases[v.toLowerCase()]??null; }
+function tipo(v:string|null):TipoVeiculo|null { if(!v)return null; const x=v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); return (TIPOS_VEICULO as readonly string[]).map(s=>s.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')).includes(x)?(x==='furgão'?'furgão':x) as TipoVeiculo:aliases[v.toLowerCase()]??null; }
 function distancia(a:{latitude:number;longitude:number}|null,b:{latitude:number|null;longitude:number|null}):number|null { if(!a||b.latitude==null||b.longitude==null)return null; const R=6371,rad=Math.PI/180; const p1=a.latitude*rad,p2=b.latitude*rad,dp=(b.latitude-a.latitude)*rad,dl=(b.longitude-a.longitude)*rad; const q=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2; return 2*R*Math.asin(Math.sqrt(q)); }
 
 export function calcularMatching(p:PedidoMatching, ofertas:OfertaMatching[]):ResultadoMatching[]{
