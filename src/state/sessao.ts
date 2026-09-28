@@ -20,9 +20,20 @@ export const sessao = criarSessao({
       // A documentação do supabase-js pede para não chamar o cliente dentro
       // deste callback (pode bloquear): o trabalho corre logo a seguir.
       setTimeout(() => {
-        const codigo = typeof s?.user?.user_metadata?.country_code === 'string' ? s.user.user_metadata.country_code : 'AO';
-        void selecionarPais(codigo).catch(() => undefined);
-        ouvinte(s?.user ? { id: s.user.id, email: s.user.email ?? null, nome: nomeDaConta(s.user.user_metadata), countryCode: codigo } : null);
+        void (async () => {
+          if (!s?.user) {
+            ouvinte(null);
+            return;
+          }
+          const metadataPais = typeof s.user.user_metadata?.country_code === 'string' ? s.user.user_metadata.country_code : null;
+          let codigo = metadataPais;
+          if (!codigo) {
+            const { data } = await supabase.from('user_country_profiles').select('country_code').eq('user_id', s.user.id).maybeSingle();
+            codigo = typeof data?.country_code === 'string' ? data.country_code : 'AO';
+          }
+          void selecionarPais(codigo).catch(() => undefined);
+          ouvinte({ id: s.user.id, email: s.user.email ?? null, nome: nomeDaConta(s.user.user_metadata), countryCode: codigo });
+        })();
       }, 0);
     });
     return () => data.subscription.unsubscribe();
