@@ -23,7 +23,7 @@ create table if not exists public.marketplace_payout_accounts (
  destination_type text not null check(destination_type in ('BANK_ACCOUNT','MOBILE_MONEY')),
  holder_name text not null,
  masked_destination text not null,
- provider_token text,
+ provider_account_ref text,
  kyc_status text not null default 'PENDING' check(kyc_status in ('PENDING','VERIFIED','REJECTED')),
  status text not null default 'PENDING' check(status in ('PENDING','ACTIVE','DISABLED')),
  is_default boolean not null default false,
