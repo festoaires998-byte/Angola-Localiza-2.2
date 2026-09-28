@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { limparCacheConfigPais, obterConfigPais, paisTemNivel, nivelLocalidade, nivelPorChave, CONFIG_AO_OFFLINE_TESTE } from './pais';
+import { limparCacheConfigPais, obterConfigPais, paisTemNivel, nivelLocalidade, nivelPorChave, nomeDaMarcaPorCodigo, CONFIG_AO_OFFLINE_TESTE } from './pais';
 
 type CountryConfigRow = { country_code: string; name: string; native_name: string; locale: string; currency_code: string; currency_symbol: string; phone_country_code: string; enabled: boolean; };
 type LevelRow = { level_key: string; label: string; plural_label: string; level_order: number; is_locality: boolean };
@@ -45,6 +45,17 @@ describe('configuração de país', () => {
       phone_country_code: '+244',
     });
     expect(mockMaybeSingle).toHaveBeenCalledTimes(1);
+  });
+
+  it('gera a identidade Localiza para todos os países suportados', () => {
+    const casos: Array<[string, string]> = [
+      ['AO', 'Angola Localiza'],
+      ['MZ', 'Moçambique Localiza'],
+      ['CV', 'Cabo Verde Localiza'],
+      ['GW', 'Guiné-Bissau Localiza'],
+      ['ST', 'São Tomé e Príncipe Localiza'],
+    ];
+    for (const [codigo, esperado] of casos) expect(nomeDaMarcaPorCodigo(codigo)).toBe(esperado);
   });
 
   it('mantém Angola funcional quando o servidor está indisponível', async () => {
