@@ -560,8 +560,8 @@ export default function Mapa() {
             <Botao titulo="Tirar do mapa" variante="secundario" onPress={() => setAlvo(null)} />
           </View>
         ) : null}
-        {posicao && !dentroDaRegiao(regiaoAtual, posicao.latitude, posicao.longitude) ? (
-          <Caixa tipo="info">{`Estás fora da zona do mapa (${regiaoAtual.nome}). O teu código continua a funcionar.`}</Caixa>
+        {posicao && !dentroDaRegiao(regiao, posicao.latitude, posicao.longitude) ? (
+          <Caixa tipo="info">{`Estás fora da zona do mapa (${regiao.nome}). O teu código continua a funcionar.`}</Caixa>
         ) : null}
 
         {/* 7. Privacidade, Categoria e Guardar como favorito */}
