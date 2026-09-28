@@ -113,6 +113,12 @@ export default function Definicoes() {
       ) : null}
 
       <Cartao>
+        <Subtitulo>Notificações</Subtitulo>
+        <Texto suave>Vê avisos de entregas, validações, Campo e outros eventos da tua conta.</Texto>
+        <Botao titulo="Abrir notificações" variante="secundario" onPress={() => router.push('/notificacoes')} />
+      </Cartao>
+
+      <Cartao>
         <Subtitulo>Sincronização</Subtitulo>
         <Linha nome="Trabalhos por enviar" valor={String(fila.pendentes)} />
         <Linha nome="Fotos por enviar" valor={String(fila.fotosPendentes)} />
