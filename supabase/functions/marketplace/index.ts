@@ -229,6 +229,45 @@ Deno.serve(async req=>{
    return out({proposal:accepted,booking});
   }
 
+  if(action==="listing-order-create"){
+   if(typeof body.listing_id!=="string")return out({error:"ANUNCIO_INVALIDO"},422);
+   const qty=Number(body.quantity??1);
+   if(!Number.isInteger(qty)||qty<1||qty>1000)return out({error:"QUANTIDADE_INVALIDA"},422);
+   const {data:l}=await db.from("marketplace_listings").select("id,seller_id,country_code,currency,price,status").eq("id",body.listing_id).eq("country_code",country).eq("status","ACTIVE").maybeSingle();
+   if(!l)return out({error:"ANUNCIO_NAO_ENCONTRADO"},404);
+   if(l.seller_id===uid)return out({error:"NAO_PODES_COMPRAR_O_TEU_PROPRIO_ANUNCIO"},422);
+   if(l.price===null)return out({error:"ANUNCIO_SEM_PRECO_CONTACTAR_VENDEDOR"},409);
+   const message=typeof body.message==="string"?body.message.trim().slice(0,1000):null;
+   const {data:o,error}=await db.from("marketplace_listing_orders").insert({listing_id:l.id,buyer_id:uid,seller_id:l.seller_id,country_code:country,currency:l.currency,quantity:qty,unit_price:l.price,message,status:"REQUESTED"}).select().single();
+   if(error)throw error;
+   await notificar(db,l.seller_id,"Novo pedido no Marketplace","Recebeste um novo pedido para o anúncio "+l.id+".","marketplace_listing_order",o.id);
+   return out({order:o});
+  }
+  if(action==="listing-orders"){
+   const {data,error}=await db.from("marketplace_listing_orders").select("*").or("buyer_id.eq."+uid+",seller_id.eq."+uid).eq("country_code",country).order("created_at",{ascending:false}).limit(100);
+   if(error)throw error; return out({orders:data||[]});
+  }
+  if(action==="listing-order-status"){
+   if(typeof body.order_id!=="string"||typeof body.status!=="string")return out({error:"PEDIDO_INVALIDO"},422);
+   const {data:o}=await db.from("marketplace_listing_orders").select("*").eq("id",body.order_id).eq("country_code",country).maybeSingle();
+   if(!o)return out({error:"PEDIDO_NAO_ENCONTRADO"},404);
+   let allowed=false;
+   if(body.status==="ACCEPTED"&&o.seller_id===uid&&o.status==="REQUESTED")allowed=true;
+   if(body.status==="REJECTED"&&o.seller_id===uid&&o.status==="REQUESTED")allowed=true;
+   if(body.status==="CANCELLED"&&o.buyer_id===uid&&o.status==="REQUESTED")allowed=true;
+   if(body.status==="COMPLETED"&&(o.buyer_id===uid||o.seller_id===uid)&&o.status==="ACCEPTED")allowed=true;
+   if(!allowed)return out({error:"TRANSICAO_NAO_PERMITIDA"},409);
+   const patch:any={status:body.status,updated_at:new Date().toISOString()};
+   if(body.status==="ACCEPTED")patch.accepted_at=new Date().toISOString();
+   if(body.status==="COMPLETED")patch.completed_at=new Date().toISOString();
+   if(body.status==="CANCELLED")patch.cancelled_at=new Date().toISOString();
+   const {data:updated,error}=await db.from("marketplace_listing_orders").update(patch).eq("id",o.id).eq("status",o.status).select().single();
+   if(error)throw error;if(!updated)return out({error:"ALTERACAO_CONCORRENTE"},409);
+   const recipient=uid===o.seller_id?o.buyer_id:o.seller_id;
+   await notificar(db,recipient,"Estado do pedido atualizado","O pedido do Marketplace passou para "+body.status+".","marketplace_listing_order",o.id);
+   return out({order:updated});
+  }
+
   if(action==="categories"){
    const {data,error}=await db.from("marketplace_categories").select("id,slug,name,icon").eq("active",true).order("sort_order");
    if(error)throw error; return out({categories:data||[]});
