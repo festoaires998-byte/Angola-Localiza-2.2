@@ -1,5 +1,7 @@
 name: Mapas offline nacionais PALOP
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: '0 4 1 * *'
@@ -28,50 +30,3 @@ jobs:
           - {pais: CV, regiao: cabo-verde, bbox: '-25.4,14.7,-22.6,17.3'}
           - {pais: GW, regiao: guine-bissau, bbox: '-16.7,10.9,-13.6,12.7'}
           - {pais: ST, regiao: sao-tome-principe, bbox: '6.4,-0.1,7.5,1.8'}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
-        with: {go-version: stable, cache: false}
-      - name: Instalar pmtiles
-        run: go install github.com/protomaps/go-pmtiles@latest
-      - name: Encontrar build
-        id: build
-        run: |
-          chave=$(curl -sSf https://build-metadata.protomaps.dev/builds.json | jq -r 'map(.key) | map(select(test("^[0-9]{8}\\.pmtiles$"))) | sort | last // empty')
-          test -n "$chave" || { echo '::error::Build Protomaps não encontrado'; exit 1; }
-          echo "chave=$chave" >> "$GITHUB_OUTPUT"
-          echo "versao=${chave%.pmtiles}" >> "$GITHUB_OUTPUT"
-      - name: Extrair mapa nacional
-        env:
-          CHAVE: ${{ steps.build.outputs.chave }}
-          REGIAO: ${{ matrix.regiao }}
-          BBOX: ${{ matrix.bbox }}
-        run: |
-          set -euo pipefail
-          mkdir -p "saida/$REGIAO"
-          f="$REGIAO-${{ steps.build.outputs.versao }}.pmtiles"
-          go-pmtiles extract "https://build.protomaps.com/$CHAVE" "saida/$REGIAO/$f" --bbox="$BBOX" --maxzoom="$MAXZOOM"
-          bytes=$(stat -c%s "saida/$REGIAO/$f")
-          test "$bytes" -le "$((LIMITE_MB*1048576))" || { echo "::error::$REGIAO excedeu ${LIMITE_MB}MB"; exit 1; }
-          md5=$(md5sum "saida/$REGIAO/$f" | cut -d' ' -f1)
-          jq -n --arg pais "${{ matrix.pais }}" --arg regiao "$REGIAO" --arg versao "${{ steps.build.outputs.versao }}" --arg ficheiro "$f" --argjson bytes "$bytes" --arg md5 "$md5" --arg gerado "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{pais:$pais,regiao:$regiao,versao:$versao,ficheiro:$ficheiro,bytes:$bytes,md5:$md5,gerado_em:$gerado}' > "saida/$REGIAO/manifesto.json"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mapa-${{ matrix.pais }}
-          path: saida/
-      - name: Publicar no Supabase Storage
-        if: github.event_name != 'pull_request'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ env.S3_REGIAO }}
-          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-        run: |
-          set -euo pipefail
-          aws configure set default.s3.addressing_style path
-          aws --endpoint-url "$S3_ENDPOINT" s3api head-bucket --bucket "$BUCKET"
-          f=$(find saida/${{ matrix.regiao }} -name '*.pmtiles' -print -quit)
-          mf=saida/${{ matrix.regiao }}/manifesto.json
-          aws --endpoint-url "$S3_ENDPOINT" s3 cp "$f" "s3://$BUCKET/${{ matrix.regiao }}/$(basename "$f")" --content-type application/octet-stream --cache-control 'max-age=31536000, immutable' --only-show-errors
-          aws --endpoint-url "$S3_ENDPOINT" s3 cp "$mf" "s3://$BUCKET/${{ matrix.regiao }}/manifesto.json" --content-type application/json --cache-control 'no-cache' --only-show-errors
