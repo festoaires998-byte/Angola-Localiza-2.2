@@ -44,7 +44,7 @@ function origemDoMapa(mapa: ReturnType<typeof criarMapaDoPais>, estado: EstadoMa
       ? estado.remoto
       : null;
   if (online && remoto) {
-    return { tiles: mapaHuambo.urlTiles(remoto, false), ...mapaHuambo.origemRecursos(false) };
+    return { tiles: mapa.urlTiles(remoto, false), ...mapa.origemRecursos(false) };
   }
   return null;
 }
@@ -284,10 +284,12 @@ export default function Mapa() {
   const posicao = captura ?? aoVivo ?? (gps.estado === 'a_procurar' ? gps.ultima : null);
   // Com mais de ±10 m o código fica provisório (não se pede a confirmação ao servidor).
   const info = useInfoLocal(captura, online, !captura?.fraca);
-  const origem = codigoPais === 'AO' ? origemDoMapa(estadoMapa, online) : null;
+  const gestorMapa = criarMapaDoPais(codigoPais);
+  const nomePais = codigoPais === 'AO' ? 'Angola' : codigoPais === 'MZ' ? 'Moçambique' : codigoPais === 'CV' ? 'Cabo Verde' : codigoPais === 'GW' ? 'Guiné-Bissau' : 'São Tomé e Príncipe';
+  const origem = origemDoMapa(gestorMapa, estadoMapa, online);
   const chaveOrigem = origem ? `${origem.tiles}|${origem.fontes}` : null;
   // O estilo só muda quando a origem muda (evita recarregar o mapa a cada posição).
-  const estiloBase = useMemo(() => codigoPais === 'AO' ? (origem ? criarEstilo(origem) : null) : (online ? criarEstiloOnlineOSM() : null), [codigoPais, online, chaveOrigem]);
+  const estiloBase = useMemo(() => origem ? criarEstilo(origem) : (online ? criarEstiloOnlineOSM() : null), [codigoPais, online, chaveOrigem]);
   const estiloSatelite = useMemo(() => criarEstiloSatelite(), []);
   const semPermissao = gps.estado === 'sem_permissao' || gps.estado === 'gps_desligado';
 
@@ -568,7 +570,7 @@ export default function Mapa() {
         </Cartao>
 
         {/* 8. Mapa para usar sem rede */}
-        <CartaoMapaOffline estado={estadoMapa} online={online} />
+        <CartaoMapaOffline mapa={gestorMapa} estado={estadoMapa} online={online} nomePais={nomePais} />
       </ScrollView>
 
       <Modal visible={ecraInteiro} animationType="slide" onRequestClose={() => setEcraInteiro(false)}>
