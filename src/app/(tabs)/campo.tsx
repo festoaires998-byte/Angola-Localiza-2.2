@@ -15,7 +15,7 @@ export default function Campo() {
   const sessao = useSessao();
   const gps = usePosicao();
   const posicao = gps.estado === 'ok' ? gps.posicao : gps.estado === 'a_procurar' ? gps.ultima : null;
-  const info = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao != null && posicao.precisao <= 10);
+  const info = useInfoLocal(posicao ? { latitude: posicaoAtual.latitude, longitude: posicaoAtual.longitude } : null, online === true, posicao?.precisao != null && posicaoAtual.precisao <= 10);
   const [contexto, setContexto] = useState<ContextoCampo | null>(null);
   const [foto, setFoto] = useState<string | null>(null);
   const [referencia, setReferencia] = useState('');
@@ -31,7 +31,7 @@ export default function Campo() {
   useEffect(() => {
     if (!online || !posicao) return;
     let ativo = true;
-    listarContextoCampo(posicao.latitude, posicao.longitude).then((v) => ativo && setContexto(v)).catch(() => ativo && setContexto(null));
+    listarContextoCampo(posicaoAtual.latitude, posicaoAtual.longitude).then((v) => ativo && setContexto(v)).catch(() => ativo && setContexto(null));
     return () => { ativo = false; };
   }, [online, posicao?.latitude, posicao?.longitude]);
 
@@ -43,6 +43,7 @@ export default function Campo() {
   if (!sessao.utilizador) return <Ecra><Caixa tipo="aviso">Inicia sessão para utilizar o modo Campo.</Caixa></Ecra>;
   if (online === false) return <Ecra><Caixa tipo="aviso">O modo Campo precisa de ligação à internet para sincronizar a recolha com segurança.</Caixa></Ecra>;
   if (!posicao) return <Ecra><Caixa tipo="aviso">Autoriza a localização e fica ao ar livre alguns segundos para obter uma posição.</Caixa></Ecra>;
+  const posicaoAtual = posicao;
 
   async function tirarFoto() {
     setErro(null);
@@ -57,13 +58,13 @@ export default function Campo() {
     if (!foto) { setErro('A fotografia da fachada é obrigatória.'); return; }
     if (!referencia.trim()) { setErro('Indica uma referência que permita identificar o local.'); return; }
     if (!ruaNova && !rua.trim() && !contexto?.streets.length) { setErro('Indica a rua ou marca “Rua sem nome”.'); return; }
-    if (posicao.precisao != null && posicao.precisao > 15 && precisaoJustificacao.trim().length < 10) { setErro('A precisão do GPS é baixa. Explica em pelo menos 10 caracteres porque continuas.'); return; }
+    if (posicaoAtual.precisao != null && posicaoAtual.precisao > 15 && precisaoJustificacao.trim().length < 10) { setErro('A precisão do GPS é baixa. Explica em pelo menos 10 caracteres porque continuas.'); return; }
     setAEnviar(true);
     try {
-      const marca = await fotoComMarcaDeAgua(foto, ['📍 ' + posicao.latitude.toFixed(6) + ', ' + posicao.longitude.toFixed(6) + ' · ' + nomePais, '📮 ' + (info?.codigoPostal?.codigo ?? info?.plusCode ?? 'sem código')], 'campo');
+      const marca = await fotoComMarcaDeAgua(foto, ['📍 ' + posicaoAtual.latitude.toFixed(6) + ', ' + posicaoAtual.longitude.toFixed(6) + ' · ' + nomePais, '📮 ' + (info?.codigoPostal?.codigo ?? info?.plusCode ?? 'sem código')], 'campo');
       const nome = utilizador!.id + '/' + marca.sha256 + '.jpg';
       const url = await enviarFotoCampo(marca.uri, nome);
-      const r = await enviarCampo({ latitude: posicao.latitude, longitude: posicao.longitude, accuracyMeters: posicao.precisao, accuracyJustification: precisaoJustificacao || undefined, photoFacadeUrl: url, streetName: ruaNova ? undefined : (rua.trim() || contexto?.streets[0]?.name), newUnnamedStreet: ruaNova, neighborhoodName: bairro.trim() || undefined, reference: referencia, placeKind: codigo || undefined, watermarkMatch: true });
+      const r = await enviarCampo({ latitude: posicaoAtual.latitude, longitude: posicaoAtual.longitude, accuracyMeters: posicaoAtual.precisao, accuracyJustification: precisaoJustificacao || undefined, photoFacadeUrl: url, streetName: ruaNova ? undefined : (rua.trim() || contexto?.streets[0]?.name), newUnnamedStreet: ruaNova, neighborhoodName: bairro.trim() || undefined, reference: referencia, placeKind: codigo || undefined, watermarkMatch: true });
       setResultado('Registo ' + r.field_record_id + ' recebido: ' + r.status + '.');
       setFoto(null); setReferencia(''); setPrecisaoJustificacao('');
     } catch (e) { setErro(e instanceof Error ? e.message : String(e)); } finally { setAEnviar(false); }
@@ -72,15 +73,15 @@ export default function Campo() {
   return (
     <Ecra>
       <Subtitulo>Campo · {nomePais}</Subtitulo>
-      <Caixa tipo="info">{'Posição: ' + posicao.latitude.toFixed(6) + ', ' + posicao.longitude.toFixed(6) + '\nPrecisão: ' + (posicao.precisao == null ? 'desconhecida' : Math.round(posicao.precisao) + ' m') + '\nCódigo: ' + (referenciaAutomatica || 'a calcular…')}</Caixa>
+      <Caixa tipo="info">{'Posição: ' + posicaoAtual.latitude.toFixed(6) + ', ' + posicaoAtual.longitude.toFixed(6) + '\nPrecisão: ' + (posicaoAtual.precisao == null ? 'desconhecida' : Math.round(posicaoAtual.precisao) + ' m') + '\nCódigo: ' + (referenciaAutomatica || 'a calcular…')}</Caixa>
       <Botao titulo={foto ? 'Refazer fotografia da fachada' : 'Fotografar fachada'} onPress={() => void tirarFoto()} />
       {foto ? <Caixa tipo="info">Fotografia preparada e será marcada com posição, país e código.</Caixa> : null}
       <CampoInput rotulo="Referência do local" value={referencia} onChangeText={setReferencia} placeholder="Ex.: casa azul ao lado da escola" multiline />
-      <Campo rotulo="Bairro" value={bairro} onChangeText={setBairro} placeholder={contexto?.neighborhoods_nearby?.[0] ?? 'Nome do bairro'} />
+      <CampoInput rotulo="Bairro" value={bairro} onChangeText={setBairro} placeholder={contexto?.neighborhoods_nearby?.[0] ?? 'Nome do bairro'} />
       <Campo rotulo="Rua" value={rua} onChangeText={setRua} placeholder={contexto?.streets?.[0]?.name ?? 'Nome da rua'} />
       {contexto?.streets?.length ? <Caixa tipo="info">{'Ruas próximas: ' + contexto.streets.slice(0, 5).map((s) => s.name).join(', ')}</Caixa> : null}
       <Botao titulo={ruaNova ? 'Usar rua sem nome: SIM' : 'Usar rua sem nome: NÃO'} variante="secundario" onPress={() => setRuaNova((v) => !v)} />
-      {posicao.precisao != null && posicao.precisao > 15 ? <Campo rotulo="Justificação da precisão GPS" value={precisaoJustificacao} onChangeText={setPrecisaoJustificacao} placeholder="Explica porque a recolha continua." multiline /> : null}
+      {posicaoAtual.precisao != null && posicaoAtual.precisao > 15 ? <Campo rotulo="Justificação da precisão GPS" value={precisaoJustificacao} onChangeText={setPrecisaoJustificacao} placeholder="Explica porque a recolha continua." multiline /> : null}
       <CampoCodigo valor={codigo} aoMudar={setCodigo} />
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
       {resultado ? <Caixa tipo="sucesso">{resultado}</Caixa> : null}
