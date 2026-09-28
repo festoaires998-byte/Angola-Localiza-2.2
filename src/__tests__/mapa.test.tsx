@@ -15,6 +15,7 @@ import type { EstadoMapaOffline } from '@/services/mapas/mapaOffline';
 jest.mock('@maplibre/maplibre-react-native', () => jest.requireActual<typeof import('@/testes/mocksMapa')>('@/testes/mocksMapa').maplibre);
 
 const mockDescarregar = jest.fn(async () => undefined);
+const mockMapa: EstadoMapaOffline = { estado: 'sem_mapa', remoto: null };
 jest.mock('@/services/mapas/mapaOffline', () => ({
   criarMapaDoPais: () => ({
     estado: { obter: () => mockMapa, subscrever: () => () => undefined },
@@ -28,6 +29,3 @@ jest.mock('@/services/mapas/mapaOffline', () => ({
 
 let mockOnline: boolean | null = false;
 let mockGps: Record<string, unknown> = { estado: 'a_procurar', ultima: null };
-let mockInfo: InfoLocal | null = null;
-let mockMapa: EstadoMapaOffline = { estado: 'sem_mapa', remoto: null };
-const mockTentarDeNovo = jest.fn();
