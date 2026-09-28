@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Botao, Caixa, Cartao, Campo, Subtitulo, Texto, Titulo } from '@/components/ui';
-import { marketplace, marketplaceServices, type MarketplaceCategory, type MarketplaceListing, type MarketplaceProvider } from '@/services/marketplace/marketplace';
+import { marketplace, marketplaceServices, marketplaceServiceFlow, type MarketplaceCategory, type MarketplaceListing, type MarketplaceProvider } from '@/services/marketplace/marketplace';
 
 type Aba='descobrir'|'favoritos'|'meus'|'publicar';
 type Modo='classificados'|'servicos';
@@ -26,6 +26,7 @@ export default function Marketplace(){
  const [contact,setContact]=useState(''); const [selected,setSelected]=useState<MarketplaceListing|null>(null);
  const [detail,setDetail]=useState<{listing:MarketplaceListing;images:{id:string;storage_path:string;sort_order:number;url:string}[];similar:MarketplaceListing[]}|null>(null);
  const [detailLoading,setDetailLoading]=useState(false);
+ const [serviceRequestOpen,setServiceRequestOpen]=useState(false); const [requestTitle,setRequestTitle]=useState(''); const [requestDescription,setRequestDescription]=useState(''); const [requestBudget,setRequestBudget]=useState(''); const [requestDate,setRequestDate]=useState(''); const [requestBusy,setRequestBusy]=useState(false); const [bookings,setBookings]=useState<Array<Record<string,unknown>>>([]);
 
  const carregar=useCallback(async()=>{
   setLoading(true);setErro(null);
@@ -34,6 +35,15 @@ export default function Marketplace(){
   }catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar o Marketplace.');} finally{setLoading(false);}
  },[q,category]);
  useEffect(()=>{void carregar();},[carregar]);
+ async function criarPedidoServico(){
+  if(!requestTitle.trim()||requestDescription.trim().length<10){setErro('Indica um título e uma descrição com pelo menos 10 caracteres.');return;}
+  setRequestBusy(true);setErro(null);setMensagem(null);
+  try{const budget=requestBudget.trim()===''?null:Number(requestBudget.replace(',','.'));if(budget!==null&&(!Number.isFinite(budget)||budget<0))throw new Error('ORCAMENTO_INVALIDO');
+   await marketplaceServices.request({title:requestTitle.trim(),description:requestDescription.trim(),category:serviceCategory.trim()||'outros',budget_max:budget,preferred_date:requestDate.trim()||null});
+   setMensagem('Pedido de serviço publicado. Os prestadores compatíveis poderão enviar propostas.');setRequestTitle('');setRequestDescription('');setRequestBudget('');setRequestDate('');setServiceRequestOpen(false);
+  }catch(e){setErro(e instanceof Error?e.message:'Não foi possível publicar o pedido.');}finally{setRequestBusy(false);}
+ }
+ async function carregarAgendamentos(){try{const r=await marketplaceServiceFlow.bookings();setBookings(r.bookings);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar os agendamentos.');}}
  async function carregarServicos(){
   setLoading(true);setErro(null);
   try{const r=await marketplaceServices.providers({q:serviceQ||undefined,category:serviceCategory||undefined,provider_type:providerType||undefined});setProviders(r.providers);}
@@ -91,8 +101,22 @@ export default function Marketplace(){
    <Campo rotulo="Categoria" value={serviceCategory} onChangeText={setServiceCategory} placeholder="Categoria do serviço" />
    <View style={s.tabs}><Botao titulo="Todos" onPress={()=>setProviderType('')} /><Botao titulo="Freelancers" onPress={()=>setProviderType('FREELANCER')} /><Botao titulo="Empresas" onPress={()=>setProviderType('BUSINESS')} /></View>
    <Botao titulo="Pesquisar serviços" aCarregar={loading} onPress={()=>void carregarServicos()} />
-   <Botao titulo="Preciso de um serviço" onPress={()=>setMensagem('A criação de pedidos de orçamento será disponibilizada na próxima camada.')} />
+   <Botao titulo="Preciso de um serviço" onPress={()=>setServiceRequestOpen(true)} />
+   {serviceRequestOpen?<Cartao><Subtitulo>Novo pedido de serviço</Subtitulo>
+    <Campo rotulo="Título" value={requestTitle} onChangeText={setRequestTitle} placeholder="Ex.: Preciso de um eletricista" />
+    <Campo rotulo="Descrição" value={requestDescription} onChangeText={setRequestDescription} placeholder="Explica o que precisas, local e detalhes…" multiline />
+    <Campo rotulo="Categoria" value={serviceCategory} onChangeText={setServiceCategory} placeholder="Ex.: eletricidade" />
+    <Campo rotulo="Orçamento máximo (opcional)" value={requestBudget} onChangeText={setRequestBudget} keyboardType="decimal-pad" placeholder={currency||"Moeda local"} />
+    <Campo rotulo="Data pretendida (opcional)" value={requestDate} onChangeText={setRequestDate} placeholder="AAAA-MM-DD" />
+    <Botao titulo="Publicar pedido" aCarregar={requestBusy} onPress={()=>void criarPedidoServico()} /><Botao titulo="Cancelar" onPress={()=>setServiceRequestOpen(false)} />
+   </Cartao>:null}
+   <Botao titulo="Meus agendamentos" onPress={()=>void carregarAgendamentos()} />
   </Cartao>:null}
+  {modo==='servicos'&&bookings.map((b,i)=><Cartao key={String(b.id||i)}>
+   <Subtitulo>Agendamento</Subtitulo><Texto>{String(b.status||'')}</Texto><Texto suave>{b.scheduled_date?String(b.scheduled_date):'Data a combinar'}</Texto>
+   {b.status==='SCHEDULED'?<Botao titulo="Iniciar serviço" onPress={async()=>{await marketplaceServiceFlow.updateBooking(String(b.id),'IN_PROGRESS');await carregarAgendamentos();}} />:null}
+   {b.status==='IN_PROGRESS'?<Botao titulo="Marcar como concluído" onPress={async()=>{await marketplaceServiceFlow.updateBooking(String(b.id),'COMPLETED');await carregarAgendamentos();}} />:null}
+  </Cartao>)}
   {modo==='servicos'?providers.map(p=><Cartao key={p.id}>
    <Subtitulo>{p.display_name}{p.verified?' ✓':''}</Subtitulo>
    <Texto>{p.headline||'Prestador de serviços Localiza'}</Texto>
