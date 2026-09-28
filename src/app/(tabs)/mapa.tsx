@@ -134,7 +134,7 @@ function CartaoMapaPaisOffline({ pais, nome }: { pais: Parameters<typeof criarMa
         <Subtitulo>✅ {nome}</Subtitulo>
         <Texto>Mapa guardado no telemóvel e disponível sem internet.</Texto>
         {estado.novo ? <Texto>{`Nova versão disponível: ${megas(estado.novo.bytes)}.`}</Texto> : null}
-        {online ? <Botao titulo={estado.novo ? 'Atualizar mapa' : 'Mapa descarregado'} variante="secundario" onPress={estado.novo ? descarregar : undefined} /> : null}
+        {online ? <Botao titulo={estado.novo ? 'Atualizar mapa' : 'Mapa descarregado'} variante="secundario" onPress={descarregar} desativado={!estado.novo} /> : null}
       </Cartao>
     );
   }
