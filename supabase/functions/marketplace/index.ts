@@ -141,7 +141,7 @@ Deno.serve(async req=>{
    if(pay?.status==="PAID")return out({error:"REEMBOLSO_OBRIGATORIO",payment_intent_id:pay.id},409);
    const {data:updated,error}=await db.from("marketplace_service_bookings").update({status:"CANCELLED",cancelled_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",b.id).eq("status",b.status).select().single();if(error)throw error;if(!updated)return out({error:"ALTERACAO_CONCORRENTE"},409);
    if(pay?.status&&["PENDING","REQUIRES_ACTION","PROCESSING"].includes(pay.status))await db.from("marketplace_payment_intents").update({status:"CANCELLED",updated_at:new Date().toISOString()}).eq("id",pay.id).in("status",["PENDING","REQUIRES_ACTION","PROCESSING"]);
-   const other=b.client_id===uid?b.provider_id:b.client_id;let otherUser=other;const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",other).maybeSingle();if(pp?.owner_id)otherUser=pp.owner_id;
+   let otherUser=b.client_id;if(b.client_id===uid){const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",b.provider_id).maybeSingle();if(pp?.owner_id)otherUser=pp.owner_id;}
    await notificar(db,otherUser,"Serviço cancelado","O agendamento foi cancelado.","marketplace_booking",b.id);
    return out({booking:updated,payment_status:pay?.status==="PAID"?"REFUND_REQUIRED":pay?.status||null});
   }
