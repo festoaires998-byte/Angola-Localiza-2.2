@@ -153,19 +153,33 @@ export default function Entregas() {
               <Texto suave>{online === false ? '🔴 Offline' : sync.aSincronizar ? '🟠 A sincronizar…' : `🟢 Ligado · ${sync.pendentes} pendentes`}</Texto>
               {sync.pendentes > 0 ? <Pressable accessibilityRole="button" onPress={() => void sync.sincronizarAgora()} style={estilos.acaoSecundaria}><Text style={estilos.acaoTexto}>🔄 Sincronizar agora</Text></Pressable> : null}
             </View>
-            {eEstafeta ? <Pressable onPress={() => router.push({ pathname: '/chat-organizacao', params: { tipo: 'ORG_ESTAFETA' } })} style={estilos.acaoSecundaria}><Text style={estilos.acaoTexto}>💬 Falar com a organização</Text></Pressable> : null}
+            {eEstafeta || visaoOrganizacao ? <Pressable onPress={() => router.push({ pathname: '/chat-organizacao', params: { tipo: 'ORG_ESTAFETA' } })} style={estilos.acaoSecundaria}><Text style={estilos.acaoTexto}>💬 Falar com a organização</Text></Pressable> : null}
             {visaoOrganizacao && cargos.includes('super_admin') ? (
-              <Pressable onPress={() => Alert.alert('Limpar histórico de entregas', 'Esta ação elimina todas as entregas do sistema, incluindo provas e livro-razão. Esta ação é potencialmente irreversível.', [
-                { text: 'Cancelar', style: 'cancel' },
-                { text: 'Continuar', style: 'destructive', onPress: () => Alert.prompt('Confirmação', 'Escreve exatamente ELIMINAR TUDO', [
+              <Pressable onPress={() => Alert.alert(
+                'Limpar histórico de entregas',
+                'ATENÇÃO: isto apaga TODAS as entregas do sistema, incluindo provas e livro-razão. A ação é potencialmente irreversível.',
+                [
                   { text: 'Cancelar', style: 'cancel' },
-                  { text: 'Confirmar', onPress: async (value) => {
-                    if (value !== 'ELIMINAR TUDO') { Alert.alert('Não confirmado', 'Nada foi apagado.'); return; }
-                    try { const deleted = await limparHistoricoEntregas(); Alert.alert('Concluído', `${deleted} entrega(s) eliminada(s).`); await recarregarEntregasOrganizacao(); }
-                    catch (e) { Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível limpar o histórico.'); }
-                  } },
-                ], 'plain-text') },
-              ])} style={estilos.acaoPerigo}><Text style={estilos.acaoPerigoTexto}>🗑️ Limpar histórico de entregas (super admin)</Text></Pressable>
+                  { text: 'Continuar', style: 'destructive', onPress: () => Alert.alert(
+                    'Última confirmação',
+                    'Confirma eliminar todo o histórico de entregas?',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      { text: 'ELIMINAR TUDO', style: 'destructive', onPress: async () => {
+                        try {
+                          const deleted = await limparHistoricoEntregas();
+                          Alert.alert('Concluído', `${deleted} entrega(s) eliminada(s).`);
+                          await recarregarEntregasOrganizacao();
+                        } catch (e) {
+                          Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível limpar o histórico.');
+                        }
+                      } },
+                    ],
+                  ) },
+                ],
+              )} style={estilos.acaoPerigo}>
+                <Text style={estilos.acaoPerigoTexto}>🗑️ Limpar histórico de entregas (super admin)</Text>
+              </Pressable>
             ) : null}
             {eEstafeta && online === true && estado.pedidosDisponiveis.length > 0 ? (
               <View style={estilos.disponiveis}>
