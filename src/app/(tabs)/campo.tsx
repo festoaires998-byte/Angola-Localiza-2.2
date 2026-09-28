@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useMemo, useState } from 'react';
 
-import { Botao, Caixa, Campo, Ecra, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
+import { Botao, Caixa, Campo as CampoInput, Ecra, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
 import { CampoCodigo } from '@/components/CampoCodigo';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
 import { useOnline } from '@/hooks/useOnline';
@@ -14,7 +14,7 @@ export default function Campo() {
   const online = useOnline();
   const sessao = useSessao();
   const gps = usePosicao();
-  const posicao = gps.estado === 'ok' ? gps.posicao : gps.ultima;
+  const posicao = gps.estado === 'ok' ? gps.posicao : gps.estado === 'a_procurar' ? gps.ultima : null;
   const info = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao != null && posicao.precisao <= 10);
   const [contexto, setContexto] = useState<ContextoCampo | null>(null);
   const [foto, setFoto] = useState<string | null>(null);
@@ -35,7 +35,8 @@ export default function Campo() {
     return () => { ativo = false; };
   }, [online, posicao?.latitude, posicao?.longitude]);
 
-  const nomePais = sessao.utilizador?.countryCode ?? 'AO';
+  const utilizador = sessao.utilizador;
+  const nomePais = utilizador?.countryCode ?? 'AO';
   const referenciaAutomatica = useMemo(() => info?.codigoPostal?.codigo ?? info?.plusCode ?? '', [info?.codigoPostal?.codigo, info?.plusCode]);
 
   if (!sessao.carregado || gps.estado === 'a_procurar') return <EcraCarregamento texto="A preparar o Campo…" />;
@@ -60,7 +61,7 @@ export default function Campo() {
     setAEnviar(true);
     try {
       const marca = await fotoComMarcaDeAgua(foto, ['📍 ' + posicao.latitude.toFixed(6) + ', ' + posicao.longitude.toFixed(6) + ' · ' + nomePais, '📮 ' + (info?.codigoPostal?.codigo ?? info?.plusCode ?? 'sem código')], 'campo');
-      const nome = sessao.utilizador.id + '/' + marca.sha256 + '.jpg';
+      const nome = utilizador!.id + '/' + marca.sha256 + '.jpg';
       const url = await enviarFotoCampo(marca.uri, nome);
       const r = await enviarCampo({ latitude: posicao.latitude, longitude: posicao.longitude, accuracyMeters: posicao.precisao, accuracyJustification: precisaoJustificacao || undefined, photoFacadeUrl: url, streetName: ruaNova ? undefined : (rua.trim() || contexto?.streets[0]?.name), newUnnamedStreet: ruaNova, neighborhoodName: bairro.trim() || undefined, reference: referencia, placeKind: codigo || undefined, watermarkMatch: true });
       setResultado('Registo ' + r.field_record_id + ' recebido: ' + r.status + '.');
@@ -74,7 +75,7 @@ export default function Campo() {
       <Caixa tipo="info">{'Posição: ' + posicao.latitude.toFixed(6) + ', ' + posicao.longitude.toFixed(6) + '\nPrecisão: ' + (posicao.precisao == null ? 'desconhecida' : Math.round(posicao.precisao) + ' m') + '\nCódigo: ' + (referenciaAutomatica || 'a calcular…')}</Caixa>
       <Botao titulo={foto ? 'Refazer fotografia da fachada' : 'Fotografar fachada'} onPress={() => void tirarFoto()} />
       {foto ? <Caixa tipo="info">Fotografia preparada e será marcada com posição, país e código.</Caixa> : null}
-      <Campo rotulo="Referência do local" value={referencia} onChangeText={setReferencia} placeholder="Ex.: casa azul ao lado da escola" multiline />
+      <CampoInput rotulo="Referência do local" value={referencia} onChangeText={setReferencia} placeholder="Ex.: casa azul ao lado da escola" multiline />
       <Campo rotulo="Bairro" value={bairro} onChangeText={setBairro} placeholder={contexto?.neighborhoods_nearby?.[0] ?? 'Nome do bairro'} />
       <Campo rotulo="Rua" value={rua} onChangeText={setRua} placeholder={contexto?.streets?.[0]?.name ?? 'Nome da rua'} />
       {contexto?.streets?.length ? <Caixa tipo="info">{'Ruas próximas: ' + contexto.streets.slice(0, 5).map((s) => s.name).join(', ')}</Caixa> : null}
