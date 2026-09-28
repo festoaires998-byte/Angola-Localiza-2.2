@@ -27,11 +27,6 @@ export function Icone({ nome, cor, tamanho = 28 }: { nome: Separador; cor: Color
           <Circle cx={6.5} cy={18} r={2} {...traco} />
           <Circle cx={17} cy={18} r={2} {...traco} />
         </>
-      ) : nome === 'marketplace' ? (
-        <>
-          <Path d="M4 8h16v12H4z" {...traco} />
-          <Path d="M3 8l2-4h14l2 4M8 8v12M16 8v12M3 20h18" {...traco} />
-        </>
       ) : nome === 'campo' ? (
         <>
           <Rect x={5} y={4} width={14} height={18} rx={2} {...traco} />
