@@ -28,6 +28,7 @@ import { ouvirPais, paisAtual } from '@/state/pais';
 import type { InfoLocal } from '@/services/location/infoLocal';
 import { criarEstilo, criarEstiloOnlineOSM, criarEstiloSatelite } from '@/services/mapas/estiloMapa';
 import { criarMapaDoPais, type EstadoMapaOffline } from '@/services/mapas/mapaOffline';
+import { mapaDoPais } from '@/services/mapas/catalogoMapas';
 import { dentroDaRegiao, REGIAO_HUAMBO } from '@/services/mapas/regioes';
 import type { Visibilidade } from '@/services/moradas/moradas';
 import { mudancasMoradas, servicoMoradas } from '@/services/moradas/moradasApp';
@@ -84,7 +85,7 @@ function CartaoMapaOffline({ mapa, estado, online, nomePais }: { mapa: ReturnTyp
       <Subtitulo>Mapa para usar sem rede</Subtitulo>
       <Texto>
         {remoto
-          ? `Descarrega o mapa de ${REGIAO_HUAMBO.nome} (${megas(remoto.bytes)}) para o veres mesmo sem internet.`
+          ? `Descarrega o mapa de ${regiao.nome} (${megas(remoto.bytes)}) para o veres mesmo sem internet.`
           : `Descarrega o mapa de ${REGIAO_HUAMBO.nome} para o veres mesmo sem internet.`}
       </Texto>
       {estado.estado === 'erro' ? <Caixa tipo="erro">{estado.mensagem}</Caixa> : null}
@@ -267,6 +268,7 @@ const CENTRO_HUAMBO = { latitude: REGIAO_HUAMBO.centro[1], longitude: REGIAO_HUA
 export default function Mapa() {
   const [configPais, setConfigPais] = useState(CONFIG_AO_OFFLINE_TESTE);
   const [codigoPais, setCodigoPais] = useState(paisAtual());
+  const regiao = useMemo(() => mapaDoPais(codigoPais).regiao, [codigoPais]);
   useEffect(() => { let ativo = true; void obterConfigPais(codigoPais).then((config) => { if (ativo) setConfigPais(config); }).catch(() => undefined); return () => { ativo = false; }; }, [codigoPais]);
   const rotulos = useMemo(() => rotulosMapa(configPais), [configPais]);
   const router = useRouter();
@@ -285,7 +287,7 @@ export default function Mapa() {
   // Com mais de ±10 m o código fica provisório (não se pede a confirmação ao servidor).
   const info = useInfoLocal(captura, online, !captura?.fraca);
   const gestorMapa = criarMapaDoPais(codigoPais);
-  const nomePais = codigoPais === 'AO' ? 'Angola' : codigoPais === 'MZ' ? 'Moçambique' : codigoPais === 'CV' ? 'Cabo Verde' : codigoPais === 'GW' ? 'Guiné-Bissau' : 'São Tomé e Príncipe';
+  const nomePais = configPais.country_name;
   const origem = origemDoMapa(gestorMapa, estadoMapa, online);
   const chaveOrigem = origem ? `${origem.tiles}|${origem.fontes}` : null;
   // O estilo só muda quando a origem muda (evita recarregar o mapa a cada posição).
@@ -337,7 +339,7 @@ export default function Mapa() {
   }, [rolagem, yMapa]);
   const pesquisa = usePesquisaMapa({
     online,
-    referencia: captura ?? aoVivo ?? CENTRO_HUAMBO,
+    referencia: captura ?? aoVivo ?? { latitude: regiao.centro[1], longitude: regiao.centro[0] },
     aoEncontrarPonto: mostrarNoMapa,
   });
 
@@ -559,7 +561,7 @@ export default function Mapa() {
             <Botao titulo="Tirar do mapa" variante="secundario" onPress={() => setAlvo(null)} />
           </View>
         ) : null}
-        {posicao && !dentroDaRegiao(REGIAO_HUAMBO, posicao.latitude, posicao.longitude) ? (
+        {posicao && !dentroDaRegiao(regiao, posicao.latitude, posicao.longitude) ? (
           <Caixa tipo="info">{`Estás fora da zona do mapa (${REGIAO_HUAMBO.nome}). O teu código continua a funcionar.`}</Caixa>
         ) : null}
 
