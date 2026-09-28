@@ -26,18 +26,18 @@ describe('separadoresPermitidos', () => {
     ['cidadão com KYC pendente', [], 'PENDING_ID', ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'marketplace', 'definicoes']],
     ['cidadão verificado', [], OK, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'marketplace', 'definicoes']],
     // cada cargo, com KYC verificado
-    ['tecnico_campo', ['tecnico_campo'], OK, ['mapa', 'guardados', 'campo', 'definicoes']],
-    ['estafeta', ['estafeta'], OK, ['mapa', 'minhas-entregas', 'definicoes']],
-    ['operador_postal', ['operador_postal'], OK, ['mapa', 'minhas-entregas', 'definicoes']],
-    ['supervisor', ['supervisor'], OK, ['mapa', 'guardados', 'validar', 'definicoes']],
-    ['admin_municipal', ['admin_municipal'], OK, ['mapa', 'validar', 'admin', 'definicoes']],
-    ['admin_provincial', ['admin_provincial'], OK, ['mapa', 'validar', 'admin', 'definicoes']],
-    ['admin_nacional', ['admin_nacional'], OK, ['mapa', 'validar', 'admin', 'definicoes']],
-    ['auditor', ['auditor'], OK, ['mapa', 'admin', 'definicoes']],
+    ['tecnico_campo', ['tecnico_campo'], OK, ['mapa', 'guardados', 'marketplace', 'campo', 'definicoes']],
+    ['estafeta', ['estafeta'], OK, ['mapa', 'minhas-entregas', 'marketplace', 'definicoes']],
+    ['operador_postal', ['operador_postal'], OK, ['mapa', 'minhas-entregas', 'marketplace', 'definicoes']],
+    ['supervisor', ['supervisor'], OK, ['mapa', 'guardados', 'marketplace', 'validar', 'definicoes']],
+    ['admin_municipal', ['admin_municipal'], OK, ['mapa', 'marketplace', 'validar', 'admin', 'definicoes']],
+    ['admin_provincial', ['admin_provincial'], OK, ['mapa', 'marketplace', 'validar', 'admin', 'definicoes']],
+    ['admin_nacional', ['admin_nacional'], OK, ['mapa', 'marketplace', 'validar', 'admin', 'definicoes']],
+    ['auditor', ['auditor'], OK, ['mapa', 'marketplace', 'admin', 'definicoes']],
     ['empresa', ['empresa'], OK, MINIMOS],
     // vários cargos juntam-se
-    ['tecnico_campo + estafeta', ['tecnico_campo', 'estafeta'], OK, ['mapa', 'guardados', 'minhas-entregas', 'campo', 'definicoes']],
-    ['supervisor + auditor', ['supervisor', 'auditor'], OK, ['mapa', 'guardados', 'validar', 'admin', 'definicoes']],
+    ['tecnico_campo + estafeta', ['tecnico_campo', 'estafeta'], OK, ['mapa', 'guardados', 'minhas-entregas', 'marketplace', 'campo', 'definicoes']],
+    ['supervisor + auditor', ['supervisor', 'auditor'], OK, ['mapa', 'guardados', 'marketplace', 'validar', 'admin', 'definicoes']],
     // staff sem KYC verificado → só mapa e definicoes
     ['tecnico_campo sem KYC', ['tecnico_campo'], null, MINIMOS],
     ['estafeta com KYC pendente', ['estafeta'], 'PENDING_ID', MINIMOS],
@@ -95,7 +95,7 @@ describe('decidirAcesso (MFA e falhar fechado)', () => {
     ['técnico, nível desconhecido', { perfil: tecnico, nivel: null }, MINIMOS, true, 'falta_mfa'],
     ['super_admin AAL1', { perfil: superAdmin, nivel: 'aal1' }, MINIMOS, true, 'falta_mfa'],
     // staff com AAL2 → regras normais
-    ['técnico AAL2', { perfil: tecnico, nivel: 'aal2' }, ['mapa', 'guardados', 'campo', 'definicoes'], false, null],
+    ['técnico AAL2', { perfil: tecnico, nivel: 'aal2' }, ['mapa', 'guardados', 'marketplace', 'campo', 'definicoes'], false, null],
     ['super_admin AAL2', { perfil: superAdmin, nivel: 'aal2' }, [...SEPARADORES], false, null],
     ['técnico AAL2 sem KYC', { perfil: { cargos: ['tecnico_campo'], estadoKyc: 'PENDING_ID' }, nivel: 'aal2' }, MINIMOS, false, 'kyc'],
   ])('%s', (_nome, entrada, separadores, faltaMfa, restricao) => {
@@ -129,9 +129,9 @@ describe('decidirAcesso (MFA e falhar fechado)', () => {
   });
 
   test.each<[string, string[], string | null, 'aal1' | 'aal2', Separador[], boolean, string | null]>([
-    ['estafeta + desconhecido, AAL2', ['estafeta', 'rei'], OK, 'aal2', ['mapa', 'minhas-entregas', 'definicoes'], false, null],
+    ['estafeta + desconhecido, AAL2', ['estafeta', 'rei'], OK, 'aal2', ['mapa', 'minhas-entregas', 'marketplace', 'definicoes'], false, null],
     ['super_admin + desconhecido, AAL2', ['super_admin', 'rei'], null, 'aal2', [...SEPARADORES], false, null],
-    ['supervisor + auditor + desconhecido, AAL2', ['rei', 'supervisor', 'auditor'], OK, 'aal2', ['mapa', 'guardados', 'validar', 'admin', 'definicoes'], false, null],
+    ['supervisor + auditor + desconhecido, AAL2', ['rei', 'supervisor', 'auditor'], OK, 'aal2', ['mapa', 'guardados', 'marketplace', 'validar', 'admin', 'definicoes'], false, null],
     // Os conhecidos continuam a exigir MFA e KYC.
     ['estafeta + desconhecido, AAL1', ['estafeta', 'rei'], OK, 'aal1', MINIMOS, true, 'falta_mfa'],
     ['estafeta + desconhecido, sem KYC', ['estafeta', 'rei'], 'PENDING_ID', 'aal2', MINIMOS, false, 'kyc'],
