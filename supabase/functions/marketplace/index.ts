@@ -136,13 +136,19 @@ Deno.serve(async req=>{
   if(action==="request-payout"){
    const {data:profile}=await db.from("marketplace_service_profiles").select("id,country_code").eq("owner_id",uid).eq("active",true).maybeSingle();if(!profile)return out({error:"PERFIL_PRESTADOR_NAO_ENCONTRADO"},404);
    if(profile.country_code!==country)return out({error:"PAIS_DA_CONTA_DIVERGENTE"},403);
-   const {data:rows}=await db.from("marketplace_provider_ledger").select("id,provider_amount,currency").eq("provider_id",profile.id).eq("status","AVAILABLE").order("created_at",{ascending:true});
+   const {data:countryCfg}=await db.from("country_configs").select("currency_code,is_active").eq("country_code",country).maybeSingle();if(!countryCfg)return out({error:"PAIS_NAO_CONFIGURADO"},422);
+   if(!countryCfg.is_active)return out({error:"PAGAMENTOS_NAO_ATIVOS_NESTE_PAIS"},409);
+   const {data:rule}=await db.from("marketplace_payout_country_rules").select("*").eq("country_code",country).maybeSingle();if(!rule)return out({error:"REGRAS_DE_PAYOUT_NAO_CONFIGURADAS"},409);
+   const {data:account}=await db.from("marketplace_payout_accounts").select("id,destination_type,currency,kyc_status,status,masked_destination").eq("id",body.payout_account_id||"").eq("provider_id",profile.id).eq("country_code",country).maybeSingle();if(!account)return out({error:"CONTA_DE_PAYOUT_NAO_ENCONTRADA"},404);
+   if(account.status!=="ACTIVE"||account.kyc_status!=="VERIFIED")return out({error:"CONTA_DE_PAYOUT_NAO_VERIFICADA"},409);
+   const destinationType=account.destination_type;if(destinationType==="MOBILE_MONEY"&&!rule.mobile_money_enabled)return out({error:"MOBILE_MONEY_NAO_DISPONIVEL_NESTE_PAIS"},409);if(destinationType==="BANK_ACCOUNT"&&!rule.bank_account_enabled)return out({error:"CONTA_BANCARIA_NAO_DISPONIVEL_NESTE_PAIS"},409);
+   const {data:rows}=await db.from("marketplace_provider_ledger").select("id,provider_amount,currency").eq("provider_id",profile.id).eq("status","AVAILABLE").eq("currency",countryCfg.currency_code).order("created_at",{ascending:true});
    const available=(rows||[]).reduce((s,x)=>s+Number(x.provider_amount||0),0);const amount=Number(body.amount);
-   if(!Number.isFinite(amount)||amount<=0||amount>available)return out({error:"SALDO_INSUFICIENTE",available,currency:country==="AO"?"AOA":"LOCAL"},409);
-   const destinationType=body.destination_type==="MOBILE_MONEY"?"MOBILE_MONEY":"BANK_ACCOUNT";const key=typeof body.idempotency_key==="string"?body.idempotency_key.trim():"";
+   if(!Number.isFinite(amount)||amount<Number(rule.minimum_payout)||amount>available||(rule.maximum_payout!==null&&amount>Number(rule.maximum_payout)))return out({error:"VALOR_DE_PAYOUT_INVALIDO",available,currency:countryCfg.currency_code,minimum:Number(rule.minimum_payout),maximum:rule.maximum_payout===null?null:Number(rule.maximum_payout)},409);
+   const key=typeof body.idempotency_key==="string"?body.idempotency_key.trim():"";
    if(key.length<8)return out({error:"IDEMPOTENCY_KEY_INVALIDA"},422);
    const {data:existing}=await db.from("marketplace_payouts").select("*").eq("idempotency_key",key).maybeSingle();if(existing)return out({payout:existing,idempotent_replay:true});
-   const {data:payout,error}=await db.from("marketplace_payouts").insert({provider_id:profile.id,country_code:country,currency:country==="AO"?"AOA":"LOCAL",amount,destination_type:destinationType,destination_masked:typeof body.destination_masked==="string"?body.destination_masked:null,idempotency_key:key,status:"REQUESTED"}).select().single();if(error)throw error;
+   const {data:payout,error}=await db.from("marketplace_payouts").insert({provider_id:profile.id,country_code:country,currency:countryCfg.currency_code,amount,destination_type:destinationType,destination_masked:account.masked_destination,idempotency_key:key,status:"REQUESTED"}).select().single();if(error)throw error;
    let remaining=amount;for(const row of rows||[]){if(remaining<=0)break;const take=Math.min(Number(row.provider_amount),remaining);if(take<=0)continue;const {data:locked}=await db.from("marketplace_provider_ledger").update({status:"PAYOUT_REQUESTED",payout_requested_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",row.id).eq("status","AVAILABLE").select("id").maybeSingle();if(locked){remaining-=take;}}
    if(remaining>0){await db.from("marketplace_payouts").update({status:"CANCELLED",failure_reason:"SALDO_ALTERADO_CONCORRENTEMENTE",updated_at:new Date().toISOString()}).eq("id",payout.id);return out({error:"SALDO_ALTERADO_CONCORRENTEMENTE"},409);}
    await notificar(db,uid,"Pedido de payout criado","O seu pedido de recebimento foi registado e aguarda processamento.","marketplace_payout",payout.id);return out({payout,available_after:available-amount});
