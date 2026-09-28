@@ -28,7 +28,7 @@ import { ouvirPais, paisAtual } from '@/state/pais';
 import type { InfoLocal } from '@/services/location/infoLocal';
 import { criarEstilo, criarEstiloOnlineOSM, criarEstiloSatelite } from '@/services/mapas/estiloMapa';
 import { criarMapaDoPais, type EstadoMapaOffline } from '@/services/mapas/mapaOffline';
-import { mapaDoPais } from '@/services/mapas/catalogoMapas';
+import { CATALOGO_MAPAS_PALOP, mapaDoPais } from '@/services/mapas/catalogoMapas';
 import { dentroDaRegiao } from '@/services/mapas/regioes';
 import type { Visibilidade } from '@/services/moradas/moradas';
 import { mudancasMoradas, servicoMoradas } from '@/services/moradas/moradasApp';
@@ -98,6 +98,62 @@ function CartaoMapaOffline({ mapa, estado, online, nomePais }: { mapa: ReturnTyp
       ) : (
         <Caixa tipo="info">Sem rede. Liga-te à internet (de preferência Wi-Fi) para descarregar o mapa.</Caixa>
       )}
+    </Cartao>
+  );
+}
+
+function CartaoMapaPaisOffline({ pais, nome }: { pais: Parameters<typeof criarMapaDoPais>[0]; nome: string }) {
+  const online = useOnline();
+  const mapa = criarMapaDoPais(pais);
+  const estado = useMapaOffline(online, pais);
+
+  const descarregar = () => {
+    void mapa.descarregar().catch(() => undefined);
+  };
+
+  if (estado.estado === 'a_verificar') {
+    return <Cartao><Subtitulo>{nome}</Subtitulo><Texto>Verificando mapa…</Texto></Cartao>;
+  }
+
+  if (estado.estado === 'a_descarregar') {
+    return (
+      <Cartao>
+        <Subtitulo>{nome}</Subtitulo>
+        <Texto>A descarregar o mapa para usar sem internet…</Texto>
+        <View style={estilos.barra} accessibilityRole="progressbar">
+          <View style={[estilos.barraCheia, { width: `${Math.round(estado.progresso * 100)}%` }]} />
+        </View>
+        <Texto>{`${Math.round(estado.progresso * 100)}% de ${megas(estado.remoto.bytes)}`}</Texto>
+      </Cartao>
+    );
+  }
+
+  if (estado.estado === 'pronto') {
+    return (
+      <Cartao>
+        <Subtitulo>✅ {nome}</Subtitulo>
+        <Texto>Mapa guardado no telemóvel e disponível sem internet.</Texto>
+        {estado.novo ? <Texto>{`Nova versão disponível: ${megas(estado.novo.bytes)}.`}</Texto> : null}
+        {online ? <Botao titulo={estado.novo ? 'Atualizar mapa' : 'Mapa descarregado'} variante="secundario" onPress={estado.novo ? descarregar : undefined} /> : null}
+      </Cartao>
+    );
+  }
+
+  const remoto = estado.remoto;
+  return (
+    <Cartao>
+      <Subtitulo>{nome}</Subtitulo>
+      <Texto>
+        {remoto
+          ? `Mapa offline disponível para descarregar (${megas(remoto.bytes)}).`
+          : 'Mapa offline ainda não está publicado. Tenta novamente quando o mapa estiver disponível.'}
+      </Texto>
+      {estado.estado === 'erro' ? <Caixa tipo="erro">{estado.mensagem}</Caixa> : null}
+      {online && remoto ? (
+        <Botao titulo={estado.estado === 'erro' ? 'Tentar novamente' : 'Descarregar mapa'} onPress={descarregar} />
+      ) : !online ? (
+        <Caixa tipo="info">Liga-te à internet para descarregar este mapa.</Caixa>
+      ) : null}
     </Cartao>
   );
 }
@@ -572,6 +628,15 @@ export default function Mapa() {
 
         {/* 8. Mapa para usar sem rede */}
         <CartaoMapaOffline mapa={gestorMapa} estado={estadoMapa} online={online} nomePais={nomePais} />
+
+        {/* 9. Mapas nacionais PALOP: podem ser descarregados individualmente */}
+        <Cartao>
+          <Subtitulo>Mapas offline dos países</Subtitulo>
+          <Texto>Descarrega os mapas que quiseres para os usar sem internet. Cada país fica guardado separadamente no telemóvel.</Texto>
+        </Cartao>
+        {CATALOGO_MAPAS_PALOP.filter((entrada) => entrada.pais !== codigoPais).map((entrada) => (
+          <CartaoMapaPaisOffline key={entrada.pais} pais={entrada.pais} nome={entrada.nome} />
+        ))}
       </ScrollView>
 
       <Modal visible={ecraInteiro} animationType="slide" onRequestClose={() => setEcraInteiro(false)}>
