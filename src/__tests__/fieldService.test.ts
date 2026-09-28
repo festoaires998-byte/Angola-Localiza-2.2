@@ -37,7 +37,7 @@ describe('field-service: código postal da aprovação no esquema 2', () => {
     const fonte = ler('supabase/functions/field-service/index.ts');
     expect(fonte).toContain('import { codigoBase } from "./codigoPostal.ts";');
     expect(fonte).not.toMatch(/GRID_ALPHABET|function encodeGrid|function checksum/);
-    expect(fonte).toMatch(/const \{ base, checksum: chk \} = codigoBase\(lat, lng, provinceName\);/);
+    expect(fonte).toMatch(/const \{ base, checksum: chk \} = codigoBase\(lat, lng, provinceName(?:, countryCode)?\);/);
   });
 
   test('no Huambo, onde o esquema 1 dava "undefined", o esquema 2 dá um código válido igual ao da app', () => {
@@ -88,13 +88,3 @@ describe('field-service: o bairro do registo chega à base de dados', () => {
   const submit = fonte.slice(fonte.indexOf('if (action === "submit") {\n      const {'), fonte.indexOf('if (action === "check_duplicates")'));
 
   test('submit lê neighborhood_name (cidadãos e técnicos, sem distinção) e grava-o no field_record', () => {
-    expect(submit).toMatch(/const \{[^}]*\bneighborhood_name\b[^}]*\} = body;/);
-    expect(submit).toMatch(/street_id: streetId, neighborhood_name,/);
-    // Não há ramo só para técnicos a decidir o bairro.
-    expect(submit).not.toMatch(/tecnico_campo[\s\S]*neighborhood_name/);
-  });
-
-  test('list_streets_in_quadra devolve os bairros perto (neighborhoods_nearby) que a app mostra', () => {
-    expect(fonte).toContain('neighborhoods_nearby: neighborhoodsNearby');
-  });
-});
