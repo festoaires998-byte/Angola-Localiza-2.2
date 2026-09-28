@@ -8,6 +8,15 @@ export interface ConfigPais {
   address_hierarchy: string[]; territorial_levels: NivelTerritorial[]; is_active: boolean;
 }
 export const PAIS_PADRAO: CodigoPais = 'AO';
+
+export function nomeDaMarca(config: Pick<ConfigPais, 'country_name'>): string {
+  return `${config.country_name} Localiza`;
+}
+
+export function nomeDaMarcaPorCodigo(countryCode: CodigoPais): string {
+  const nomes: Record<string, string> = { AO: 'Angola', MZ: 'Moçambique', CV: 'Cabo Verde', GW: 'Guiné-Bissau', ST: 'São Tomé e Príncipe' };
+  return `${nomes[countryCode.trim().toUpperCase()] ?? countryCode.trim().toUpperCase()} Localiza`;
+}
 const CONFIG_AO_OFFLINE: ConfigPais = {
   country_code: 'AO', country_name: 'Angola', native_name: 'Angola', locale: 'pt-AO',
   currency_code: 'AOA', currency_symbol: 'Kz', phone_country_code: '+244',
