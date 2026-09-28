@@ -32,9 +32,10 @@ export default function Campo() {
   const posicaoAtual = posicao;
 
   useEffect(() => {
-    if (!online || !posicaoAtual) return;
+    const p = posicaoAtual;
+    if (!online || !p) return;
     let ativo = true;
-    listarContextoCampo(posicaoAtual.latitude, posicaoAtual.longitude)
+    listarContextoCampo(p.latitude, p.longitude)
       .then((v) => ativo && setContexto(v))
       .catch(() => ativo && setContexto(null));
     return () => { ativo = false; };
@@ -47,7 +48,7 @@ export default function Campo() {
   if (!sessao.carregado || gps.estado === 'a_procurar') return <EcraCarregamento texto="A preparar o Campo…" />;
   if (!sessao.utilizador) return <Ecra><Caixa tipo="aviso">Inicia sessão para utilizar o modo Campo.</Caixa></Ecra>;
   if (online === false) return <Ecra><Caixa tipo="aviso">O modo Campo precisa de ligação à internet para sincronizar a recolha com segurança.</Caixa></Ecra>;
-  if (!posicao) return <Ecra><Caixa tipo="aviso">Autoriza a localização e fica ao ar livre alguns segundos para obter uma posição.</Caixa></Ecra>;
+  if (!posicaoAtual) return <Ecra><Caixa tipo="aviso">Autoriza a localização e fica ao ar livre alguns segundos para obter uma posição.</Caixa></Ecra>;
   async function tirarFoto() {
     setErro(null);
     const permissao = await ImagePicker.requestCameraPermissionsAsync();
