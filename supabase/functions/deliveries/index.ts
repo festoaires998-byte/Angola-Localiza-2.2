@@ -200,7 +200,7 @@ Deno.serve(async (req: Request) => {
       }
 
       let query = supabase.from("deliveries")
-        .select("id, tracking_code, status, recipient_name, recipient_phone, instructions, updated_at, assigned_driver, origin_postal_code, origin_plus_code, is_urgent, addresses(reference,plus_code,postal_code,house_number,streets(name),quadras(code))")
+        .select("id, tracking_code, status, recipient_name, recipient_phone, instructions, updated_at, assigned_driver, origin_postal_code, origin_plus_code, is_urgent, cargo_type, cargo_description, cargo_quantity, cargo_weight_kg, cargo_length_cm, cargo_width_cm, cargo_height_cm, cargo_declared_value, requested_vehicle_type, requested_vehicle_capacity_kg, addresses(reference,plus_code,postal_code,house_number,streets(name),quadras(code))")
         .order("updated_at", { ascending: false }).limit(100);
       if (!isSuper) query = query.eq("organization_id", organizationId);
       const { data, error } = await query;
