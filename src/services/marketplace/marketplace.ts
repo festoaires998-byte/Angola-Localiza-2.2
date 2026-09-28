@@ -45,7 +45,7 @@ export type MarketplaceServiceRequest={id:string;client_id:string;country_code:s
 export type MarketplaceProposal={id:string;request_id:string;provider_id:string;provider_user_id:string;amount:number|null;currency:string|null;message:string;proposed_date:string|null;status:string;created_at:string;updated_at:string};
 export const marketplaceServices={
  providers:(body?:Record<string,unknown>)=>chamarFuncao<{providers:MarketplaceProvider[]}>('marketplace','service-providers',{body,tempoMaximo:20000}),
- detail:(provider_id:string)=>chamarFuncao<{provider:MarketplaceProvider;services:MarketplaceService[];rating_average:number;review_count:number}>('marketplace','service-detail',{body:{provider_id},tempoMaximo:20000}),
+ detail:(provider_id:string)=>chamarFuncao<{provider:MarketplaceProvider;services:MarketplaceService[];rating_average:number;review_count:number;identity_verified:boolean;driver_kyc_status:string|null}>('marketplace','service-detail',{body:{provider_id},tempoMaximo:20000}),
  saveProfile:(body:Record<string,unknown>)=>chamarFuncao<{provider:MarketplaceProvider}>('marketplace','service-profile-upsert',{body,tempoMaximo:20000}),
  saveService:(body:Record<string,unknown>)=>chamarFuncao<{service:MarketplaceService}>('marketplace','service-upsert',{body,tempoMaximo:20000}),
  request:(body:Record<string,unknown>)=>chamarFuncao<{request:MarketplaceServiceRequest}>('marketplace','request-service',{body,tempoMaximo:20000}),
@@ -60,4 +60,5 @@ export const marketplaceServiceFlow={
  bookings:()=>chamarFuncao<{bookings:Array<Record<string,unknown>>}>('marketplace','booking-list',{tempoMaximo:20000}),
  updateBooking:(booking_id:string,status:string)=>chamarFuncao<{booking:Record<string,unknown>}>('marketplace','booking-status',{body:{booking_id,status},tempoMaximo:20000}),
  review:(booking_id:string,rating:number,comment?:string)=>chamarFuncao<{review:Record<string,unknown>}>('marketplace','review-service',{body:{booking_id,rating,comment},tempoMaximo:20000}),
+ requestDelivery:(body:Record<string,unknown>)=>chamarFuncao<{logistics:Record<string,unknown>;delivery:Record<string,unknown>}>('marketplace','request-delivery',{body,tempoMaximo:30000}),
 };
