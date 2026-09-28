@@ -3,7 +3,8 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { obterConfigSupabase } from '@/config/env';
 
 import { criarMapaOffline, type SistemaFicheiros } from './nucleoMapaOffline';
-import { REGIAO_HUAMBO } from './regioes';
+import { mapaDoPais } from './catalogoMapas';
+import type { CodigoPais } from '@/config/pais';
 
 export type { EstadoMapaOffline, ManifestoMapa } from './nucleoMapaOffline';
 
@@ -68,10 +69,13 @@ async function buscarJson(url: string): Promise<unknown> {
   }
 }
 
-/** Mapa do Huambo guardado no telemóvel (um só para a app). */
-export const mapaHuambo = criarMapaOffline({
-  regiao: REGIAO_HUAMBO,
-  urlBase: `${obterConfigSupabase().url}/storage/v1/object/public/mapas`,
-  fs: fsDaApp,
-  buscarJson,
-});
+const urlBase = `${obterConfigSupabase().url}/storage/v1/object/public/mapas`;
+
+/** Cria o gestor do mapa nacional correspondente ao país selecionado. */
+export function criarMapaDoPais(pais: CodigoPais) {
+  const entrada = mapaDoPais(pais);
+  return criarMapaOffline({ regiao: entrada.regiao, urlBase, fs: fsDaApp, buscarJson });
+}
+
+/** Compatibilidade com a implementação regional antiga do Huambo. */
+export const mapaHuambo = criarMapaDoPais('AO');
