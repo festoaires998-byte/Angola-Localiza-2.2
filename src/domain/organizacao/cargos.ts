@@ -23,6 +23,7 @@ export const SEPARADORES = [
   'guardados',
   'entrega',
   'minhas-entregas',
+  'marketplace',
   'campo',
   'validar',
   'admin',
@@ -39,7 +40,7 @@ export type NivelGarantia = 'aal1' | 'aal2';
 /** O que qualquer pessoa vê, mesmo sem nada confirmado. */
 export const SEPARADORES_MINIMOS: readonly Separador[] = ['mapa', 'definicoes'];
 
-const DO_CIDADAO: readonly Separador[] = ['guardados', 'entrega', 'minhas-entregas'];
+const DO_CIDADAO: readonly Separador[] = ['guardados', 'entrega', 'minhas-entregas', 'marketplace'];
 
 const POR_CARGO: Partial<Record<Cargo, readonly Separador[]>> = {
   tecnico_campo: ['campo', 'guardados'],
