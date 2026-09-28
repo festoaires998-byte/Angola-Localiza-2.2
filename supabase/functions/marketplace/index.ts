@@ -132,12 +132,28 @@ Deno.serve(async req=>{
    let q=db.from("marketplace_service_bookings").select("*").eq("country_code",country);q=ids.length?q.or("client_id.eq."+uid+",provider_id.in.("+ids.join(",")+")"):q.eq("client_id",uid);
    const {data:b,error}=await q.order("created_at",{ascending:false}).limit(100);if(error)throw error;return out({bookings:b||[]});
   }
+  if(action==="cancel-booking"){
+   if(typeof body.booking_id!=="string")return out({error:"AGENDAMENTO_INVALIDO"},422);
+   const {data:b,error:be}=await db.from("marketplace_service_bookings").select("id,client_id,provider_id,status,country_code").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
+   let allowed=b.client_id===uid;if(!allowed){const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("id",b.provider_id).eq("owner_id",uid).maybeSingle();allowed=!!p;}if(!allowed)return out({error:"ACESSO_NEGADO"},403);
+   if(["COMPLETED","CANCELLED"].includes(b.status))return out({error:"AGENDAMENTO_NAO_CANCELAVEL"},409);
+   const {data:pay}=await db.from("marketplace_payment_intents").select("id,status").eq("booking_id",b.id).maybeSingle();
+   if(pay?.status==="PAID")return out({error:"REEMBOLSO_OBRIGATORIO",payment_intent_id:pay.id},409);
+   const {data:updated,error}=await db.from("marketplace_service_bookings").update({status:"CANCELLED",cancelled_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",b.id).eq("status",b.status).select().single();if(error)throw error;if(!updated)return out({error:"ALTERACAO_CONCORRENTE"},409);
+   if(pay?.status&&["PENDING","REQUIRES_ACTION","PROCESSING"].includes(pay.status))await db.from("marketplace_payment_intents").update({status:"CANCELLED",updated_at:new Date().toISOString()}).eq("id",pay.id).in("status",["PENDING","REQUIRES_ACTION","PROCESSING"]);
+   const other=b.client_id===uid?b.provider_id:b.client_id;let otherUser=other;const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",other).maybeSingle();if(pp?.owner_id)otherUser=pp.owner_id;
+   await notificar(db,otherUser,"Serviço cancelado","O agendamento foi cancelado.","marketplace_booking",b.id);
+   return out({booking:updated,payment_status:pay?.status==="PAID"?"REFUND_REQUIRED":pay?.status||null});
+  }
   if(action==="booking-status"){
    if(typeof body.booking_id!=="string"||typeof body.status!=="string")return out({error:"DADOS_INVALIDOS"},422);
    if(!["SCHEDULED","IN_PROGRESS","COMPLETED","CANCELLED"].includes(body.status))return out({error:"ESTADO_INVALIDO"},422);
    const {data:b,error:be}=await db.from("marketplace_service_bookings").select("*").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
    let owner=b.client_id===uid;if(!owner){const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("id",b.provider_id).eq("owner_id",uid).maybeSingle();owner=!!p;}if(!owner)return out({error:"ACESSO_NEGADO"},403);
-   const patch:any={status:body.status,updated_at:new Date().toISOString()};if(body.status==="IN_PROGRESS"&&!b.started_at)patch.started_at=new Date().toISOString();if(body.status==="COMPLETED")patch.completed_at=new Date().toISOString();
+   const {data:pay}=await db.from("marketplace_payment_intents").select("id,status").eq("booking_id",b.id).maybeSingle();
+   if(body.status==="COMPLETED"&&pay&&pay.status!=="PAID")return out({error:"PAGAMENTO_NAO_CONFIRMADO"},409);
+   if(body.status==="CANCELLED"&&pay?.status==="PAID")return out({error:"REEMBOLSO_OBRIGATORIO_ANTES_DE_CANCELAR"},409);
+   const patch:any={status:body.status,updated_at:new Date().toISOString()};if(body.status==="IN_PROGRESS"&&!b.started_at)patch.started_at=new Date().toISOString();if(body.status==="COMPLETED")patch.completed_at=new Date().toISOString();if(body.status==="CANCELLED")patch.cancelled_at=new Date().toISOString();
    const {data:updated,error}=await db.from("marketplace_service_bookings").update(patch).eq("id",b.id).eq("status",b.status).select().single();if(error)throw error;if(!updated)return out({error:"ALTERACAO_CONCORRENTE"},409);
    const recipient=b.client_id===uid?b.provider_id:null;
    if(recipient){const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",recipient).maybeSingle();if(pp?.owner_id)await notificar(db,pp.owner_id,"Estado do serviço atualizado","O estado do teu serviço foi atualizado para "+body.status+".","marketplace_booking",b.id);}
