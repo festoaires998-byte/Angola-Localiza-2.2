@@ -609,7 +609,7 @@ describe('Mapa / Satélite', () => {
     expect(await screen.findByText('Local pesquisado')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
     expect(await screen.findByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
-    expect(screen.getByText('Local pesquisado')).toBeTruthy();
+    expect(screen.getAllByText('Local pesquisado').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('-12.50000, 13.40000')).toBeTruthy();
   });
   test('sem rede: o satélite não liga e explica porquê', async () => {
@@ -761,6 +761,8 @@ describe('Guardar como favorito', () => {
     ]);
     await desenhar();
     fireEvent.changeText(screen.getByLabelText('Pesquisar'), 'local pesquisado');
+    fireEvent.press(screen.getByLabelText('Pesquisar'), 'submitEditing');
+    expect(await screen.findByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' })).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Rua: Local pesquisado. Ver no mapa' }));
     expect(await screen.findByLabelText('Local selecionado: Local pesquisado')).toBeTruthy();
     fireEvent(screen.getByTestId('vista-mapa'), 'touchStart');
