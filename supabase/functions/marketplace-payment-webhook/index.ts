@@ -26,12 +26,13 @@ Deno.serve(async req=>{
  const {data:intent}=intentId?await db.from("marketplace_payment_intents").select("id,status,amount_total,currency,client_id,provider_id,booking_id").eq("id",intentId).maybeSingle():{data:null};
  if(!intent)return new Response(JSON.stringify({error:"PAYMENT_INTENT_NOT_FOUND"}),{status:404,headers:cors});
  if(Number(intent.amount_total)!==amount||intent.currency!=="AOA")return new Response(JSON.stringify({error:"AMOUNT_MISMATCH"}),{status:409,headers:cors});
- const {error:ie}=await db.from("marketplace_payment_events").insert({payment_intent_id:intent.id,provider:"PROXYPAY",external_event_id:externalEventId,event_type:"PAYMENT_RECEIVED",amount,currency:"AOA",raw_payload:payment,signature_valid:true,processed_at:new Date().toISOString()});
+ const rawType=String(payment.event_type||payment.status||"PAYMENT_RECEIVED").toUpperCase(); const eventType=rawType.includes("REFUND")?"REFUND_CONFIRMED":"PAYMENT_RECEIVED"; const {error:ie}=await db.from("marketplace_payment_events").insert({payment_intent_id:intent.id,provider:"PROXYPAY",external_event_id:externalEventId,event_type:eventType,amount,currency:"AOA",raw_payload:payment,signature_valid:true,processed_at:new Date().toISOString()});
  if(ie&&ie.code!=="23505")return new Response(JSON.stringify({error:ie.message}),{status:500,headers:cors});
  if(!ie)return await finalizar();
  return new Response(JSON.stringify({ok:true,idempotent_replay:true}),{headers:cors});
 
  async function finalizar(){
+   if(eventType==="REFUND_CONFIRMED"){ const {data:refunded,error:re}=await db.from("marketplace_payment_intents").update({status:"REFUNDED",updated_at:new Date().toISOString()}).eq("id",intent.id).in("status",["PAID","PROCESSING"]).select().maybeSingle(); if(re) return new Response(JSON.stringify({error:re.message}),{status:500,headers:cors}); if(refunded){ await db.from("marketplace_service_bookings").update({status:"CANCELLED",cancelled_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",intent.booking_id).in("status",["SCHEDULED","IN_PROGRESS"]); await db.from("notifications").insert({user_id:intent.client_id,title:"Reembolso confirmado",body:"O reembolso do serviço foi confirmado pelo provedor de pagamento.","entity_type":"marketplace_payment",entity_id:intent.id}); } return new Response(JSON.stringify({ok:true}),{headers:cors}); }
    if(intent.status!=="PAID"){
      const {data:updated,error:ue}=await db.from("marketplace_payment_intents").update({status:"PAID",paid_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",intent.id).neq("status","PAID").select().maybeSingle();
      if(ue)return new Response(JSON.stringify({error:ue.message}),{status:500,headers:cors});
