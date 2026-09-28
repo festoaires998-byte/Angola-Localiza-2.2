@@ -104,6 +104,12 @@ export default function Definicoes() {
         ))}
       </Cartao>
 
+      <Cartao>
+        <Subtitulo>Motorista</Subtitulo>
+        <Texto suave>Candidata-te para trabalhar como motorista. A documentação é revista antes de ativares o perfil.</Texto>
+        <Botao titulo="Motorista / KYC" variante="secundario" onPress={() => router.push('/definicoes/motorista')} />
+      </Cartao>
+
       {cargos.length === 0 ? (
         <Cartao>
           <Subtitulo>Verificação simples</Subtitulo>
