@@ -47,6 +47,7 @@ export const MAX_INSTRUCOES = 300;
 
 /** O que a pessoa preenche no ecrã "Novo envio". */
 export interface DadosEnvio {
+  countryCode?: string;
   /** Posição de origem capturada no telemóvel (opcional; o servidor valida os restantes campos). */
   origem?: {
     latitude: number;
@@ -81,12 +82,14 @@ export interface PedidoEnvio {
  * Telefone angolano no formato "+244 9xx xxx xxx".
  * '' → null (o telefone é opcional); undefined se não for válido.
  */
-export function normalizarTelefone(texto: string): string | null | undefined {
+export function normalizarTelefone(texto: string, countryCode: string = 'AO'): string | null | undefined {
   const digitos = texto.replace(/\D/g, '');
   if (digitos === '') return null;
-  const local = digitos.startsWith('244') && digitos.length === 12 ? digitos.slice(3) : digitos;
+  const prefixos: Record<string, string> = { AO: '244', MZ: '258', CV: '238', GW: '245', ST: '239' };
+  const prefixo = prefixos[countryCode] ?? prefixos.AO;
+  const local = digitos.startsWith(prefixo) && digitos.length === prefixo.length + 9 ? digitos.slice(prefixo.length) : digitos;
   if (!/^9\d{8}$/.test(local)) return undefined;
-  return `+244 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
+  return `+${prefixo} ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
 }
 
 /** Nome sem espaços a mais. */
@@ -99,7 +102,7 @@ export function faltaNoEnvio(d: DadosEnvio): string[] {
   const falta: string[] = [];
   if (!d.moradaId) falta.push('Escolher a morada de destino.');
   if (limparTexto(d.destinatario).length < 2) falta.push('Escrever o nome de quem vai receber.');
-  if (normalizarTelefone(d.telefone) === undefined) falta.push('O telefone tem de ter 9 algarismos e começar por 9 (ex.: 923 456 789).');
+  if (normalizarTelefone(d.telefone, d.countryCode) === undefined) falta.push('O telefone tem de ter 9 algarismos e começar por 9 (ex.: 923 456 789).');
   if (d.instrucoes.trim().length > MAX_INSTRUCOES) falta.push(`As instruções têm no máximo ${MAX_INSTRUCOES} letras.`);
   return falta;
 }
@@ -112,7 +115,7 @@ export function montarPedidoEnvio(d: DadosEnvio): PedidoEnvio {
   const pedido: PedidoEnvio = {
     address_id: d.moradaId!,
     recipient_name: limparTexto(d.destinatario),
-    recipient_phone: normalizarTelefone(d.telefone) ?? null,
+    recipient_phone: normalizarTelefone(d.telefone, d.countryCode) ?? null,
     instructions: instrucoes === '' ? null : instrucoes,
     is_urgent: d.urgente,
   };
