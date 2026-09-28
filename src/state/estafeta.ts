@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import type { Envio } from '@/domain/entregas/envio';
+import type { PedidoDisponivelEstafeta } from '@/api/entregas';
 import type { AcaoNaFila } from '@/services/entregas/estafeta';
 
 import { criarLoja } from './loja';
@@ -14,13 +15,14 @@ export interface AvisoEstafeta {
 export interface EstadoEstafeta {
   /** null = ainda não se leu. */
   entregas: Envio[] | null;
+  pedidosDisponiveis: PedidoDisponivelEstafeta[];
   acoes: AcaoNaFila[];
   doServidor: boolean;
   erro: string | null;
   aviso: AvisoEstafeta | null;
 }
 
-export const ESTADO_INICIAL_ESTAFETA: EstadoEstafeta = { entregas: null, acoes: [], doServidor: false, erro: null, aviso: null };
+export const ESTADO_INICIAL_ESTAFETA: EstadoEstafeta = { entregas: null, pedidosDisponiveis: [], acoes: [], doServidor: false, erro: null, aviso: null };
 
 export const lojaEstafeta = criarLoja<EstadoEstafeta>(ESTADO_INICIAL_ESTAFETA);
 
