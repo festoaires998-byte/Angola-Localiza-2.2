@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { BotaoSair } from '@/components/BotaoSair';
@@ -8,6 +8,7 @@ import { dataHora, NOMES_CARGOS, NOMES_OPERACOES } from '@/components/nomes';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { KYC_VERIFICADO } from '@/domain/organizacao/cargos';
+import { PAISES_PALOP, ouvirPais, paisAtual, selecionarPais } from '@/state/pais';
 import { useCargos } from '@/hooks/useCargos';
 import { useFilaSync, type OperacaoComProblema } from '@/hooks/useFilaSync';
 import { useSessao } from '@/hooks/useSessao';
@@ -43,6 +44,17 @@ export default function Definicoes() {
   const { cargos, estadoKyc, confirmadoAgora } = useCargos();
   const fila = useFilaSync();
   const [resultado, setResultado] = useState<string | null>(null);
+  const [pais, setPais] = useState(paisAtual());
+  const [aMudarPais, setAMudarPais] = useState(false);
+
+  useEffect(() => ouvirPais(setPais), []);
+
+  async function mudarPais(codigo: string) {
+    setAMudarPais(true);
+    try { await selecionarPais(codigo); setResultado(null); }
+    catch (e) { setResultado(e instanceof Error ? e.message : 'Não foi possível mudar o país.'); }
+    finally { setAMudarPais(false); }
+  }
 
   async function sincronizar() {
     setResultado(null);
@@ -75,6 +87,20 @@ export default function Definicoes() {
         {!confirmadoAgora ? (
           <Texto suave>Sem ligação ao servidor: estes são os últimos dados guardados neste telemóvel.</Texto>
         ) : null}
+      </Cartao>
+
+      <Cartao>
+        <Subtitulo>País</Subtitulo>
+        <Texto suave>Escolhe o país ativo. Angola continua a ser o padrão.</Texto>
+        {PAISES_PALOP.map((codigo) => (
+          <Botao
+            key={codigo}
+            titulo={pais === codigo ? `✓ ${codigo}` : codigo}
+            variante={pais === codigo ? 'primario' : 'secundario'}
+            aCarregar={aMudarPais}
+            onPress={() => void mudarPais(codigo)}
+          />
+        ))}
       </Cartao>
 
       {cargos.length === 0 ? (
