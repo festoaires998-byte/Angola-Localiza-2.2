@@ -57,7 +57,7 @@ export const marketplaceServices={
 };
 export const marketplaceServiceFlow={
  requestDetail:(request_id:string)=>chamarFuncao<{request:MarketplaceServiceRequest;proposals:MarketplaceProposal[]}>('marketplace','request-detail',{body:{request_id},tempoMaximo:20000}),
- bookings:()=>chamarFuncao<{bookings:Array<Record<string,unknown>}>('marketplace','booking-list',{tempoMaximo:20000}),
+ bookings:()=>chamarFuncao<{bookings:Array<Record<string,unknown>>}>('marketplace','booking-list',{tempoMaximo:20000}),
  updateBooking:(booking_id:string,status:string)=>chamarFuncao<{booking:Record<string,unknown>}>('marketplace','booking-status',{body:{booking_id,status},tempoMaximo:20000}),
  review:(booking_id:string,rating:number,comment?:string)=>chamarFuncao<{review:Record<string,unknown>}>('marketplace','review-service',{body:{booking_id,rating,comment},tempoMaximo:20000}),
 };
