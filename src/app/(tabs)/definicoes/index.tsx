@@ -104,11 +104,6 @@ export default function Definicoes() {
         ))}
       </Cartao>
 
-      <Cartao>
-        <Subtitulo>Marketplace</Subtitulo>
-        <Texto suave>Compra e publica anúncios no país associado à tua conta.</Texto>
-        <Botao titulo="Abrir Marketplace" variante="secundario" onPress={() => router.push('/definicoes/marketplace')} />
-      </Cartao>
 
       <Cartao>
         <Subtitulo>Motorista</Subtitulo>
