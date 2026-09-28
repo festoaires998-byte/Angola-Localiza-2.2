@@ -6,6 +6,7 @@ import { nomeDaConta } from '@/domain/identidade/nome';
 import { criarRepositorioPerfilLocal } from '@/database/repositories/perfilLocal';
 
 import { criarSessao } from './criarSessao';
+import { selecionarPais } from './pais';
 
 export type { EstadoSessao, NivelSessao, UtilizadorSessao } from './criarSessao';
 
@@ -19,7 +20,9 @@ export const sessao = criarSessao({
       // A documentação do supabase-js pede para não chamar o cliente dentro
       // deste callback (pode bloquear): o trabalho corre logo a seguir.
       setTimeout(() => {
-        ouvinte(s?.user ? { id: s.user.id, email: s.user.email ?? null, nome: nomeDaConta(s.user.user_metadata) } : null);
+        const codigo = typeof s?.user?.user_metadata?.country_code === 'string' ? s.user.user_metadata.country_code : 'AO';
+        void selecionarPais(codigo).catch(() => undefined);
+        ouvinte(s?.user ? { id: s.user.id, email: s.user.email ?? null, nome: nomeDaConta(s.user.user_metadata), countryCode: codigo } : null);
       }, 0);
     });
     return () => data.subscription.unsubscribe();
