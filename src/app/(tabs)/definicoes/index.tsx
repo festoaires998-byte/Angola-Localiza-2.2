@@ -9,6 +9,7 @@ import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { KYC_VERIFICADO } from '@/domain/organizacao/cargos';
 import { PAISES_PALOP, ouvirPais, paisAtual, selecionarPais } from '@/state/pais';
+import { nomeDaMarcaPorCodigo } from '@/config/pais';
 import { useCargos } from '@/hooks/useCargos';
 import { useFilaSync, type OperacaoComProblema } from '@/hooks/useFilaSync';
 import { useSessao } from '@/hooks/useSessao';
@@ -90,8 +91,8 @@ export default function Definicoes() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>País</Subtitulo>
-        <Texto suave>Escolhe o país ativo. Angola continua a ser o padrão.</Texto>
+        <Subtitulo>País ativo</Subtitulo>
+        <Texto suave>{`Escolhe o país ativo. A identidade da plataforma será ${nomeDaMarcaPorCodigo(pais)}.`}</Texto>
         {PAISES_PALOP.map((codigo) => (
           <Botao
             key={codigo}
@@ -154,7 +155,7 @@ export default function Definicoes() {
       <BotaoSair />
 
       <View style={estilos.versao}>
-        <Texto suave>{`Angola Localiza, versão ${versaoDaApp()}`}</Texto>
+        <Texto suave>{`${nomeDaMarcaPorCodigo(pais)}, versão ${versaoDaApp()}`}</Texto>
       </View>
     </Ecra>
   );
