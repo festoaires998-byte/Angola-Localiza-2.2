@@ -15,7 +15,7 @@ export interface RegiaoMapa {
 }
 
 export const REGIOES_OFFLINE_PALOP: Record<string, RegiaoMapa> = {
-  AO: { id: 'huambo', nome: 'Huambo e arredores', bbox: [15.45, -13.0, 16.0, -12.55], centro: [15.7392, -12.7761] },
+  AO: { id: 'angola', nome: 'Angola', bbox: [11.6, -18.1, 24.1, -4.3], centro: [13.2343, -8.8383] },
   // Os limites abaixo definem o futuro pacote nacional; os ficheiros PMTiles serão publicados separadamente.
   MZ: { id: 'mocambique', nome: 'Moçambique', bbox: [30.0, -26.9, 41.0, -10.4], centro: [32.5732, -25.9692] },
   CV: { id: 'cabo-verde', nome: 'Cabo Verde', bbox: [-25.4, 14.7, -22.6, 17.3], centro: [-23.513, 14.933] },
