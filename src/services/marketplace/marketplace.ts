@@ -38,3 +38,20 @@ export const marketplace={
  },
  imageUrl:(storage_path:string)=>chamarFuncao<{url:string}>('marketplace','image-read-url',{body:{storage_path},tempoMaximo:20000}),
 };
+
+export type MarketplaceProvider={id:string;owner_id:string;country_code:string;provider_type:'FREELANCER'|'BUSINESS';display_name:string;headline:string|null;bio:string|null;phone:string|null;province:string|null;city:string|null;neighborhood:string|null;verified:boolean;active:boolean};
+export type MarketplaceService={id:string;provider_id:string;name:string;description:string|null;category:string;price_from:number|null;currency:string;active:boolean};
+export type MarketplaceServiceRequest={id:string;client_id:string;country_code:string;category:string;title:string;description:string;province:string|null;city:string|null;neighborhood:string|null;preferred_date:string|null;budget_min:number|null;budget_max:number|null;status:string;created_at:string;updated_at:string};
+export type MarketplaceProposal={id:string;request_id:string;provider_id:string;provider_user_id:string;amount:number|null;currency:string|null;message:string;proposed_date:string|null;status:string;created_at:string;updated_at:string};
+export const marketplaceServices={
+ providers:(body?:Record<string,unknown>)=>chamarFuncao<{providers:MarketplaceProvider[]}>('marketplace','service-providers',{body,tempoMaximo:20000}),
+ detail:(provider_id:string)=>chamarFuncao<{provider:MarketplaceProvider;services:MarketplaceService[]}>('marketplace','service-detail',{body:{provider_id},tempoMaximo:20000}),
+ saveProfile:(body:Record<string,unknown>)=>chamarFuncao<{provider:MarketplaceProvider}>('marketplace','service-profile-upsert',{body,tempoMaximo:20000}),
+ saveService:(body:Record<string,unknown>)=>chamarFuncao<{service:MarketplaceService}>('marketplace','service-upsert',{body,tempoMaximo:20000}),
+ request:(body:Record<string,unknown>)=>chamarFuncao<{request:MarketplaceServiceRequest}>('marketplace','request-service',{body,tempoMaximo:20000}),
+ myRequests:()=>chamarFuncao<{requests:MarketplaceServiceRequest[]}>('marketplace','my-service-requests',{tempoMaximo:20000}),
+ openRequests:()=>chamarFuncao<{requests:MarketplaceServiceRequest[]}>('marketplace','open-service-requests',{tempoMaximo:20000}),
+ propose:(body:Record<string,unknown>)=>chamarFuncao<{proposal:MarketplaceProposal}>('marketplace','propose-service',{body,tempoMaximo:20000}),
+ myProposals:()=>chamarFuncao<{proposals:MarketplaceProposal[]}>('marketplace','my-proposals',{tempoMaximo:20000}),
+ acceptProposal:(proposal_id:string)=>chamarFuncao<{proposal:MarketplaceProposal}>('marketplace','accept-proposal',{body:{proposal_id},tempoMaximo:20000}),
+};
