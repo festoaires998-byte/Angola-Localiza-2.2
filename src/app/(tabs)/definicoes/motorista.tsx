@@ -28,6 +28,7 @@ export default function Motorista() {
   useEffect(()=>{void ler();},[online]);
 
   if(!utilizador) return <EcraCarregamento texto="A abrir…" />;
+  const userId = userId;
 
   async function foto(chave:DocKey,label:string){
     setErro(null);
@@ -38,7 +39,7 @@ export default function Motorista() {
     setBusy(true);
     try{
       const res=await fetch(r.assets[0].uri); const blob=await res.blob();
-      const path=`${utilizador.id}/driver/${chave}-${Date.now()}.jpg`;
+      const path=`${userId}/driver/${chave}-${Date.now()}.jpg`;
       const up=await supabase.storage.from('kyc-artifacts').upload(path,blob,{contentType:'image/jpeg',upsert:false});
       if(up.error)throw new Error(up.error.message);
       setDocs(d=>({...d,[chave]:path})); setOk(`${label} enviado.`);
