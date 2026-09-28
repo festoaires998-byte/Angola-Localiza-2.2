@@ -33,7 +33,9 @@ Deno.serve(async req=>{
    if(typeof body.provider_id!=="string")return out({error:"PRESTADOR_INVALIDO"},422);
    const {data:p,error}=await db.from("marketplace_service_profiles").select("id,owner_id,country_code,provider_type,display_name,headline,bio,phone,province,city,neighborhood,verified,active").eq("id",body.provider_id).eq("country_code",country).eq("active",true).maybeSingle();if(error)throw error;if(!p)return out({error:"PRESTADOR_NAO_ENCONTRADO"},404);
    const {data:services,error:se}=await db.from("marketplace_services").select("id,name,description,category,price_from,currency,active").eq("provider_id",p.id).eq("active",true).order("created_at",{ascending:false});if(se)throw se;
-   return out({provider:p,services:services||[]});
+   const {data:reviews,error:re}=await db.from("marketplace_service_reviews").select("rating").eq("provider_id",p.id);if(re)throw re;
+   const ratings=(reviews||[]).map((x:any)=>Number(x.rating)).filter((x:number)=>Number.isFinite(x));const review_count=ratings.length;const rating_average=review_count?Math.round((ratings.reduce((a:number,b:number)=>a+b,0)/review_count)*10)/10:0;
+   return out({provider:p,services:services||[],rating_average,review_count});
   }
   if(action==="service-profile-upsert"){
    const type=body.provider_type==="BUSINESS"?"BUSINESS":"FREELANCER";
