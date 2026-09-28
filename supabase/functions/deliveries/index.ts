@@ -117,6 +117,15 @@ async function verificarAssinaturaProva(
   }
 }
 
+async function motoristaAprovado(supabase: ReturnType<typeof createClient>, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("driver_profiles")
+    .select("status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data?.status === "APPROVED";
+}
+
 async function identidadeVerificada(supabase: ReturnType<typeof createClient>, userId: string) {
   const { data: identity } = await supabase.from("user_identity").select("citizen_id_verified").eq("user_id", userId).maybeSingle();
   if (identity?.citizen_id_verified === true) return true;
@@ -432,6 +441,9 @@ Deno.serve(async (req: Request) => {
       const { data: papeis } = await supabase.from("organization_members").select("organization_id, role").eq("user_id", driver_id);
       const memberships = papeis ?? [];
       if (!memberships.some((m) => m.role === "estafeta")) return new Response(JSON.stringify({ error: "essa pessoa nao e estafeta" }), { status: 422, headers: cors });
+      if (!(await motoristaAprovado(supabase, driver_id))) {
+        return new Response(JSON.stringify({ error: "MOTORISTA_KYC_NAO_APROVADO" }), { status: 403, headers: cors });
+      }
       const targetOrganizationId = delivery.organization_id ?? operatorMembership?.organization_id ?? null;
       if (targetOrganizationId && !memberships.some((m) => m.role === "estafeta" && m.organization_id === targetOrganizationId)) {
         return new Response(JSON.stringify({ error: "ESTAFETA_FORA_DA_ORGANIZACAO" }), { status: 403, headers: cors });
@@ -462,6 +474,9 @@ Deno.serve(async (req: Request) => {
 
       const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
       const isDriver = delivery.assigned_driver === callerId;
+      if (isDriver && !(await motoristaAprovado(supabase, callerId))) {
+        return new Response(JSON.stringify({ error: "MOTORISTA_KYC_NAO_APROVADO" }), { status: 403, headers: cors });
+      }
       const isOwnerCancelling = delivery.created_by === callerId && new_status === "CANCELLED";
       if (!isAdminRes && !isDriver && !isOwnerCancelling) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
 
