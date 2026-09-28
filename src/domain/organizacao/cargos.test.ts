@@ -12,7 +12,7 @@ import {
   type Separador,
 } from './cargos';
 
-const MINIMOS: Separador[] = ['mapa', 'definicoes'];
+const MINIMOS: Separador[] = ['mapa', 'marketplace', 'definicoes'];
 const OK = 'ID_VERIFIED';
 
 describe('separadoresPermitidos', () => {
@@ -22,9 +22,9 @@ describe('separadoresPermitidos', () => {
     ['super_admin sem KYC', ['super_admin'], null, [...SEPARADORES]],
     ['super_admin com outro cargo', ['super_admin', 'auditor'], 'PENDING_ID', [...SEPARADORES]],
     // cidadão (sem cargos) → nunca bloqueado por KYC
-    ['cidadão sem KYC', [], null, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'definicoes']],
-    ['cidadão com KYC pendente', [], 'PENDING_ID', ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'definicoes']],
-    ['cidadão verificado', [], OK, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'definicoes']],
+    ['cidadão sem KYC', [], null, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'marketplace', 'definicoes']],
+    ['cidadão com KYC pendente', [], 'PENDING_ID', ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'marketplace', 'definicoes']],
+    ['cidadão verificado', [], OK, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'marketplace', 'definicoes']],
     // cada cargo, com KYC verificado
     ['tecnico_campo', ['tecnico_campo'], OK, ['mapa', 'guardados', 'campo', 'definicoes']],
     ['estafeta', ['estafeta'], OK, ['mapa', 'minhas-entregas', 'definicoes']],
@@ -88,8 +88,8 @@ describe('decidirAcesso (MFA e falhar fechado)', () => {
     ['sem perfil, AAL2', { perfil: null, nivel: 'aal2' }, MINIMOS, false, 'sem_perfil'],
     ['sem perfil, nível desconhecido', { perfil: null, nivel: null }, MINIMOS, false, 'sem_perfil'],
     // cidadão não precisa de MFA
-    ['cidadão AAL1', { perfil: cidadao, nivel: 'aal1' }, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'definicoes'], false, null],
-    ['cidadão, nível desconhecido', { perfil: cidadao, nivel: null }, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'definicoes'], false, null],
+    ['cidadão AAL1', { perfil: cidadao, nivel: 'aal1' }, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'marketplace', 'definicoes'], false, null],
+    ['cidadão, nível desconhecido', { perfil: cidadao, nivel: null }, ['mapa', 'guardados', 'entrega', 'minhas-entregas', 'marketplace', 'definicoes'], false, null],
     // staff sem AAL2 → mínimo até verificar o código
     ['técnico AAL1', { perfil: tecnico, nivel: 'aal1' }, MINIMOS, true, 'falta_mfa'],
     ['técnico, nível desconhecido', { perfil: tecnico, nivel: null }, MINIMOS, true, 'falta_mfa'],
