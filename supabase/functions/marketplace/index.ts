@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Content-Type":"application/json"};
+const listingsSafe=(rows:any[])=>rows.map(({id,title,category,price,currency,condition,city,province,status,country_code,seller_id,views_count,created_at})=>({id,title,category,price,currency,condition,city,province,status,country_code,seller_id,views_count,created_at}));
 const out=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:cors});
 const countries=["AO","MZ","CV","GW","ST"];
 const currencyByCountry:Record<string,string>={AO:"AOA",MZ:"MZN",CV:"CVE",GW:"XOF",ST:"STN"};
@@ -37,6 +38,20 @@ Deno.serve(async req=>{
    query=query.order(sort,{ascending:body.sort==="price_asc"});
    const {data,error}=await query.limit(100); if(error)throw error;
    return out({country_code:country,currency:currencyByCountry[country],listings:data||[]});
+  }
+
+  if(action==="detail"){
+   if(typeof body.listing_id!=="string")return out({error:"ANUNCIO_INVALIDO"},422);
+   const {data:l,error}=await db.from("marketplace_listings").select("id,title,description,category,price,currency,status,condition,province,city,neighborhood,contact_phone,contact_message,country_code,seller_id,views_count,created_at,updated_at").eq("id",body.listing_id).eq("country_code",country).eq("status","ACTIVE").maybeSingle();
+   if(error)throw error;if(!l)return out({error:"ANUNCIO_NAO_ENCONTRADO"},404);
+   const {data:imgs,error:ie}=await db.from("marketplace_listing_images").select("id,storage_path,sort_order").eq("listing_id",l.id).order("sort_order");
+   if(ie)throw ie;
+   const images=[];
+   for(const i of imgs||[]){const {data:u,error:ue}=await db.storage.from("marketplace-media").createSignedUrl(i.storage_path,3600);if(!ue&&u)images.push({id:i.id,storage_path:i.storage_path,sort_order:i.sort_order,url:u.signedUrl});}
+   const {data:similar,error:se}=await db.from("marketplace_listings").select("id,title,category,price,currency,condition,city,province,status,country_code,seller_id,views_count,created_at").eq("country_code",country).eq("status","ACTIVE").eq("category",l.category).neq("id",l.id).order("created_at",{ascending:false}).limit(6);
+   if(se)throw se;
+   await db.from("marketplace_listings").update({views_count:(l.views_count||0)+1}).eq("id",l.id);
+   return out({listing:{...l,views_count:(l.views_count||0)+1},images,similar:listingsSafe(similar||[])});
   }
 
   if(action==="mine"){
