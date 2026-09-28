@@ -39,7 +39,9 @@ const mapaHuambo = {
   origemRecursos: () => ({ fontes: 'file:///f', sprite: 'file:///s' }),
 };
 
+export const criarMapaDoPais = () => mapaHuambo;
+
 export const mapaOffline = {
-  criarMapaDoPais: () => mapaHuambo,
+  criarMapaDoPais,
   mapaHuambo,
 };
