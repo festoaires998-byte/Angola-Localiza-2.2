@@ -84,6 +84,7 @@ Deno.serve(async req=>{
    const method=typeof body.payment_method==="string"?body.payment_method:"PROXYPAY_MULTICAIXA";
    if(country!=="AO"||!["PROXYPAY_MULTICAIXA","PROXYPAY_GPO"].includes(method))return out({error:"PROVEDOR_DE_PAGAMENTO_AINDA_NAO_CONFIGURADO",country_code:country,payment_method:method},503);
    const {data:existing}=await db.from("marketplace_payment_intents").select("*").eq("client_id",uid).eq("idempotency_key",body.idempotency_key.trim()).maybeSingle();if(existing)return out({payment:existing,idempotent_replay:true});
+   const {data:bookingPayment}=await db.from("marketplace_payment_intents").select("*").eq("booking_id",body.booking_id).eq("client_id",uid).maybeSingle();if(bookingPayment)return out({payment:bookingPayment,idempotent_replay:true});
    const {data:b,error:be}=await db.from("marketplace_service_bookings").select("id,client_id,provider_id,country_code,status,proposal_id").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
    if(b.client_id!==uid)return out({error:"APENAS_CLIENTE_PODE_PAGAR"},403);
    if(!["SCHEDULED","IN_PROGRESS"].includes(b.status))return out({error:"ESTADO_NAO_PERMITE_PAGAMENTO"},409);
