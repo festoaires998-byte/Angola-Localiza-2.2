@@ -20,6 +20,64 @@ Deno.serve(async req=>{
   if(!country||!countries.includes(country))return out({error:"PAIS_DA_CONTA_EM_FALTA"},422);
   const body=req.method==="GET"?{}:await req.json();
 
+  if(action==="service-providers"){
+   const category=typeof body.category==="string"?body.category.trim():"";
+   let q=db.from("marketplace_service_profiles").select("id,owner_id,country_code,provider_type,display_name,headline,bio,phone,province,city,neighborhood,verified,active").eq("country_code",country).eq("active",true);
+   if(body.provider_type==="FREELANCER"||body.provider_type==="BUSINESS")q=q.eq("provider_type",body.provider_type);
+   if(category)q=q.in("id",(await db.from("marketplace_services").select("provider_id").eq("category",category).eq("active",true)).data?.map((x:any)=>x.provider_id)||[]);
+   if(typeof body.q==="string"&&body.q.trim())q=q.or("display_name.ilike.%"+body.q.trim()+"%,headline.ilike.%"+body.q.trim()+"%,bio.ilike.%"+body.q.trim()+"%");
+   const {data,error}=await q.order("verified",{ascending:false}).order("created_at",{ascending:false}).limit(100);if(error)throw error;
+   return out({providers:data||[]});
+  }
+  if(action==="service-detail"){
+   if(typeof body.provider_id!=="string")return out({error:"PRESTADOR_INVALIDO"},422);
+   const {data:p,error}=await db.from("marketplace_service_profiles").select("id,owner_id,country_code,provider_type,display_name,headline,bio,phone,province,city,neighborhood,verified,active").eq("id",body.provider_id).eq("country_code",country).eq("active",true).maybeSingle();if(error)throw error;if(!p)return out({error:"PRESTADOR_NAO_ENCONTRADO"},404);
+   const {data:services,error:se}=await db.from("marketplace_services").select("id,name,description,category,price_from,currency,active").eq("provider_id",p.id).eq("active",true).order("created_at",{ascending:false});if(se)throw se;
+   return out({provider:p,services:services||[]});
+  }
+  if(action==="service-profile-upsert"){
+   const type=body.provider_type==="BUSINESS"?"BUSINESS":"FREELANCER";
+   if(typeof body.display_name!=="string"||body.display_name.trim().length<2)return out({error:"NOME_INVALIDO"},422);
+   const {data,error}=await db.from("marketplace_service_profiles").upsert({owner_id:uid,country_code:country,provider_type:type,display_name:body.display_name.trim(),headline:typeof body.headline==="string"?body.headline.trim():null,bio:typeof body.bio==="string"?body.bio.trim():null,phone:typeof body.phone==="string"?body.phone.trim():null,province:typeof body.province==="string"?body.province.trim():null,city:typeof body.city==="string"?body.city.trim():null,neighborhood:typeof body.neighborhood==="string"?body.neighborhood.trim():null,updated_at:new Date().toISOString()},{onConflict:"owner_id"}).select().single();if(error)throw error;return out({provider:data});
+  }
+  if(action==="service-upsert"){
+   if(typeof body.name!=="string"||body.name.trim().length<2||typeof body.category!=="string"||!body.category.trim())return out({error:"SERVICO_INVALIDO"},422);
+   const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("owner_id",uid).eq("country_code",country).maybeSingle();if(!p)return out({error:"PERFIL_PRESTADOR_OBRIGATORIO"},409);
+   const amount=body.price_from===null||body.price_from===""||body.price_from===undefined?null:Number(body.price_from);if(amount!==null&&(!Number.isFinite(amount)||amount<0))return out({error:"PRECO_INVALIDO"},422);
+   const values={provider_id:p.id,name:body.name.trim(),description:typeof body.description==="string"?body.description.trim():null,category:body.category.trim(),price_from:amount,currency:currencyByCountry[country],active:body.active!==false,updated_at:new Date().toISOString()};
+   const {data,error}=body.id?await db.from("marketplace_services").update(values).eq("id",body.id).eq("provider_id",p.id).select().single():await db.from("marketplace_services").insert(values).select().single();if(error)throw error;return out({service:data});
+  }
+  if(action==="request-service"){
+   if(typeof body.title!=="string"||body.title.trim().length<3||typeof body.description!=="string"||body.description.trim().length<10||typeof body.category!=="string"||!body.category.trim())return out({error:"PEDIDO_INVALIDO"},422);
+   const min=body.budget_min==null?null:Number(body.budget_min),max=body.budget_max==null?null:Number(body.budget_max);if((min!==null&&(!Number.isFinite(min)||min<0))||(max!==null&&(!Number.isFinite(max)||max<0))||(min!==null&&max!==null&&max<min))return out({error:"ORCAMENTO_INVALIDO"},422);
+   const {data,error}=await db.from("marketplace_service_requests").insert({client_id:uid,country_code:country,category:body.category.trim(),title:body.title.trim(),description:body.description.trim(),province:body.province||null,city:body.city||null,neighborhood:body.neighborhood||null,preferred_date:body.preferred_date||null,budget_min:min,budget_max:max}).select().single();if(error)throw error;return out({request:data});
+  }
+  if(action==="my-service-requests"){
+   const {data,error}=await db.from("marketplace_service_requests").select("*").eq("client_id",uid).eq("country_code",country).order("created_at",{ascending:false}).limit(100);if(error)throw error;return out({requests:data||[]});
+  }
+  if(action==="open-service-requests"){
+   const {data,error}=await db.from("marketplace_service_requests").select("*").eq("country_code",country).eq("status","OPEN").order("created_at",{ascending:false}).limit(100);if(error)throw error;return out({requests:data||[]});
+  }
+  if(action==="propose-service"){
+   if(typeof body.request_id!=="string"||typeof body.message!=="string"||body.message.trim().length<2)return out({error:"PROPOSTA_INVALIDA"},422);
+   const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("owner_id",uid).eq("country_code",country).eq("active",true).maybeSingle();if(!p)return out({error:"PERFIL_PRESTADOR_OBRIGATORIO"},409);
+   const {data:req}=await db.from("marketplace_service_requests").select("id,country_code,status").eq("id",body.request_id).eq("country_code",country).eq("status","OPEN").maybeSingle();if(!req)return out({error:"PEDIDO_NAO_DISPONIVEL"},409);
+   const amount=body.amount==null?null:Number(body.amount);if(amount!==null&&(!Number.isFinite(amount)||amount<0))return out({error:"VALOR_INVALIDO"},422);
+   const {data,error}=await db.from("marketplace_service_proposals").upsert({request_id:req.id,provider_id:p.id,provider_user_id:uid,amount,currency:currencyByCountry[country],message:body.message.trim(),proposed_date:body.proposed_date||null,status:"PENDING",updated_at:new Date().toISOString()},{onConflict:"request_id,provider_id"}).select().single();if(error)throw error;return out({proposal:data});
+  }
+  if(action==="my-proposals"){
+   const {data,error}=await db.from("marketplace_service_proposals").select("*").eq("provider_user_id",uid).order("created_at",{ascending:false}).limit(100);if(error)throw error;return out({proposals:data||[]});
+  }
+  if(action==="accept-proposal"){
+   if(typeof body.proposal_id!=="string")return out({error:"PROPOSTA_INVALIDA"},422);
+   const {data:p}=await db.from("marketplace_service_proposals").select("id,request_id,provider_user_id,status").eq("id",body.proposal_id).maybeSingle();if(!p)return out({error:"PROPOSTA_NAO_ENCONTRADA"},404);
+   const {data:req}=await db.from("marketplace_service_requests").select("id,client_id,status").eq("id",p.request_id).eq("client_id",uid).eq("status","OPEN").maybeSingle();if(!req)return out({error:"PEDIDO_NAO_DISPONIVEL"},409);
+   const {error:e1}=await db.from("marketplace_service_proposals").update({status:"REJECTED",updated_at:new Date().toISOString()}).eq("request_id",req.id).neq("id",p.id).eq("status","PENDING");if(e1)throw e1;
+   const {data:accepted,error:e2}=await db.from("marketplace_service_proposals").update({status:"ACCEPTED",updated_at:new Date().toISOString()}).eq("id",p.id).select().single();if(e2)throw e2;
+   const {error:e3}=await db.from("marketplace_service_requests").update({status:"AWARDED",updated_at:new Date().toISOString()}).eq("id",req.id).eq("client_id",uid);if(e3)throw e3;
+   return out({proposal:accepted});
+  }
+
   if(action==="categories"){
    const {data,error}=await db.from("marketplace_categories").select("id,slug,name,icon").eq("active",true).order("sort_order");
    if(error)throw error; return out({categories:data||[]});
