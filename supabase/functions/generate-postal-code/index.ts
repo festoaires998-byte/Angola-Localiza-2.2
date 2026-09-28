@@ -8,16 +8,16 @@ import { codigoBase, SCHEME_VERSION, validatePostalCode } from "./codigoPostal.t
 // (partilhado com a app, que calcula o mesmo sem rede).
 // Pedido e resposta iguais aos da versão anterior (o site continua a funcionar).
 
-async function generatePostalCode(supabase: ReturnType<typeof createClient>, latitude: number, longitude: number, provinceName?: string) {
-  const { provinceCode, gridCode, base, checksum: chk } = codigoBase(latitude, longitude, provinceName);
+async function generatePostalCode(supabase: ReturnType<typeof createClient>, latitude: number, longitude: number, provinceName?: string, countryCode = 'AO') {
+  const { provinceCode, gridCode, base, checksum: chk } = codigoBase(latitude, longitude, provinceName, countryCode);
 
-  let candidate = `AO-${base}-${chk}`;
+  let candidate = `${countryCode.trim().toUpperCase()}-${base}-${chk}`;
   let n = 1;
   while (true) {
     const { data } = await supabase.from("addresses").select("id").eq("postal_code", candidate).maybeSingle();
     if (!data) break;
     n++;
-    candidate = `AO-${base}-${n}-${chk}`;
+    candidate = `${countryCode.trim().toUpperCase()}-${base}-${n}-${chk}`;
     if (n > 20) break; // limite de seguranca - celula anormalmente cheia
   }
 
@@ -47,11 +47,11 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify(validatePostalCode(code)), { headers: cors });
     }
 
-    const { latitude, longitude, province_name } = body;
+    const { latitude, longitude, province_name, country_code = 'AO' } = body;
     if (typeof latitude !== "number" || typeof longitude !== "number") {
       return new Response(JSON.stringify({ error: "latitude e longitude sao obrigatorios (numeros)" }), { status: 400, headers: cors });
     }
-    const result = await generatePostalCode(supabase, latitude, longitude, province_name);
+    const result = await generatePostalCode(supabase, latitude, longitude, province_name, country_code);
     return new Response(JSON.stringify(result), { headers: cors });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: cors });
