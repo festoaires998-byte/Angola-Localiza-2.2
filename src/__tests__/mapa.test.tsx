@@ -245,10 +245,10 @@ describe('separador Mapa', () => {
     expect(mockTentarDeNovo).toHaveBeenCalled();
   });
 
-  test('fora do Huambo: avisa que o código continua a funcionar', async () => {
-    const luanda = { ...POS, latitude: -8.8383, longitude: 13.2344 };
-    mockGps = { estado: 'ok', posicao: luanda };
-    mockMedida = medida(luanda);
+  test('fora de Angola: avisa que o código continua a funcionar', async () => {
+    const foraDeAngola = { ...POS, latitude: 0, longitude: 0 };
+    mockGps = { estado: 'ok', posicao: foraDeAngola };
+    mockMedida = medida(foraDeAngola);
     await desenhar();
     expect(screen.getByText(/Estás fora da zona do mapa/)).toBeTruthy();
   });
