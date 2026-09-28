@@ -39,7 +39,9 @@ Deno.serve(async req=>{
    const {data:services,error:se}=await db.from("marketplace_services").select("id,name,description,category,price_from,currency,active").eq("provider_id",p.id).eq("active",true).order("created_at",{ascending:false});if(se)throw se;
    const {data:reviews,error:re}=await db.from("marketplace_service_reviews").select("rating").eq("provider_id",p.id);if(re)throw re;
    const ratings=(reviews||[]).map((x:any)=>Number(x.rating)).filter((x:number)=>Number.isFinite(x));const review_count=ratings.length;const rating_average=review_count?Math.round((ratings.reduce((a:number,b:number)=>a+b,0)/review_count)*10)/10:0;
-   return out({provider:p,services:services||[],rating_average,review_count});
+   const {data:identityVerified}=await db.rpc("is_id_verified",{check_user_id:p.owner_id});
+   const {data:driverApp}=await db.from("driver_applications").select("status").eq("user_id",p.owner_id).maybeSingle();
+   return out({provider:p,services:services||[],rating_average,review_count,identity_verified:identityVerified===true,driver_kyc_status:driverApp?.status||null});
   }
   if(action==="service-profile-upsert"){
    const type=body.provider_type==="BUSINESS"?"BUSINESS":"FREELANCER";
