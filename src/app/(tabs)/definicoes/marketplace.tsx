@@ -2,12 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Botao, Caixa, Cartao, Campo, Subtitulo, Texto, Titulo } from '@/components/ui';
-import { marketplace, type MarketplaceCategory, type MarketplaceListing } from '@/services/marketplace/marketplace';
+import { marketplace, marketplaceServices, type MarketplaceCategory, type MarketplaceListing, type MarketplaceProvider } from '@/services/marketplace/marketplace';
 
 type Aba='descobrir'|'favoritos'|'meus'|'publicar';
+type Modo='classificados'|'servicos';
 
 export default function Marketplace(){
  const [aba,setAba]=useState<Aba>('descobrir');
+ const [modo,setModo]=useState<Modo>('classificados');
+ const [providers,setProviders]=useState<MarketplaceProvider[]>([]);
+ const [providerType,setProviderType]=useState<'FREELANCER'|'BUSINESS'|''>('');
+ const [serviceQ,setServiceQ]=useState('');
+ const [serviceCategory,setServiceCategory]=useState('');
  const [items,setItems]=useState<MarketplaceListing[]>([]);
  const [cats,setCats]=useState<MarketplaceCategory[]>([]);
  const [country,setCountry]=useState('—'); const [currency,setCurrency]=useState('');
@@ -28,6 +34,11 @@ export default function Marketplace(){
   }catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar o Marketplace.');} finally{setLoading(false);}
  },[q,category]);
  useEffect(()=>{void carregar();},[carregar]);
+ async function carregarServicos(){
+  setLoading(true);setErro(null);
+  try{const r=await marketplaceServices.providers({q:serviceQ||undefined,category:serviceCategory||undefined,provider_type:providerType||undefined});setProviders(r.providers);}
+  catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar os prestadores.');}finally{setLoading(false);}
+ }
  async function favoritos(){setErro(null);setLoading(true);try{const r=await marketplace.favorites();setItems(r.listings);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar favoritos.');}finally{setLoading(false);}}
  async function meus(){setErro(null);setLoading(true);try{const r=await marketplace.mine();setItems(r.listings);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar os teus anúncios.');}finally{setLoading(false);}}
  useEffect(()=>{if(aba==='favoritos')void favoritos();if(aba==='meus')void meus();},[aba]);
@@ -73,17 +84,34 @@ export default function Marketplace(){
   <Titulo>Marketplace</Titulo><Texto suave>{country!=='—'?'Marketplace de '+country+' · '+currency:'Marketplace'}</Texto>
   <View style={s.tabs}>{(['descobrir','favoritos','meus','publicar'] as Aba[]).map(x=><Botao key={x} titulo={{descobrir:'Descobrir',favoritos:'Favoritos',meus:'Meus',publicar:'Publicar'}[x]} onPress={()=>setAba(x)} />)}</View>
   {erro?<Caixa tipo='erro'>{erro}</Caixa>:null}{mensagem?<Caixa tipo='sucesso'>{mensagem}</Caixa>:null}<Subtitulo>{tituloAba}</Subtitulo>
+  <View style={s.tabs}><Botao titulo="Comprar / Vender" onPress={()=>setModo('classificados')} /><Botao titulo="Serviços" onPress={()=>{setModo('servicos');void carregarServicos();}} /></View>
+  {modo==='servicos'?<Cartao>
+   <Subtitulo>Encontrar profissionais e empresas</Subtitulo>
+   <Campo rotulo="Pesquisar" value={serviceQ} onChangeText={setServiceQ} placeholder="Eletricista, fotógrafo, oficina…" />
+   <Campo rotulo="Categoria" value={serviceCategory} onChangeText={setServiceCategory} placeholder="Categoria do serviço" />
+   <View style={s.tabs}><Botao titulo="Todos" onPress={()=>setProviderType('')} /><Botao titulo="Freelancers" onPress={()=>setProviderType('FREELANCER')} /><Botao titulo="Empresas" onPress={()=>setProviderType('BUSINESS')} /></View>
+   <Botao titulo="Pesquisar serviços" aCarregar={loading} onPress={()=>void carregarServicos()} />
+   <Botao titulo="Preciso de um serviço" onPress={()=>setMensagem('A criação de pedidos de orçamento será disponibilizada na próxima camada.')} />
+  </Cartao>:null}
+  {modo==='servicos'?providers.map(p=><Cartao key={p.id}>
+   <Subtitulo>{p.display_name}{p.verified?' ✓':''}</Subtitulo>
+   <Texto>{p.headline||'Prestador de serviços Localiza'}</Texto>
+   <Texto suave>{p.provider_type==='BUSINESS'?'Empresa':'Freelancer'} · {p.city||p.province||'Localização não indicada'}</Texto>
+   {p.bio?<Texto>{p.bio}</Texto>:null}
+   <Botao titulo="Ver serviços" onPress={async()=>{try{const r=await marketplaceServices.detail(p.id);setMensagem(r.services.length+' serviço(s) disponíveis para este prestador.');}catch(e){setErro(e instanceof Error?e.message:'Não foi possível abrir o perfil.');}}} />
+  </Cartao>):null}
+
   {aba==='descobrir'?<Cartao><Campo rotulo='Pesquisar' value={q} onChangeText={setQ} placeholder='O que procuras?' /><Campo rotulo='Categoria' value={category} onChangeText={setCategory} placeholder='ex.: eletronica' /><Botao titulo='Pesquisar' aCarregar={loading} onPress={()=>void carregar()} />{cats.length>0?<Texto suave>Categorias: {cats.map(c=>c.name).join(' · ')}</Texto>:null}</Cartao>:null}
-  {aba==='publicar'?<Cartao><Subtitulo>O teu anúncio</Subtitulo><Campo rotulo='Título' value={title} onChangeText={setTitle} placeholder='Ex.: Toyota Corolla 2018' /><Campo rotulo='Descrição' value={description} onChangeText={setDescription} placeholder='Descreve claramente o anúncio…' multiline /><Campo rotulo='Categoria' value={category} onChangeText={setCategory} placeholder='ex.: veiculos' /><Campo rotulo='Preço (opcional)' value={price} onChangeText={setPrice} placeholder={'Valor em '+(currency||'moeda local')} keyboardType='decimal-pad' /><Campo rotulo='Província' value={province} onChangeText={setProvince} placeholder='Província' /><Campo rotulo='Cidade' value={city} onChangeText={setCity} placeholder='Cidade' /><Campo rotulo='Bairro' value={neighborhood} onChangeText={setNeighborhood} placeholder='Bairro (opcional)' /><Texto suave>Estado do anúncio</Texto>
+  {modo==='classificados'&&aba==='publicar'?<Cartao><Subtitulo>O teu anúncio</Subtitulo><Campo rotulo='Título' value={title} onChangeText={setTitle} placeholder='Ex.: Toyota Corolla 2018' /><Campo rotulo='Descrição' value={description} onChangeText={setDescription} placeholder='Descreve claramente o anúncio…' multiline /><Campo rotulo='Categoria' value={category} onChangeText={setCategory} placeholder='ex.: veiculos' /><Campo rotulo='Preço (opcional)' value={price} onChangeText={setPrice} placeholder={'Valor em '+(currency||'moeda local')} keyboardType='decimal-pad' /><Campo rotulo='Província' value={province} onChangeText={setProvince} placeholder='Província' /><Campo rotulo='Cidade' value={city} onChangeText={setCity} placeholder='Cidade' /><Campo rotulo='Bairro' value={neighborhood} onChangeText={setNeighborhood} placeholder='Bairro (opcional)' /><Texto suave>Estado do anúncio</Texto>
    <View style={s.tabs}>
     <Botao titulo="Novo" onPress={()=>setCondition('NEW')} />
     <Botao titulo="Usado" onPress={()=>setCondition('USED')} />
     <Botao titulo="Recondicionado" onPress={()=>setCondition('REFURBISHED')} />
    </View><Botao titulo='Escolher fotografias' onPress={()=>void escolherFotos()} />{files.length>0?<Texto>{files.length} fotografia(s) selecionada(s).</Texto>:null}<Botao titulo={busy?'A publicar…':'Publicar anúncio'} aCarregar={busy} onPress={()=>void publicar()} /><Texto suave>O servidor valida o país da conta e as imagens permanecem privadas.</Texto></Cartao>:null}
-  {aba!=='publicar'&&items.map(item=><Cartao key={item.id}><Subtitulo>{item.title}</Subtitulo><Texto>{item.description||'Sem descrição.'}</Texto><Texto suave>{item.category+' · '+(item.condition==='NEW'?'Novo':item.condition==='REFURBISHED'?'Recondicionado':'Usado')+' · '+(item.city||item.province||'Localização não indicada')}</Texto>{item.price!==null?<Texto>{item.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+item.currency}</Texto>:<Texto>Preço sob consulta</Texto>}<Botao titulo="Ver anúncio" aCarregar={detailLoading} onPress={()=>void abrirDetalhe(item.id)} />
+  {modo==='classificados'&&aba!=='publicar'&&items.map(item=><Cartao key={item.id}><Subtitulo>{item.title}</Subtitulo><Texto>{item.description||'Sem descrição.'}</Texto><Texto suave>{item.category+' · '+(item.condition==='NEW'?'Novo':item.condition==='REFURBISHED'?'Recondicionado':'Usado')+' · '+(item.city||item.province||'Localização não indicada')}</Texto>{item.price!==null?<Texto>{item.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+item.currency}</Texto>:<Texto>Preço sob consulta</Texto>}<Botao titulo="Ver anúncio" aCarregar={detailLoading} onPress={()=>void abrirDetalhe(item.id)} />
    <Botao titulo={aba==='favoritos'?'Remover favorito':'Guardar favorito'} onPress={async()=>{await marketplace.favorite(item.id,aba!=='favoritos');if(aba==='favoritos')await favoritos();}} />
    <Botao titulo='Contactar anunciante' onPress={()=>setSelected(item)} />{aba==='meus'&&item.status==='ACTIVE'?<Botao titulo='Pausar anúncio' onPress={async()=>{await marketplace.pause(item.id);await meus();}} />:null}{aba==='meus'&&item.status==='PAUSED'?<Botao titulo='Publicar novamente' onPress={async()=>{await marketplace.publish(item.id);await meus();}} />:null}</Cartao>)}
-  {items.length===0&&!loading&&aba!=='publicar'?<Texto>Não há anúncios para mostrar.</Texto>:null}
+  {modo==='classificados'&&items.length===0&&!loading&&aba!=='publicar'?<Texto>Não há anúncios para mostrar.</Texto>:null}
   {selected?<Cartao><Subtitulo>Contactar: {selected.title}</Subtitulo><Campo rotulo='Mensagem' value={contact} onChangeText={setContact} placeholder='Olá, ainda está disponível?' multiline /><Botao titulo='Enviar mensagem' aCarregar={busy} onPress={()=>void interesse()} /><Botao titulo='Fechar' onPress={()=>setSelected(null)} /></Cartao>:null}
  </ScrollView>;
 }
