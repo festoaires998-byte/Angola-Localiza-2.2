@@ -2,6 +2,7 @@ import type { Entrega } from '@/database/repositories/entregas';
 import { marcadorOffline, type FicheiroPendente, type NovoFicheiro } from '@/database/repositories/ficheirosPendentes';
 import type { OperacaoFila, TipoOperacao } from '@/database/repositories/filaSaida';
 import type { Envio } from '@/domain/entregas/envio';
+import type { PedidoDisponivelEstafeta } from '@/api/entregas';
 import {
   payloadFalha,
   payloadPasso,
@@ -37,7 +38,14 @@ export interface FicheiroGravado {
 }
 
 export interface DependenciasEstafeta {
-  servidor: { listarAtribuidas(userId: string): Promise<Envio[]>; aceitar(deliveryId: string): Promise<void> };
+  servidor: {
+    listarAtribuidas(userId: string): Promise<Envio[]>;
+    listarDisponiveis(): Promise<{
+      pedidos: PedidoDisponivelEstafeta[];
+      estafeta: { online: boolean; status: string; vehicle_type: string | null; vehicle_capacity_kg: number | null };
+    }>;
+    aceitar(deliveryId: string): Promise<void>;
+  };
   entregas: {
     guardarVarias(e: (Omit<Entrega, 'atualizado_em'> & { atualizado_em?: string })[]): Promise<void>;
     listar(): Promise<Entrega[]>;
@@ -127,6 +135,11 @@ export function criarServicoEstafeta(deps: DependenciasEstafeta) {
     /** Aceita diretamente um pedido ainda disponível. A decisão final é atómica no servidor. */
     async aceitar(deliveryId: string): Promise<void> {
       await deps.servidor.aceitar(deliveryId);
+    },
+
+    /** Pedidos ainda sem estafeta, classificados pelo perfil real do veículo. */
+    async listarDisponiveis() {
+      return deps.servidor.listarDisponiveis();
     },
 
     /** Com rede vêm do servidor e ficam guardadas; sem rede (ou se falhar), as guardadas. */
