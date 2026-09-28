@@ -24,6 +24,8 @@ Deno.serve(async req=>{
       if(!country) return out({error:"PAIS_DA_CONTA_EM_FALTA"},422);
       if(!["AO","MZ","CV","GW","ST"].includes(country)) return out({error:"PAIS_NAO_SUPORTADO"},422);
       const required=["vehicle_type","vehicle_plate","license_number","id_document_path","license_front_path","license_back_path","vehicle_document_path","selfie_path"];
+      const paths=["id_document_path","license_front_path","license_back_path","vehicle_document_path","selfie_path"];
+      if(paths.some(k=>typeof body[k]!=="string" || !(body[k] as string).startsWith(uid+"/"))) return out({error:"FICHEIRO_KYC_FORA_DA_PASTA_DO_UTILIZADOR"},422);
       if(required.some(k=>typeof body[k]!=="string"||!body[k].trim())) return out({error:"DADOS_KYC_INCOMPLETOS"},422);
       const {data:exist}=await supabase.from("driver_applications").select("status").eq("user_id",uid).maybeSingle();
       if(exist?.status==="APPROVED") return out({ok:true,status:"APPROVED"});
