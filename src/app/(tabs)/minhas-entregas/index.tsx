@@ -12,6 +12,7 @@ import { useRealtimeEntregas } from '@/hooks/useRealtimeEntregas';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import { acoesDaEntrega, type AcaoNaFila } from '@/services/entregas/estafeta';
+import { servicoEstafeta } from '@/services/entregas/estafetaApp';
 import { definirAvisoEstafeta } from '@/state/estafeta';
 
 function ItemEntrega({ entrega, acoes, aoAbrir }: { entrega: Envio; acoes: AcaoNaFila[]; aoAbrir(): void }) {
@@ -40,6 +41,25 @@ function ItemEntrega({ entrega, acoes, aoAbrir }: { entrega: Envio; acoes: AcaoN
   );
 }
 
+function ItemPedidoDisponivel({ pedido, aoAceitar }: { pedido: import('@/api/entregas').PedidoDisponivelEstafeta; aoAceitar(): void }) {
+  const compat = pedido.compatibilidade === 'COMPATIVEL';
+  const carga = pedido.carga;
+  return (
+    <View style={estilos.item}>
+      <Text style={estilos.titulo}>{carga?.tipo ?? 'Carga'}</Text>
+      {carga?.descricao ? <Text style={estilos.detalhe} numberOfLines={2}>{carga.descricao}</Text> : null}
+      <View style={estilos.etiquetas}>
+        <Text style={[estilos.etiqueta, compat ? estilos.etiquetaCompativel : estilos.etiquetaAviso]}>{compat ? '🟢 Compatível' : '🟡 Alternativa'}</Text>
+        {pedido.urgente ? <Text style={[estilos.etiqueta, estilos.etiquetaAviso]}>Urgente</Text> : null}
+      </View>
+      {carga?.pesoKg != null ? <Text style={estilos.detalhe}>{'Peso: ' + carga.pesoKg + ' kg'}</Text> : null}
+      {carga?.tipoVeiculo ? <Text style={estilos.detalhe}>{'Veículo pedido: ' + carga.tipoVeiculo}</Text> : null}
+      {carga?.capacidadeVeiculoKg != null ? <Text style={estilos.detalhe}>{'Capacidade pedida: ' + carga.capacidadeVeiculoKg + ' kg'}</Text> : null}
+      {!compat && pedido.motivos.length > 0 ? <Text style={estilos.detalhe}>{pedido.motivos.join(' · ')}</Text> : null}
+      <Pressable onPress={aoAceitar} accessibilityRole="button" style={estilos.aceitar}><Text style={estilos.aceitarTexto}>Aceitar pedido</Text></Pressable>
+    </View>
+  );
+}
 /** Separador Entregas: as entregas atribuídas ao estafeta (as por fazer primeiro). */
 export default function Entregas() {
   const online = useOnline();
@@ -58,6 +78,7 @@ export default function Entregas() {
   const [pesquisa, setPesquisa] = useState('');
   const [filtro, setFiltro] = useState<'todas' | 'em_curso' | 'falhadas' | 'concluidas'>('todas');
   const [ordemSugerida, setOrdemSugerida] = useState(false);
+  const [aAceitar, setAAceitar] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visaoOrganizacao || !orgCarregando) return;
@@ -125,6 +146,22 @@ export default function Entregas() {
             <Titulo>{visaoOrganizacao ? 'Entregas da organização' : 'As minhas entregas'}</Titulo>
             <Texto suave>{`Hoje: ${hojeEntregas.length} entregas · ${concluidasHoje} com prova · ${sucesso}% sucesso`}</Texto>
             <Texto suave>{`${porFazer.length} por fazer`}</Texto>
+            {eEstafeta && online === true && estado.pedidosDisponiveis.length > 0 ? (
+              <View style={estilos.disponiveis}>
+                <Titulo>Pedidos disponíveis</Titulo>
+                <Texto suave>{estado.pedidosDisponiveis.length + ' pedidos aguardam estafeta. Podes aceitar diretamente.'}</Texto>
+                {estado.pedidosDisponiveis.map((pedido) => (
+                  <ItemPedidoDisponivel key={pedido.id} pedido={pedido} aoAceitar={() => {
+                    if (aAceitar) return;
+                    setAAceitar(pedido.id);
+                    void servicoEstafeta.aceitar(pedido.id)
+                      .then(() => recarregarEstafeta(userId!, true))
+                      .catch((e) => definirAvisoEstafeta({ tipo: 'erro', texto: e instanceof Error && /PEDIDO_JA_ACEITE/.test(e.message) ? 'Este pedido já foi aceite por outro estafeta. A lista foi atualizada.' : e instanceof Error ? e.message : 'Não foi possível aceitar o pedido.' }))
+                      .finally(() => setAAceitar(null));
+                  }} />
+                ))}
+              </View>
+            ) : null}
             {orgErro ? <Caixa tipo="aviso">{`Não foi possível atualizar: ${orgErro}`}</Caixa> : null}
             {estado.aviso ? <Caixa tipo={estado.aviso.tipo}>{estado.aviso.texto}</Caixa> : null}
             {online === false ? <Caixa tipo="info">Offline / pendentes de sincronização.</Caixa> : null}
