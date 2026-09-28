@@ -133,6 +133,20 @@ Deno.serve(async req=>{
    let q=db.from("marketplace_service_bookings").select("*").eq("country_code",country);q=ids.length?q.or("client_id.eq."+uid+",provider_id.in.("+ids.join(",")+")"):q.eq("client_id",uid);
    const {data:b,error}=await q.order("created_at",{ascending:false}).limit(100);if(error)throw error;return out({bookings:b||[]});
   }
+  if(action==="request-payout"){
+   const {data:profile}=await db.from("marketplace_service_profiles").select("id,country_code").eq("owner_id",uid).eq("active",true).maybeSingle();if(!profile)return out({error:"PERFIL_PRESTADOR_NAO_ENCONTRADO"},404);
+   if(profile.country_code!==country)return out({error:"PAIS_DA_CONTA_DIVERGENTE"},403);
+   const {data:rows}=await db.from("marketplace_provider_ledger").select("id,provider_amount,currency").eq("provider_id",profile.id).eq("status","AVAILABLE").order("created_at",{ascending:true});
+   const available=(rows||[]).reduce((s,x)=>s+Number(x.provider_amount||0),0);const amount=Number(body.amount);
+   if(!Number.isFinite(amount)||amount<=0||amount>available)return out({error:"SALDO_INSUFICIENTE",available,currency:country==="AO"?"AOA":"LOCAL"},409);
+   const destinationType=body.destination_type==="MOBILE_MONEY"?"MOBILE_MONEY":"BANK_ACCOUNT";const key=typeof body.idempotency_key==="string"?body.idempotency_key.trim():"";
+   if(key.length<8)return out({error:"IDEMPOTENCY_KEY_INVALIDA"},422);
+   const {data:existing}=await db.from("marketplace_payouts").select("*").eq("idempotency_key",key).maybeSingle();if(existing)return out({payout:existing,idempotent_replay:true});
+   const {data:payout,error}=await db.from("marketplace_payouts").insert({provider_id:profile.id,country_code:country,currency:country==="AO"?"AOA":"LOCAL",amount,destination_type:destinationType,destination_masked:typeof body.destination_masked==="string"?body.destination_masked:null,idempotency_key:key,status:"REQUESTED"}).select().single();if(error)throw error;
+   let remaining=amount;for(const row of rows||[]){if(remaining<=0)break;const take=Math.min(Number(row.provider_amount),remaining);if(take<=0)continue;const {data:locked}=await db.from("marketplace_provider_ledger").update({status:"PAYOUT_REQUESTED",payout_requested_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",row.id).eq("status","AVAILABLE").select("id").maybeSingle();if(locked){remaining-=take;}}
+   if(remaining>0){await db.from("marketplace_payouts").update({status:"CANCELLED",failure_reason:"SALDO_ALTERADO_CONCORRENTEMENTE",updated_at:new Date().toISOString()}).eq("id",payout.id);return out({error:"SALDO_ALTERADO_CONCORRENTEMENTE"},409);}
+   await notificar(db,uid,"Pedido de payout criado","O seu pedido de recebimento foi registado e aguarda processamento.","marketplace_payout",payout.id);return out({payout,available_after:available-amount});
+  }
   if(action==="cancel-booking"){
    if(typeof body.booking_id!=="string")return out({error:"AGENDAMENTO_INVALIDO"},422);
    const {data:b,error:be}=await db.from("marketplace_service_bookings").select("id,client_id,provider_id,status,country_code").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
@@ -154,7 +168,7 @@ Deno.serve(async req=>{
    const {data:pay}=await db.from("marketplace_payment_intents").select("id,status").eq("booking_id",b.id).maybeSingle();
    if(body.status==="COMPLETED"&&pay&&pay.status!=="PAID")return out({error:"PAGAMENTO_NAO_CONFIRMADO"},409);
    if(body.status==="CANCELLED"&&pay?.status==="PAID")return out({error:"REEMBOLSO_OBRIGATORIO_ANTES_DE_CANCELAR"},409);
-   const patch:any={status:body.status,updated_at:new Date().toISOString()};if(body.status==="IN_PROGRESS"&&!b.started_at)patch.started_at=new Date().toISOString();if(body.status==="COMPLETED")patch.completed_at=new Date().toISOString();if(body.status==="CANCELLED")patch.cancelled_at=new Date().toISOString();
+   const patch:any={status:body.status,updated_at:new Date().toISOString()};if(body.status==="IN_PROGRESS"&&!b.started_at)patch.started_at=new Date().toISOString();if(body.status==="COMPLETED"){patch.completed_at=new Date().toISOString(); if(pay?.status==="PAID") await db.from("marketplace_provider_ledger").update({status:"AVAILABLE",available_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("payment_intent_id",pay.id).eq("status","PENDING");}if(body.status==="CANCELLED")patch.cancelled_at=new Date().toISOString();
    const {data:updated,error}=await db.from("marketplace_service_bookings").update(patch).eq("id",b.id).eq("status",b.status).select().single();if(error)throw error;if(!updated)return out({error:"ALTERACAO_CONCORRENTE"},409);
    const recipient=b.client_id===uid?b.provider_id:null;
    if(recipient){const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",recipient).maybeSingle();if(pp?.owner_id)await notificar(db,pp.owner_id,"Estado do serviço atualizado","O estado do teu serviço foi atualizado para "+body.status+".","marketplace_booking",b.id);}
