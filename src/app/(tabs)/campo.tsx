@@ -27,13 +27,18 @@ export default function Campo() {
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
+  // A posição usada pelo efeito tem de existir antes de qualquer return condicional.
+  // Durante a aquisição inicial do GPS pode haver uma "ultima" posição disponível.
+  const posicaoAtual = posicao;
 
   useEffect(() => {
-    if (!online || !posicao) return;
+    if (!online || !posicaoAtual) return;
     let ativo = true;
-    listarContextoCampo(posicaoAtual.latitude, posicaoAtual.longitude).then((v) => ativo && setContexto(v)).catch(() => ativo && setContexto(null));
+    listarContextoCampo(posicaoAtual.latitude, posicaoAtual.longitude)
+      .then((v) => ativo && setContexto(v))
+      .catch(() => ativo && setContexto(null));
     return () => { ativo = false; };
-  }, [online, posicao?.latitude, posicao?.longitude]);
+  }, [online, posicaoAtual?.latitude, posicaoAtual?.longitude]);
 
   const utilizador = sessao.utilizador;
   const nomePais = utilizador?.countryCode ?? 'AO';
@@ -43,8 +48,6 @@ export default function Campo() {
   if (!sessao.utilizador) return <Ecra><Caixa tipo="aviso">Inicia sessão para utilizar o modo Campo.</Caixa></Ecra>;
   if (online === false) return <Ecra><Caixa tipo="aviso">O modo Campo precisa de ligação à internet para sincronizar a recolha com segurança.</Caixa></Ecra>;
   if (!posicao) return <Ecra><Caixa tipo="aviso">Autoriza a localização e fica ao ar livre alguns segundos para obter uma posição.</Caixa></Ecra>;
-  const posicaoAtual = posicao;
-
   async function tirarFoto() {
     setErro(null);
     const permissao = await ImagePicker.requestCameraPermissionsAsync();
