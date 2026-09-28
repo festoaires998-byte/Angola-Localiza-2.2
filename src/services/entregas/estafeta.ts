@@ -37,7 +37,7 @@ export interface FicheiroGravado {
 }
 
 export interface DependenciasEstafeta {
-  servidor: { listarAtribuidas(userId: string): Promise<Envio[]> };
+  servidor: { listarAtribuidas(userId: string): Promise<Envio[]>; aceitar(deliveryId: string): Promise<void> };
   entregas: {
     guardarVarias(e: (Omit<Entrega, 'atualizado_em'> & { atualizado_em?: string })[]): Promise<void>;
     listar(): Promise<Entrega[]>;
@@ -124,6 +124,11 @@ export function criarServicoEstafeta(deps: DependenciasEstafeta) {
   }
 
   return {
+    /** Aceita diretamente um pedido ainda disponível. A decisão final é atómica no servidor. */
+    async aceitar(deliveryId: string): Promise<void> {
+      await deps.servidor.aceitar(deliveryId);
+    },
+
     /** Com rede vêm do servidor e ficam guardadas; sem rede (ou se falhar), as guardadas. */
     async listar(userId: string, online: boolean): Promise<{ entregas: Envio[]; doServidor: boolean; erro: string | null }> {
       if (online) {
