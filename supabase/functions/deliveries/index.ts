@@ -200,7 +200,7 @@ Deno.serve(async (req: Request) => {
       }
 
       let query = supabase.from("deliveries")
-        .select("id, tracking_code, status, recipient_name, recipient_phone, instructions, updated_at, assigned_driver, origin_postal_code, origin_plus_code, is_urgent, addresses(reference,plus_code,postal_code,house_number,streets(name),quadras(code))")
+        .select("id, tracking_code, status, recipient_name, recipient_phone, instructions, updated_at, assigned_driver, origin_postal_code, origin_plus_code, is_urgent, cargo_type, cargo_description, cargo_quantity, cargo_weight_kg, cargo_length_cm, cargo_width_cm, cargo_height_cm, cargo_declared_value, requested_vehicle_type, requested_vehicle_capacity_kg, addresses(reference,plus_code,postal_code,house_number,streets(name),quadras(code))")
         .order("updated_at", { ascending: false }).limit(100);
       if (!isSuper) query = query.eq("organization_id", organizationId);
       const { data, error } = await query;
@@ -287,7 +287,14 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "create") {
-      const { address_id, recipient_name, recipient_phone, instructions, origin_latitude, origin_longitude, origin_municipality_id, origin_province_id, origin_postal_code, origin_plus_code, zone_code, payer_organization_id, is_urgent, sync_operation_id } = body;
+      const {
+        address_id, recipient_name, recipient_phone, instructions,
+        origin_latitude, origin_longitude, origin_municipality_id, origin_province_id, origin_postal_code, origin_plus_code,
+        zone_code, payer_organization_id, is_urgent, sync_operation_id,
+        cargo_type, cargo_description, cargo_quantity, cargo_weight_kg,
+        cargo_length_cm, cargo_width_cm, cargo_height_cm, cargo_declared_value,
+        requested_vehicle_type, requested_vehicle_capacity_kg,
+      } = body;
       if (!address_id || !recipient_name) return new Response(JSON.stringify({ error: "address_id e recipient_name sao obrigatorios" }), { status: 400, headers: cors });
       const temLat = origin_latitude !== null && origin_latitude !== undefined;
       const temLon = origin_longitude !== null && origin_longitude !== undefined;
@@ -326,6 +333,12 @@ Deno.serve(async (req: Request) => {
         origin_latitude: origin_latitude ?? null, origin_longitude: origin_longitude ?? null,
         origin_municipality_id: origin_municipality_id ?? null, origin_province_id: origin_province_id ?? null,
         origin_postal_code: origin_postal_code ?? null, origin_plus_code: origin_plus_code ?? null,
+        cargo_type: cargo_type ?? null, cargo_description: cargo_description ?? null,
+        cargo_quantity: cargo_quantity ?? null, cargo_weight_kg: cargo_weight_kg ?? null,
+        cargo_length_cm: cargo_length_cm ?? null, cargo_width_cm: cargo_width_cm ?? null,
+        cargo_height_cm: cargo_height_cm ?? null, cargo_declared_value: cargo_declared_value ?? null,
+        requested_vehicle_type: requested_vehicle_type ?? null,
+        requested_vehicle_capacity_kg: requested_vehicle_capacity_kg ?? null,
         zone_code: zone_code ?? null, payer_organization_id: payer_organization_id ?? null,
         is_urgent: !!is_urgent,
         created_by: callerId,
