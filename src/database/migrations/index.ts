@@ -29,3 +29,36 @@ export async function lerVersao(db: BaseDados): Promise<number> {
  * user_version. Se falhar, essa migração é desfeita por inteiro e a versão
  * fica na anterior; as seguintes não chegam a correr.
  *
+ * Devolve a versão final.
+ */
+export async function aplicarMigracoes(
+  db: BaseDados,
+  migracoes: readonly Migracao[] = MIGRACOES,
+): Promise<number> {
+  validarLista(migracoes);
+  let versao = await lerVersao(db);
+  for (const migracao of migracoes) {
+    if (migracao.versao <= versao) continue;
+    try {
+      await db.transacao(async (tx) => {
+        await migracao.aplicar(tx);
+        await tx.exec(`PRAGMA user_version = ${Math.trunc(migracao.versao)}`);
+      });
+    } catch (erro) {
+      const motivo = erro instanceof Error ? erro.message : String(erro);
+      throw new Error(`Migração ${migracao.versao} (${migracao.nome}) falhou: ${motivo}`);
+    }
+    versao = migracao.versao;
+  }
+  return versao;
+}
+
+function validarLista(migracoes: readonly Migracao[]): void {
+  migracoes.forEach((m, i) => {
+    if (m.versao !== i + 1) {
+      throw new Error(
+        `Migrações fora de ordem: na posição ${i + 1} está a versão ${m.versao}.`,
+      );
+    }
+  });
+}
