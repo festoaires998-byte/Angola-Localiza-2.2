@@ -141,8 +141,8 @@ Deno.serve(async req=>{
    if(!masked||masked.length>80||!holder||holder.length>120)return out({error:"DADOS_DA_CONTA_INVALIDOS"},422);
    const {data:rule}=await db.from("marketplace_payout_country_rules").select("*").eq("country_code",country).maybeSingle();if(!rule)return out({error:"REGRAS_DE_PAYOUT_NAO_CONFIGURADAS"},409);
    if(type==="MOBILE_MONEY"&&!rule.mobile_money_enabled)return out({error:"MOBILE_MONEY_NAO_DISPONIVEL_NESTE_PAIS"},409);
-   const token=typeof body.provider_token==="string"?body.provider_token.trim():null;
-   const {data:account,error}=await db.from("marketplace_payout_accounts").insert({provider_id:profile.id,country_code:country,currency:cfg.currency_code,destination_type:type,holder_name:holder,masked_destination:masked,provider_token:token,kyc_status:"PENDING",status:"PENDING",is_default:false}).select("id,country_code,currency,destination_type,holder_name,masked_destination,kyc_status,status,is_default").single();if(error)throw error;
+   const providerRef=typeof body.provider_account_ref==="string"?body.provider_account_ref.trim():null;
+   const {data:account,error}=await db.from("marketplace_payout_accounts").insert({provider_id:profile.id,country_code:country,currency:cfg.currency_code,destination_type:type,holder_name:holder,masked_destination:masked,provider_account_ref:providerRef,kyc_status:"PENDING",status:"PENDING",is_default:false}).select("id,country_code,currency,destination_type,holder_name,masked_destination,kyc_status,status,is_default").single();if(error)throw error;
    return out({account,message:"Conta registada e aguarda verificação."});
   }
   if(action==="request-payout"){
