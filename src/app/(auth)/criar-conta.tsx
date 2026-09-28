@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { criarConta, eErroDeRede, ErroAuth } from '@/api/auth';
 import { Botao, Caixa, Campo, Ecra, Ligacao, Texto, Titulo } from '@/components/ui';
+import { PAISES_PALOP, obterConfigPais, type CodigoPais } from '@/config/pais';
 import { erroNome } from '@/domain/identidade/nome';
 import { useSessao } from '@/hooks/useSessao';
 import { LINK_EMAIL_CONFIRMADO } from '@/services/links/linksProfundos';
@@ -17,6 +18,7 @@ export default function CriarConta() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [repetir, setRepetir] = useState('');
+  const [pais, setPais] = useState<CodigoPais>('AO');
   const [aCriar, setACriar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -32,7 +34,7 @@ export default function CriarConta() {
     setACriar(true);
     try {
       if (!(await estaOnline())) return setErro(SEM_REDE);
-      const r = await criarConta(email, password, nome, LINK_EMAIL_CONFIRMADO);
+      const r = await criarConta(email, password, nome, LINK_EMAIL_CONFIRMADO, pais);
       if (r.precisaConfirmar) {
         router.replace({ pathname: '/verifica-email', params: { email: email.trim() } });
       }
@@ -59,6 +61,16 @@ export default function CriarConta() {
         placeholder="Ana Maria Silva"
         maxLength={80}
       />
+      <Texto>País onde vais utilizar o Localiza</Texto>
+      {PAISES_PALOP.map((codigo) => (
+        <Botao
+          key={codigo}
+          titulo={codigo === 'AO' ? '🇦🇴 Angola — Angola Localiza' : codigo === 'MZ' ? '🇲🇿 Moçambique — Moçambique Localiza' : codigo === 'CV' ? '🇨🇻 Cabo Verde — Cabo Verde Localiza' : codigo === 'GW' ? '🇬🇼 Guiné-Bissau — Guiné-Bissau Localiza' : '🇸🇹 São Tomé e Príncipe — São Tomé e Príncipe Localiza'}
+          variante={pais === codigo ? 'primario' : 'secundario'}
+          onPress={() => setPais(codigo)}
+        />
+      ))}
+      <Texto suave>O país fica associado à tua conta desde o registo.</Texto>
       <Campo
         rotulo="Email"
         value={email}
