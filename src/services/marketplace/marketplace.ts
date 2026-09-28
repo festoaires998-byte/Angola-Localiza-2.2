@@ -61,6 +61,4 @@ export const marketplaceServiceFlow={
  updateBooking:(booking_id:string,status:string)=>chamarFuncao<{booking:Record<string,unknown>}>('marketplace','booking-status',{body:{booking_id,status},tempoMaximo:20000}),
  review:(booking_id:string,rating:number,comment?:string)=>chamarFuncao<{review:Record<string,unknown>}>('marketplace','review-service',{body:{booking_id,rating,comment},tempoMaximo:20000}),
  requestDelivery:(body:{booking_id:string;address_id:string;recipient_name:string;recipient_phone:string;instructions?:string;origin_latitude?:number|null;origin_longitude?:number|null;origin_municipality_id?:string|null;origin_province_id?:string|null;origin_postal_code?:string|null;origin_plus_code?:string|null;zone_code?:string|null;is_urgent?:boolean})=>chamarFuncao<{logistics:Record<string,unknown>;delivery:Record<string,unknown>}>('marketplace','request-delivery',{body,tempoMaximo:30000}),
- listClientBookings:()=>obterOperacoes('booking-list'),
- listProviderBookings:()=>obterOperacoes('provider-bookings'),
 };
