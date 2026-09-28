@@ -1,4 +1,5 @@
 import { chamarFuncao } from './edge/chamarFuncao';
+import { paisAtual } from '@/state/pais';
 import {
   lerCodigoPostal,
   lerProvinciaMunicipio,
@@ -32,7 +33,7 @@ export async function confirmarCodigoPostal(
   provincia: string | null,
 ): Promise<CodigoPostalServidor> {
   const resposta = await chamarFuncao<unknown>('generate-postal-code', 'generate', {
-    body: { latitude, longitude, ...(provincia ? { province_name: provincia } : {}) },
+    body: { latitude, longitude, country_code: paisAtual(), ...(provincia ? { province_name: provincia } : {}) },
     tempoMaximo: 15_000,
   });
   return lerCodigoPostal(resposta);
