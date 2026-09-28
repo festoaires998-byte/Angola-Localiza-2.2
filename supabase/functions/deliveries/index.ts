@@ -430,6 +430,81 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ proofs: resultado }), { headers: cors });
     }
 
+    if (action === "accept_delivery") {
+      const { delivery_id } = body;
+      if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
+
+      const { data: delivery } = await supabase
+        .from("deliveries")
+        .select("id, created_by, status, organization_id")
+        .eq("id", delivery_id)
+        .single();
+      if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
+
+      if (delivery.created_by === callerId) {
+        return new Response(JSON.stringify({ error: "quem cria a entrega nao pode ser o estafeta dela" }), { status: 422, headers: cors });
+      }
+      if (delivery.status !== "CREATED") {
+        return new Response(JSON.stringify({ error: "este pedido ja nao esta disponivel para aceitacao" }), { status: 409, headers: cors });
+      }
+
+      const { data: memberships } = await supabase
+        .from("organization_members")
+        .select("organization_id, role")
+        .eq("user_id", callerId);
+
+      const driverMemberships = memberships ?? [];
+      if (!driverMemberships.some((m) => m.role === "estafeta")) {
+        return new Response(JSON.stringify({ error: "UTILIZADOR_NAO_E_ESTAFETA" }), { status: 403, headers: cors });
+      }
+      if (!(await motoristaAprovado(supabase, callerId))) {
+        return new Response(JSON.stringify({ error: "MOTORISTA_KYC_NAO_APROVADO" }), { status: 403, headers: cors });
+      }
+
+      if (delivery.organization_id &&
+          !driverMemberships.some((m) => m.role === "estafeta" && m.organization_id === delivery.organization_id)) {
+        return new Response(JSON.stringify({ error: "ESTAFETA_FORA_DA_ORGANIZACAO" }), { status: 403, headers: cors });
+      }
+
+      // Lock lógico atómico: apenas um estafeta pode ganhar o pedido.
+      let updateQuery = supabase
+        .from("deliveries")
+        .update({
+          assigned_driver: callerId,
+          status: "ASSIGNED",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", delivery_id)
+        .eq("status", "CREATED");
+
+      if (delivery.organization_id) {
+        updateQuery = updateQuery.eq("organization_id", delivery.organization_id);
+      } else {
+        updateQuery = updateQuery.is("organization_id", null);
+      }
+
+      const { data: mudou, error } = await updateQuery.select("id");
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      if (!mudou?.length) {
+        return new Response(JSON.stringify({
+          error: "PEDIDO_JA_ACEITE",
+          message: "Este pedido ja foi aceite por outro estafeta. Atualiza a lista.",
+        }), { status: 409, headers: cors });
+      }
+
+      await supabase.from("delivery_status_history").insert({
+        delivery_id,
+        status: "ASSIGNED",
+      });
+
+      return new Response(JSON.stringify({
+        ok: true,
+        status: "ASSIGNED",
+        delivery_id,
+        assigned_driver: callerId,
+      }), { headers: cors });
+    }
+
     if (action === "assign_driver") {
       const { delivery_id, driver_id } = body;
       if (!delivery_id || !driver_id) return new Response(JSON.stringify({ error: "delivery_id e driver_id sao obrigatorios" }), { status: 400, headers: cors });
