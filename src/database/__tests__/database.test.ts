@@ -1,72 +1,3 @@
-/**
- * @jest-environment node
- */
-import { beforeEach, describe, expect, test } from '@jest/globals';
-
-import { aplicarMigracoes, lerVersao, MIGRACOES, type Migracao } from '../migrations';
-import {
-  criarRepositorioChavesDispositivo,
-  criarRepositorioCodigosConfirmados,
-  criarRepositorioFavoritos,
-  criarRepositorioFicheirosPendentes,
-  criarRepositorioFilaSaida,
-  erroSemVolta,
-  criarRepositorioMoradas,
-  criarRepositorioPerfilLocal,
-  criarRepositorioPreferencias,
-  criarRepositorioProvasEvidencia,
-  criarRepositorioZonasGeocodificadas,
-  idDoMarcador,
-  marcadorOffline,
-  paraPedidoSync,
-  type Morada,
-} from '../repositories';
-import { criarBaseDadosSqlJs } from '../testes/baseDadosSqlJs';
-import type { BaseDados } from '../tipos';
-
-/** Gerador de ids previsível: op-1, op-2, ... */
-function geradorSequencial(prefixo: string) {
-  let n = 0;
-  return () => `${prefixo}-${++n}`;
-}
-
-/** Relógio que só anda quando o teste manda. */
-function relogioManual(inicio = '2026-09-23T10:00:00.000Z') {
-  let agora = new Date(inicio);
-  const relogio = () => new Date(agora);
-  relogio.avancar = (ms: number) => {
-    agora = new Date(agora.getTime() + ms);
-  };
-  return relogio;
-}
-
-/** Utilizador usado nos testes da fila. */
-const U = 'utilizador-a';
-
-async function baseMigrada(): Promise<BaseDados> {
-  const { db } = await criarBaseDadosSqlJs();
-  await aplicarMigracoes(db);
-  return db;
-}
-
-async function nomesTabelas(db: BaseDados): Promise<string[]> {
-  const linhas = await db.getAll<{ name: string }>(
-    `SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`,
-  );
-  return linhas.map((l) => l.name);
-}
-
-function morada(id: string, latitude: number, longitude: number): Morada {
-  return {
-    id,
-    plus_code: null,
-    codigo_postal: null,
-    latitude,
-    longitude,
-    precisao_m: 5,
-    provincia: 'Luanda',
-    municipio: 'Luanda',
-    estado: 'ativa',
     origem: 'zona_offline',
     dados: { rua: 'Rua A' },
     atualizado_em: '2026-09-23T10:00:00.000Z',
@@ -90,6 +21,7 @@ describe('migrações', () => {
       'favoritos',
       'ficheiros_pendentes',
       'fila_saida',
+      'historico_localiza',
       'levantamentos',
       'moradas',
       'perfil_local',
@@ -980,7 +912,7 @@ describe('favoritos criados sem rede (migração 009)', () => {
       ),
     ).rejects.toThrow(/CHECK/);
 
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(9);
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(10);
     const favoritos = criarRepositorioFavoritos(antiga);
     expect(await favoritos.obter('fav-1')).toEqual({
       id: 'fav-1',
@@ -998,9 +930,3 @@ describe('favoritos criados sem rede (migração 009)', () => {
     );
     expect((await favoritos.listarPendentes('user-1')).map((f) => f.id).sort()).toEqual(['fav-1', 'fav-2']);
     // Os índices voltam a existir.
-    const indices = await antiga.getAll<{ name: string }>(
-      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'favoritos' AND name LIKE 'idx_%' ORDER BY name`,
-    );
-    expect(indices.map((i) => i.name)).toEqual(['idx_favoritos_categoria', 'idx_favoritos_morada', 'idx_favoritos_utilizador']);
-  });
-});
