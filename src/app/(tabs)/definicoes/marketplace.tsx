@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Botao, Caixa, Cartao, Campo, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { marketplace, type MarketplaceCategory, type MarketplaceListing } from '@/services/marketplace/marketplace';
@@ -18,6 +18,8 @@ export default function Marketplace(){
  const [province,setProvince]=useState(''); const [city,setCity]=useState(''); const [neighborhood,setNeighborhood]=useState('');
  const [files,setFiles]=useState<ImagePicker.ImagePickerAsset[]>([]); const [busy,setBusy]=useState(false);
  const [contact,setContact]=useState(''); const [selected,setSelected]=useState<MarketplaceListing|null>(null);
+ const [detail,setDetail]=useState<{listing:MarketplaceListing;images:{id:string;storage_path:string;sort_order:number;url:string}[];similar:MarketplaceListing[]}|null>(null);
+ const [detailLoading,setDetailLoading]=useState(false);
 
  const carregar=useCallback(async()=>{
   setLoading(true);setErro(null);
@@ -51,7 +53,22 @@ export default function Marketplace(){
   try{await marketplace.interest(selected.id,contact.trim());setMensagem('Mensagem enviada ao anunciante.');setContact('');setSelected(null);}
   catch(e){setErro(e instanceof Error?e.message:'Não foi possível contactar o anunciante.');}finally{setBusy(false);}
  }
+ async function abrirDetalhe(id:string){setDetailLoading(true);setErro(null);try{setDetail(await marketplace.detail(id));}catch(e){setErro(e instanceof Error?e.message:'Não foi possível abrir o anúncio.');}finally{setDetailLoading(false);}}
  const tituloAba=useMemo(()=>({descobrir:'Descobrir',favoritos:'Favoritos',meus:'Meus anúncios',publicar:'Publicar anúncio'}[aba]),[aba]);
+ if(detail)return <ScrollView contentContainerStyle={s.conteudo}>
+  <Botao titulo="← Voltar aos anúncios" onPress={()=>setDetail(null)} />
+  {erro?<Caixa tipo='erro'>{erro}</Caixa>:null}
+  <Titulo>{detail.listing.title}</Titulo>
+  <Texto suave>{detail.listing.category+' · '+(detail.listing.condition==='NEW'?'Novo':detail.listing.condition==='REFURBISHED'?'Recondicionado':'Usado')}</Texto>
+  {detail.images.length>0?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.galeria}>{detail.images.map(im=><Image key={im.id} source={{uri:im.url}} style={s.imagem} /></ScrollView>:<Caixa>Este anúncio ainda não tem fotografias.</Caixa>}
+  {detail.listing.price!==null?<Titulo>{detail.listing.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+detail.listing.currency}</Titulo>:<Subtitulo>Preço sob consulta</Subtitulo>}
+  <Cartao><Subtitulo>Descrição</Subtitulo><Texto>{detail.listing.description||'Sem descrição.'}</Texto></Cartao>
+  <Cartao><Subtitulo>Localização</Subtitulo><Texto>{[detail.listing.neighborhood,detail.listing.city,detail.listing.province].filter(Boolean).join(' · ')||'Não indicada'}</Texto><Texto suave>{detail.listing.views_count+' visualizações'}</Texto></Cartao>
+  <Cartao><Subtitulo>Vendedor</Subtitulo><Texto>Vendedor verificado pela conta Localiza</Texto><Texto suave>País: {detail.listing.country_code}</Texto><Botao titulo="Guardar favorito" onPress={()=>void marketplace.favorite(detail.listing.id,true)} /><Botao titulo="Contactar anunciante" onPress={()=>setSelected(detail.listing)} /></Cartao>
+  {selected&&selected.id===detail.listing.id?<Cartao><Campo rotulo='Mensagem' value={contact} onChangeText={setContact} placeholder='Olá, ainda está disponível?' multiline /><Botao titulo='Enviar mensagem' aCarregar={busy} onPress={()=>void interesse()} /><Botao titulo='Fechar' onPress={()=>setSelected(null)} /></Cartao>:null}
+  {detail.similar.length>0?<><Subtitulo>Anúncios semelhantes</Subtitulo>{detail.similar.map(x=><Cartao key={x.id}><Subtitulo>{x.title}</Subtitulo><Texto suave>{x.city||x.province||'Localização não indicada'}</Texto>{x.price!==null?<Texto>{x.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+x.currency}</Texto>:<Texto>Preço sob consulta</Texto>}<Botao titulo="Ver anúncio" onPress={()=>void abrirDetalhe(x.id)} /></Cartao>)}</>:null}
+ </ScrollView>;
+
  return <ScrollView contentContainerStyle={s.conteudo} refreshControl={<RefreshControl refreshing={loading} onRefresh={()=>aba==='descobrir'?void carregar():aba==='favoritos'?void favoritos():void meus()} />}>
   <Titulo>Marketplace</Titulo><Texto suave>{country!=='—'?'Marketplace de '+country+' · '+currency:'Marketplace'}</Texto>
   <View style={s.tabs}>{(['descobrir','favoritos','meus','publicar'] as Aba[]).map(x=><Botao key={x} titulo={{descobrir:'Descobrir',favoritos:'Favoritos',meus:'Meus',publicar:'Publicar'}[x]} onPress={()=>setAba(x)} />)}</View>
@@ -63,10 +80,11 @@ export default function Marketplace(){
     <Botao titulo="Usado" onPress={()=>setCondition('USED')} />
     <Botao titulo="Recondicionado" onPress={()=>setCondition('REFURBISHED')} />
    </View><Botao titulo='Escolher fotografias' onPress={()=>void escolherFotos()} />{files.length>0?<Texto>{files.length} fotografia(s) selecionada(s).</Texto>:null}<Botao titulo={busy?'A publicar…':'Publicar anúncio'} aCarregar={busy} onPress={()=>void publicar()} /><Texto suave>O servidor valida o país da conta e as imagens permanecem privadas.</Texto></Cartao>:null}
-  {aba!=='publicar'&&items.map(item=><Cartao key={item.id}><Subtitulo>{item.title}</Subtitulo><Texto>{item.description||'Sem descrição.'}</Texto><Texto suave>{item.category+' · '+(item.condition==='NEW'?'Novo':item.condition==='REFURBISHED'?'Recondicionado':'Usado')+' · '+(item.city||item.province||'Localização não indicada')}</Texto>{item.price!==null?<Texto>{item.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+item.currency}</Texto>:<Texto>Preço sob consulta</Texto>}<Botao titulo={aba==='favoritos'?'Remover favorito':'Guardar favorito'} onPress={async()=>{await marketplace.favorite(item.id,aba!=='favoritos');if(aba==='favoritos')await favoritos();}} />
+  {aba!=='publicar'&&items.map(item=><Cartao key={item.id}><Subtitulo>{item.title}</Subtitulo><Texto>{item.description||'Sem descrição.'}</Texto><Texto suave>{item.category+' · '+(item.condition==='NEW'?'Novo':item.condition==='REFURBISHED'?'Recondicionado':'Usado')+' · '+(item.city||item.province||'Localização não indicada')}</Texto>{item.price!==null?<Texto>{item.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+item.currency}</Texto>:<Texto>Preço sob consulta</Texto>}<Botao titulo="Ver anúncio" aCarregar={detailLoading} onPress={()=>void abrirDetalhe(item.id)} />
+   <Botao titulo={aba==='favoritos'?'Remover favorito':'Guardar favorito'} onPress={async()=>{await marketplace.favorite(item.id,aba!=='favoritos');if(aba==='favoritos')await favoritos();}} />
    <Botao titulo='Contactar anunciante' onPress={()=>setSelected(item)} />{aba==='meus'&&item.status==='ACTIVE'?<Botao titulo='Pausar anúncio' onPress={async()=>{await marketplace.pause(item.id);await meus();}} />:null}{aba==='meus'&&item.status==='PAUSED'?<Botao titulo='Publicar novamente' onPress={async()=>{await marketplace.publish(item.id);await meus();}} />:null}</Cartao>)}
   {items.length===0&&!loading&&aba!=='publicar'?<Texto>Não há anúncios para mostrar.</Texto>:null}
   {selected?<Cartao><Subtitulo>Contactar: {selected.title}</Subtitulo><Campo rotulo='Mensagem' value={contact} onChangeText={setContact} placeholder='Olá, ainda está disponível?' multiline /><Botao titulo='Enviar mensagem' aCarregar={busy} onPress={()=>void interesse()} /><Botao titulo='Fechar' onPress={()=>setSelected(null)} /></Cartao>:null}
  </ScrollView>;
 }
-const s=StyleSheet.create({conteudo:{padding:16,gap:12},tabs:{flexDirection:'row',flexWrap:'wrap',gap:6}});
+const s=StyleSheet.create({conteudo:{padding:16,gap:12},tabs:{flexDirection:'row',flexWrap:'wrap',gap:6},galeria:{gap:8},imagem:{width:280,height:220,borderRadius:12}});
