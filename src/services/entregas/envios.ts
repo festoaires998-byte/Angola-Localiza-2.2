@@ -26,6 +26,7 @@ export interface DependenciasEnvios {
     lerPin(id: string): Promise<PinEnvio>;
     gerarPin(id: string): Promise<PinEnvio>;
     cancelar(id: string): Promise<void>;
+    definirUrgencia(id: string, urgente: boolean): Promise<void>;
   };
   entregas: {
     guardarVarias(e: (Omit<Entrega, 'atualizado_em'> & { atualizado_em?: string })[]): Promise<void>;
@@ -136,6 +137,7 @@ export function criarServicoEnvios(deps: DependenciasEnvios) {
 
     lerPin: (id: string) => deps.servidor.lerPin(id),
     gerarPin: (id: string) => deps.servidor.gerarPin(id),
+    definirUrgencia: (id: string, urgente: boolean) => deps.servidor.definirUrgencia(id, urgente),
 
     /** Cancela no servidor e atualiza a cópia do telemóvel. */
     async cancelar(envio: Envio): Promise<Envio> {

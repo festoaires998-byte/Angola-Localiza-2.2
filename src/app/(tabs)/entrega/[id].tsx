@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Share, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 
 import { dataHora } from '@/components/nomes';
@@ -17,7 +18,7 @@ export default function DetalheEnvio() {
   const router = useRouter();
   const online = useOnline();
   const estado = useEnvios();
-  const [aTrabalhar, setATrabalhar] = useState<'pin' | 'novo' | 'cancelar' | null>(null);
+  const [aTrabalhar, setATrabalhar] = useState<'pin' | 'novo' | 'cancelar' | 'urgente' | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const envio = estado.envios?.find((e) => e.id === id) ?? null;
@@ -32,7 +33,7 @@ export default function DetalheEnvio() {
   const pin = estado.pins[envio.id] ?? null;
   const terminada = entregaTerminada(envio.estado);
 
-  async function trabalhar(tipo: 'pin' | 'novo' | 'cancelar', acao: () => Promise<void>) {
+  async function trabalhar(tipo: 'pin' | 'novo' | 'cancelar' | 'urgente', acao: () => Promise<void>) {
     setErro(null);
     setATrabalhar(tipo);
     try {
@@ -54,6 +55,17 @@ export default function DetalheEnvio() {
   const partilharEnvio = () => {
     void Share.share({ message: textoPartilha }).catch(() => undefined);
   };
+  const copiarCodigo = () => { if (envio.codigo) void Clipboard.setStringAsync(envio.codigo); };
+  const abrirWhatsApp = () => {
+    if (!envio.telefone) return;
+    const digits = envio.telefone.replace(/\\D/g, '');
+    const mensagem = encodeURIComponent(textoPartilha);
+    void Linking.openURL(`https://wa.me/${digits}?text=${mensagem}`).catch(() => undefined);
+  };
+  const alternarUrgencia = () => trabalhar('urgente', async () => {
+    await servicoEnvios.definirUrgencia(envio.id, !envio.urgente);
+    guardarEnvio({ ...envio, urgente: !envio.urgente }, pin);
+  });
 
   const mostrarPin = () => trabalhar('pin', async () => guardarPin(envio.id, await servicoEnvios.lerPin(envio.id)));
   const gerarPin = () =>
@@ -108,6 +120,8 @@ export default function DetalheEnvio() {
               <Texto suave>Lê este QR para identificar este envio.</Texto>
             </View>
             <Botao titulo="Partilhar envio" variante="secundario" onPress={partilharEnvio} />
+            <Botao titulo="Copiar código de rastreio" variante="secundario" onPress={copiarCodigo} />
+            {envio.telefone ? <Botao titulo="WhatsApp do destinatário" variante="secundario" onPress={abrirWhatsApp} /> : null}
           </>
         ) : null}
         {envio.morada?.codigoPostal || envio.morada?.plusCode ? (
@@ -117,6 +131,7 @@ export default function DetalheEnvio() {
         {envio.telefone ? <Linha nome="Telefone" valor={envio.telefone} /> : null}
         {envio.instrucoes ? <Linha nome="Instruções" valor={envio.instrucoes} /> : null}
         <Linha nome="Prioridade" valor={envio.urgente ? 'Urgente' : 'Normal'} />
+        {!terminada ? <Botao titulo={envio.urgente ? 'Desmarcar urgente' : '🔴 Marcar urgente'} variante="secundario" onPress={alternarUrgencia} aCarregar={aTrabalhar === 'urgente'} /> : null}
         <Linha nome="Atualizado" valor={dataHora(envio.atualizadoEm)} />
       </Cartao>
 

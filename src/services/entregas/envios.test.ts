@@ -48,6 +48,7 @@ async function montar() {
     lerPin: jest.fn(async (_id: string) => ({ pin: '4821', expiraEm: null, bloqueado: false })),
     gerarPin: jest.fn(async (_id: string) => ({ pin: '1357', expiraEm: null, bloqueado: false })),
     cancelar: jest.fn(async (_id: string) => undefined),
+    definirUrgencia: jest.fn(async (_id: string, _urgente: boolean) => undefined),
   };
   const servico = criarServicoEnvios({
     servidor,

@@ -48,6 +48,11 @@ export async function cancelarEnvio(deliveryId: string): Promise<void> {
   await chamarFuncao('deliveries', 'update_status', { body: { delivery_id: deliveryId, new_status: 'CANCELLED' } });
 }
 
+/** Altera a prioridade urgente de uma entrega criada pelo utilizador. */
+export async function definirUrgenciaEnvio(deliveryId: string, urgente: boolean): Promise<void> {
+  await chamarFuncao('deliveries', 'set_urgent', { body: { delivery_id: deliveryId, is_urgent: urgente } });
+}
+
 /** As entregas atribuídas ao estafeta (separador Entregas), das mais recentes para as mais antigas. */
 /** Atualiza a última posição do estafeta no tracking da entrega ativa. */
 export async function atualizarTrackingEntrega(

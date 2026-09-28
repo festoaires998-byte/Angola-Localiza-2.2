@@ -11,6 +11,7 @@ import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
 import { useSessao } from '@/hooks/useSessao';
+import { cotarEntrega, type CotacaoEntrega } from '@/api/pricing';
 import { servicoEnvios } from '@/services/entregas/enviosApp';
 import { tituloMorada } from '@/services/moradas/moradas';
 import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
@@ -35,7 +36,9 @@ export default function NovoEnvio() {
   const infoOrigem = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao === null || posicao?.precisao === undefined ? false : posicao.precisao <= 10);
   const [verificacao, setVerificacao] = useState<Verificacao | null>(null);
   const [dados, setDados] = useState<DadosEnvio>({ moradaId: null, destinatario: '', telefone: '', instrucoes: '', urgente: false, countryCode });
-  const [modoOrigem, setModoOrigem] = useState<'gps' | 'guardado'>('gps');
+  const [modoOrigem, setModoOrigem] = useState<'gps' | 'guardado' | 'codigo' | 'qr'>('gps');
+  const [entradaOrigem, setEntradaOrigem] = useState('');
+  const [lerQrOrigem, setLerQrOrigem] = useState(false);
   const [origemGuardadaId, setOrigemGuardadaId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,6 +58,30 @@ export default function NovoEnvio() {
   const [lerQr, setLerQr] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmar, setConfirmar] = useState(false);
+  const [cotacao, setCotacao] = useState<CotacaoEntrega | null>(null);
+  const [cotacaoErro, setCotacaoErro] = useState<string | null>(null);
+  const destinoSelecionado = useMemo(() => (moradas.itens ?? []).find((i) => i.morada?.id === dados.moradaId)?.morada ?? null, [moradas.itens, dados.moradaId]);
+
+  useEffect(() => {
+    if (!online || !dados.origem || destinoSelecionado?.latitude == null || destinoSelecionado?.longitude == null) {
+      setCotacao(null);
+      setCotacaoErro(null);
+      return;
+    }
+    let ativo = true;
+    setCotacao(null);
+    setCotacaoErro(null);
+    void cotarEntrega({
+      originLatitude: dados.origem.latitude,
+      originLongitude: dados.origem.longitude,
+      destinationLatitude: destinoSelecionado.latitude,
+      destinationLongitude: destinoSelecionado.longitude,
+    }).then((q) => { if (ativo) setCotacao(q); }).catch((e) => {
+      if (ativo) setCotacaoErro(e instanceof Error ? e.message : 'Não foi possível calcular o preço.');
+    });
+    return () => { ativo = false; };
+  }, [online, dados.origem?.latitude, dados.origem?.longitude, destinoSelecionado?.latitude, destinoSelecionado?.longitude]);
+
 
   useEffect(() => {
     if (!userId) return;
@@ -104,6 +131,21 @@ export default function NovoEnvio() {
   }
 
   const falta = faltaNoEnvio(dados);
+  const selecionarOrigemPorEntrada = (entrada: string) => {
+    const referencia = posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : undefined;
+    const r = interpretarEntrada(entrada, referencia);
+    if (r.tipo !== 'ponto') {
+      setErro(r.tipo === 'invalida' ? r.motivo : 'Este código/link precisa de uma localização válida.');
+      return false;
+    }
+    mudar({ origem: { latitude: r.latitude, longitude: r.longitude, codigoPostal: null, plusCode: null } });
+    setEntradaOrigem('');
+    setLerQrOrigem(false);
+    setModoOrigem('codigo');
+    setErro(null);
+    return true;
+  };
+
   const selecionarPorEntrada = (entrada: string) => {
     const referencia = posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : undefined;
     const r = interpretarEntrada(entrada, referencia);
@@ -168,12 +210,27 @@ export default function NovoEnvio() {
       <Opcoes grupo="Local de recolha" opcoes={[
         { valor: 'gps', nome: '📍 Minha localização' },
         ...(origensGuardadas.length > 0 ? [{ valor: 'guardado', nome: '⭐ Guardados' }] : []),
+        { valor: 'codigo', nome: '🔢 Código' },
+        { valor: 'qr', nome: '📷 QR' },
       ]} valor={modoOrigem} aoEscolher={(v) => {
-        const modo = v as 'gps' | 'guardado';
+        const modo = v as 'gps' | 'guardado' | 'codigo' | 'qr';
         setModoOrigem(modo);
         if (modo === 'gps') {
           setOrigemGuardadaId(null);
+          setEntradaOrigem('');
+          setLerQrOrigem(false);
           mudar({ origem: undefined });
+          return;
+        }
+        if (modo === 'codigo') {
+          setOrigemGuardadaId(null);
+          setLerQrOrigem(false);
+          return;
+        }
+        if (modo === 'qr') {
+          setOrigemGuardadaId(null);
+          setEntradaOrigem('');
+          setLerQrOrigem(true);
           return;
         }
         const primeiro = origensGuardadas[0]?.valor;
@@ -186,6 +243,15 @@ export default function NovoEnvio() {
         setOrigemGuardadaId(primeiro ?? null);
         mudar({ origem: { latitude: item.morada.latitude, longitude: item.morada.longitude, codigoPostal: item.morada.codigo_postal, plusCode: item.morada.plus_code } });
       }} />
+      {modoOrigem === 'codigo' ? (
+        <>
+          <Campo rotulo="Código, Plus Code ou link da recolha" value={entradaOrigem} onChangeText={setEntradaOrigem} autoCapitalize="characters" placeholder="Ex.: AO-HUA-... ou link do mapa" />
+          <Botao titulo="Procurar" variante="secundario" onPress={() => selecionarOrigemPorEntrada(entradaOrigem)} desativado={!entradaOrigem.trim()} />
+        </>
+      ) : null}
+      {lerQrOrigem ? (
+        <LeitorQr aoLer={(conteudo) => selecionarOrigemPorEntrada(conteudo)} aoFechar={() => { setLerQrOrigem(false); setModoOrigem('gps'); }} />
+      ) : null}
       {modoOrigem === 'guardado' ? (
         <Opcoes grupo="Morada guardada para recolha" empilhadas opcoes={origensGuardadas}
           valor={origemGuardadaId}
@@ -258,15 +324,31 @@ export default function NovoEnvio() {
         keyboardType="phone-pad"
         placeholder="Ex.: 923 456 789"
       />
+      <Subtitulo>Nota para o estafeta</Subtitulo>
+      <Opcoes grupo="Sugestões rápidas" opcoes={[
+        { valor: 'Portão azul', nome: 'Portão azul' },
+        { valor: 'Entrada lateral', nome: 'Entrada lateral' },
+        { valor: 'Ligar à chegada', nome: 'Ligar à chegada' },
+        { valor: 'Entregar após 17h', nome: 'Entregar após 17h' },
+      ]} valor={null} aoEscolher={(v) => mudar({ instrucoes: [dados.instrucoes, String(v)].filter(Boolean).join('\n') })} />
       <Campo
         rotulo={`Instruções para o estafeta (opcional, até ${MAX_INSTRUCOES} letras)`}
         value={dados.instrucoes}
         onChangeText={(t) => mudar({ instrucoes: t })}
         multiline
-        placeholder="Ex.: Portão verde, tocar à campainha."
+        placeholder="Ex.: Portão azul, entrada lateral"
       />
 
       <Subtitulo>Prioridade</Subtitulo>
+      {online ? (
+        <Caixa tipo="info">
+          {cotacao ? (() => {
+            const b = cotacao.breakdown ?? {};
+            const total = cotacao.amount_total ?? 0;
+            return `Preço estimado: Grátis durante o piloto — fora do piloto: Frete ${b.frete ?? 0} + Roteamento ${b.roteamento ?? 0} + Prova ${b.prova ?? 0} = ${total} Kz.`;
+          })() : cotacaoErro ? 'Preço: não disponível neste momento; podes continuar e o servidor recalcula ao criar.' : 'Preço: a calcular…'}
+        </Caixa>
+      ) : null}
       <Opcoes grupo="Prioridade" opcoes={PRIORIDADES} valor={dados.urgente ? 'urgente' : 'normal'} aoEscolher={(v) => mudar({ urgente: v === 'urgente' })} />
 
       {falta.length > 0 ? (
