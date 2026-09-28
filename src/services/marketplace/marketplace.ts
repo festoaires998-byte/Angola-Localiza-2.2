@@ -64,3 +64,16 @@ export const marketplaceServiceFlow={
  createPaymentIntent:(body:{booking_id:string;payment_method?:'PROXYPAY_MULTICAIXA'|'PROXYPAY_GPO';idempotency_key:string})=>chamarFuncao<{payment:Record<string,unknown>}>('marketplace','create-payment-intent',{body,tempoMaximo:20000}),
  createProxyPayReference:(payment_intent_id:string)=>chamarFuncao<{payment:Record<string,unknown>;instructions:Record<string,unknown>}>('marketplace','create-proxypay-reference',{body:{payment_intent_id},tempoMaximo:30000}),
 };
+export type MarketplaceListingOrder={
+ id:string;listing_id:string;buyer_id:string;seller_id:string;country_code:string;currency:string;
+ quantity:number;unit_price:number;total_amount:number;message:string|null;
+ status:'REQUESTED'|'ACCEPTED'|'REJECTED'|'CANCELLED'|'COMPLETED';created_at:string;updated_at:string;
+ accepted_at:string|null;completed_at:string|null;cancelled_at:string|null;
+};
+export const marketplaceListingOrders={
+ create:(body:{listing_id:string;quantity?:number;message?:string})=>
+   chamarFuncao<{order:MarketplaceListingOrder}>('marketplace','listing-order-create',{body,tempoMaximo:20000}),
+ list:()=>chamarFuncao<{orders:MarketplaceListingOrder[]}>('marketplace','listing-orders',{tempoMaximo:20000}),
+ updateStatus:(order_id:string,status:MarketplaceListingOrder['status'])=>
+   chamarFuncao<{order:MarketplaceListingOrder}>('marketplace','listing-order-status',{body:{order_id,status},tempoMaximo:20000}),
+};
