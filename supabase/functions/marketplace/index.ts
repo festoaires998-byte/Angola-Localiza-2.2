@@ -5,6 +5,10 @@ const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"au
 const listingsSafe=(rows:any[])=>rows.map(({id,title,category,price,currency,condition,city,province,status,country_code,seller_id,views_count,created_at})=>({id,title,category,price,currency,condition,city,province,status,country_code,seller_id,views_count,created_at}));
 const out=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:cors});
 const countries=["AO","MZ","CV","GW","ST"];
+async function notificar(db:any,userId:string,title:string,body:string,entityType:string,entityId:string){
+  await db.from("notifications").insert({user_id:userId,title,body,entity_type:entityType,entity_id:entityId});
+}
+
 const currencyByCountry:Record<string,string>={AO:"AOA",MZ:"MZN",CV:"CVE",GW:"XOF",ST:"STN"};
 
 Deno.serve(async req=>{
@@ -73,6 +77,20 @@ Deno.serve(async req=>{
    if(r.client_id!==uid){const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("owner_id",uid).eq("country_code",country).maybeSingle();if(!p)return out({error:"ACESSO_NEGADO"},403);}
    const {data:props,error:pe}=await db.from("marketplace_service_proposals").select("*").eq("request_id",r.id).order("created_at",{ascending:false});if(pe)throw pe;return out({request:r,proposals:props||[]});
   }
+  if(action==="request-delivery"){
+   if(typeof body.booking_id!=="string"||typeof body.address_id!=="string"||typeof body.recipient_name!=="string"||typeof body.recipient_phone!=="string")return out({error:"DADOS_ENTREGA_INCOMPLETOS"},422);
+   const {data:b,error:be}=await db.from("marketplace_service_bookings").select("id,client_id,provider_id,country_code,status").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
+   if(b.client_id!==uid)return out({error:"APENAS_CLIENTE_PODE_SOLICITAR_ENTREGA"},403);
+   if(!["SCHEDULED","IN_PROGRESS","COMPLETED"].includes(b.status))return out({error:"SERVICO_NAO_DISPONIVEL_PARA_ENTREGA"},409);
+   const {data:existing}=await db.from("marketplace_service_logistics").select("*").eq("booking_id",b.id).maybeSingle();if(existing)return out({logistics:existing});
+   const token=(req.headers.get("authorization")||"");const deliveriesUrl=Deno.env.get("SUPABASE_URL")!+"/functions/v1/deliveries?action=create";
+   const dr=await fetch(deliveriesUrl,{method:"POST",headers:{"Authorization":token,"Content-Type":"application/json"},body:JSON.stringify({address_id:body.address_id,recipient_name:body.recipient_name,recipient_phone:body.recipient_phone,instructions:body.instructions||("Marketplace — agendamento "+b.id),origin_latitude:body.origin_latitude??null,origin_longitude:body.origin_longitude??null,origin_municipality_id:body.origin_municipality_id??null,origin_province_id:body.origin_province_id??null,origin_postal_code:body.origin_postal_code??null,origin_plus_code:body.origin_plus_code??null,zone_code:body.zone_code??null,is_urgent:!!body.is_urgent,sync_operation_id:crypto.randomUUID()})});
+   const payload=await dr.json().catch(()=>({}));if(!dr.ok)return out(payload,dr.status);
+   const {data:log,error:le}=await db.from("marketplace_service_logistics").insert({booking_id:b.id,requested_by:uid,country_code:country,delivery_id:payload.id,status:"CREATED"}).select().single();if(le)throw le;
+   await notificar(db,uid,"Entrega criada","A entrega associada ao serviço foi criada.","marketplace_delivery",payload.id);
+   const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",b.provider_id).maybeSingle();if(pp?.owner_id)await notificar(db,pp.owner_id,"Entrega associada","Foi criada uma entrega associada ao teu serviço.","marketplace_delivery",payload.id);
+   return out({logistics:log,delivery:payload});
+  }
   if(action==="booking-list"){
    const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("owner_id",uid).eq("country_code",country);const ids=(p||[]).map((x:any)=>x.id);
    let q=db.from("marketplace_service_bookings").select("*").eq("country_code",country);q=ids.length?q.or("client_id.eq."+uid+",provider_id.in.("+ids.join(",")+")"):q.eq("client_id",uid);
@@ -84,13 +102,19 @@ Deno.serve(async req=>{
    const {data:b,error:be}=await db.from("marketplace_service_bookings").select("*").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
    let owner=b.client_id===uid;if(!owner){const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("id",b.provider_id).eq("owner_id",uid).maybeSingle();owner=!!p;}if(!owner)return out({error:"ACESSO_NEGADO"},403);
    const patch:any={status:body.status,updated_at:new Date().toISOString()};if(body.status==="IN_PROGRESS"&&!b.started_at)patch.started_at=new Date().toISOString();if(body.status==="COMPLETED")patch.completed_at=new Date().toISOString();
-   const {data:updated,error}=await db.from("marketplace_service_bookings").update(patch).eq("id",b.id).select().single();if(error)throw error;return out({booking:updated});
+   const {data:updated,error}=await db.from("marketplace_service_bookings").update(patch).eq("id",b.id).eq("status",b.status).select().single();if(error)throw error;if(!updated)return out({error:"ALTERACAO_CONCORRENTE"},409);
+   const recipient=b.client_id===uid?b.provider_id:null;
+   if(recipient){const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",recipient).maybeSingle();if(pp?.owner_id)await notificar(db,pp.owner_id,"Estado do serviço atualizado","O estado do teu serviço foi atualizado para "+body.status+".","marketplace_booking",b.id);}
+   else await notificar(db,b.client_id,"Estado do serviço atualizado","O estado do teu serviço foi atualizado para "+body.status+".","marketplace_booking",b.id);
+   return out({booking:updated});
   }
   if(action==="review-service"){
    if(typeof body.booking_id!=="string"||!Number.isInteger(Number(body.rating))||Number(body.rating)<1||Number(body.rating)>5)return out({error:"AVALIACAO_INVALIDA"},422);
    const {data:b,error:be}=await db.from("marketplace_service_bookings").select("id,client_id,provider_id,status,country_code").eq("id",body.booking_id).eq("country_code",country).maybeSingle();if(be)throw be;if(!b)return out({error:"AGENDAMENTO_NAO_ENCONTRADO"},404);
    if(b.client_id!==uid||b.status!=="COMPLETED")return out({error:"AVALIACAO_NAO_PERMITIDA"},409);
-   const {data:rv,error}=await db.from("marketplace_service_reviews").insert({booking_id:b.id,reviewer_id:uid,provider_id:b.provider_id,rating:Number(body.rating),comment:typeof body.comment==="string"?body.comment.trim()||null:null}).select().single();if(error)throw error;return out({review:rv});
+   const {data:rv,error}=await db.from("marketplace_service_reviews").insert({booking_id:b.id,reviewer_id:uid,provider_id:b.provider_id,rating:Number(body.rating),comment:typeof body.comment==="string"?body.comment.trim()||null:null}).select().single();if(error)throw error;
+   const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",b.provider_id).maybeSingle();if(pp?.owner_id)await notificar(db,pp.owner_id,"Novo feedback recebido","Recebeste uma nova avaliação pelo serviço concluído.","marketplace_review",rv.id);
+   return out({review:rv});
   }
 
   if(action==="my-proposals"){
@@ -98,12 +122,14 @@ Deno.serve(async req=>{
   }
   if(action==="accept-proposal"){
    if(typeof body.proposal_id!=="string")return out({error:"PROPOSTA_INVALIDA"},422);
-   const {data:p}=await db.from("marketplace_service_proposals").select("id,request_id,provider_user_id,status").eq("id",body.proposal_id).maybeSingle();if(!p)return out({error:"PROPOSTA_NAO_ENCONTRADA"},404);
+   const {data:p}=await db.from("marketplace_service_proposals").select("id,request_id,provider_id,provider_user_id,status").eq("id",body.proposal_id).maybeSingle();if(!p)return out({error:"PROPOSTA_NAO_ENCONTRADA"},404);
    const {data:req}=await db.from("marketplace_service_requests").select("id,client_id,status").eq("id",p.request_id).eq("client_id",uid).eq("status","OPEN").maybeSingle();if(!req)return out({error:"PEDIDO_NAO_DISPONIVEL"},409);
    const {error:e1}=await db.from("marketplace_service_proposals").update({status:"REJECTED",updated_at:new Date().toISOString()}).eq("request_id",req.id).neq("id",p.id).eq("status","PENDING");if(e1)throw e1;
-   const {data:accepted,error:e2}=await db.from("marketplace_service_proposals").update({status:"ACCEPTED",updated_at:new Date().toISOString()}).eq("id",p.id).select().single();if(e2)throw e2;
+   const {data:accepted,error:e2}=await db.from("marketplace_service_proposals").update({status:"ACCEPTED",updated_at:new Date().toISOString()}).eq("id",p.id).eq("status","PENDING").select().single();if(e2)throw e2;
    const {error:e3}=await db.from("marketplace_service_requests").update({status:"AWARDED",updated_at:new Date().toISOString()}).eq("id",req.id).eq("client_id",uid).eq("status","OPEN");if(e3)throw e3;
    const {data:booking,error:e4}=await db.from("marketplace_service_bookings").insert({request_id:req.id,proposal_id:p.id,client_id:uid,provider_id:p.provider_id,country_code:country,scheduled_date:accepted.proposed_date||null,status:"SCHEDULED"}).select().single();if(e4)throw e4;
+   await notificar(db,p.provider_user_id,"Proposta aceite","O cliente aceitou a tua proposta. O agendamento foi criado.","marketplace_booking",booking.id);
+   await notificar(db,uid,"Serviço agendado","A proposta foi aceite e o agendamento foi criado.","marketplace_booking",booking.id);
    return out({proposal:accepted,booking});
   }
 
