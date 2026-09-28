@@ -148,7 +148,7 @@ export function codigoPostalProvisorio(
 
 export function codigoBase(latitude: number, longitude: number, provinceName?: string | null, countryCode = 'AO') {
   const sigla = siglaProvincia(provinceName); const grelha = codificarGrelha(latitude, longitude); const checksum = digitosControlo(sigla + '-' + grelha);
-  return { base: sigla + '-' + grelha, postal_code: countryCode.trim().toUpperCase() + '-' + sigla + '-' + grelha + '-' + checksum, checksum };
+  return { base: sigla + '-' + grelha, gridCode: grelha, postal_code: countryCode.trim().toUpperCase() + '-' + sigla + '-' + grelha + '-' + checksum, checksum };
 }
 export function validatePostalCode(code: string): { valid: boolean; reason?: string } {
   const match = code.trim().match(/^([A-Z]{2})-([A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3})-([2-9A-HJ-NP-ZL]{8})(?:-(\d+))?-(\d{2})$/);
