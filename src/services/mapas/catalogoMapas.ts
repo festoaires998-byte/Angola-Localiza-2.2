@@ -12,7 +12,7 @@ export interface EntradaMapaPais {
 }
 
 export const CATALOGO_MAPAS_PALOP: readonly EntradaMapaPais[] = [
-  { pais: 'AO', nome: 'Angola', regiao: REGIOES_OFFLINE_PALOP.AO, estado: 'disponivel', manifestoPath: 'huambo/manifesto.json' },
+  { pais: 'AO', nome: 'Angola', regiao: REGIOES_OFFLINE_PALOP.AO, estado: 'em_preparacao', manifestoPath: 'angola/manifesto.json' },
   { pais: 'MZ', nome: 'Moçambique', regiao: REGIOES_OFFLINE_PALOP.MZ, estado: 'em_preparacao', manifestoPath: 'mocambique/manifesto.json' },
   { pais: 'CV', nome: 'Cabo Verde', regiao: REGIOES_OFFLINE_PALOP.CV, estado: 'em_preparacao', manifestoPath: 'cabo-verde/manifesto.json' },
   { pais: 'GW', nome: 'Guiné-Bissau', regiao: REGIOES_OFFLINE_PALOP.GW, estado: 'em_preparacao', manifestoPath: 'guine-bissau/manifesto.json' },
