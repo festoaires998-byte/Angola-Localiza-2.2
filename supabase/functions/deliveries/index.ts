@@ -215,6 +215,88 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ deliveries: results }), { headers: cors });
     }
 
+    if (action === "list_available_for_driver") {
+      const { data: memberships, error: membershipError } = await supabase
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", callerId)
+        .eq("role", "estafeta");
+      if (membershipError) return new Response(JSON.stringify({ error: membershipError.message }), { status: 400, headers: cors });
+
+      const organizationIds = [...new Set((memberships ?? []).map((m) => m.organization_id).filter(Boolean))];
+      const { data: profile, error: profileError } = await supabase
+        .from("driver_profiles")
+        .select("user_id, online, status, vehicle_type, vehicle_capacity_kg")
+        .eq("user_id", callerId)
+        .maybeSingle();
+      if (profileError) return new Response(JSON.stringify({ error: profileError.message }), { status: 400, headers: cors });
+
+      if (!profile || profile.status !== "APPROVED" || profile.online !== true) {
+        return new Response(JSON.stringify({ deliveries: [], driver: {
+          online: profile?.online === true,
+          status: profile?.status ?? "PENDING",
+          vehicle_type: profile?.vehicle_type ?? null,
+          vehicle_capacity_kg: profile?.vehicle_capacity_kg ?? null,
+        }}), { headers: cors });
+      }
+
+      let query = supabase
+        .from("deliveries")
+        .select("id, tracking_code, status, instructions, is_urgent, created_at, updated_at, origin_latitude, origin_longitude, origin_postal_code, origin_plus_code, cargo_type, cargo_description, cargo_quantity, cargo_weight_kg, cargo_length_cm, cargo_width_cm, cargo_height_cm, cargo_declared_value, requested_vehicle_type, requested_vehicle_capacity_kg, addresses(postal_code, plus_code, reference, latitude, longitude)")
+        .eq("status", "CREATED")
+        .is("assigned_driver", null)
+        .neq("created_by", callerId)
+        .order("is_urgent", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (organizationIds.length > 0) {
+        const quoted = organizationIds.map((id) => `"${id}"`).join(",");
+        query = query.or(`organization_id.is.null,organization_id.in.(${quoted})`);
+      } else {
+        query = query.is("organization_id", null);
+      }
+
+      const { data: deliveries, error } = await query;
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+
+      const normalize = (value: unknown) => String(value ?? "").trim().toLocaleLowerCase();
+      const requiredCapacity = (d: any) =>
+        typeof d.requested_vehicle_capacity_kg === "number"
+          ? d.requested_vehicle_capacity_kg
+          : (typeof d.cargo_weight_kg === "number" ? d.cargo_weight_kg : null);
+
+      const result = (deliveries ?? []).map((d: any) => {
+        const requestedType = normalize(d.requested_vehicle_type);
+        const driverType = normalize(profile.vehicle_type);
+        const requiredKg = requiredCapacity(d);
+        const driverKg = typeof profile.vehicle_capacity_kg === "number" ? profile.vehicle_capacity_kg : null;
+        const reasons: string[] = [];
+
+        const typeOk = !requestedType || (driverType !== "" && requestedType === driverType);
+        const capacityOk = requiredKg === null || (driverKg !== null && driverKg >= requiredKg);
+        if (!requestedType) reasons.push("tipo de veículo não especificado");
+        else if (!driverType) reasons.push("tipo de veículo do estafeta não configurado");
+        else if (!typeOk) reasons.push("tipo de veículo diferente");
+        if (requiredKg === null) reasons.push("capacidade da carga não especificada");
+        else if (driverKg === null) reasons.push("capacidade do veículo do estafeta não configurada");
+        else if (!capacityOk) reasons.push("capacidade insuficiente");
+
+        const compatibilidade = typeOk && capacityOk ? "COMPATIVEL" : "ALTERNATIVA";
+        return { ...d, compatibilidade, motivos: reasons };
+      });
+
+      return new Response(JSON.stringify({
+        deliveries: result,
+        driver: {
+          online: true,
+          status: profile.status,
+          vehicle_type: profile.vehicle_type ?? null,
+          vehicle_capacity_kg: profile.vehicle_capacity_kg ?? null,
+        },
+      }), { headers: cors });
+    }
+
     if (action === "list_org_drivers") {
       const { delivery_id } = body;
       if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
