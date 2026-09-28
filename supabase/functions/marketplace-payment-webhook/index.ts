@@ -23,12 +23,13 @@ Deno.serve(async req=>{
  if(existing)return new Response(JSON.stringify({ok:true,idempotent_replay:true}),{headers:cors});
  const custom=payment.custom_fields||{};const intentId=typeof custom.payment_intent_id==="string"?custom.payment_intent_id:null;
  const amount=Number(payment.amount);if(!Number.isFinite(amount)||amount<=0)return new Response(JSON.stringify({error:"AMOUNT_INVALID"}),{status:422,headers:cors});
- const {data:intent}=intentId?await db.from("marketplace_payment_intents").select("id,status,amount_total,currency,client_id,provider_id,booking_id").eq("id",intentId).maybeSingle():{data:null};
+ const {data:intent}=intentId?await db.from("marketplace_payment_intents").select("id,status,amount_total,currency,client_id,provider_id,booking_id,country_code").eq("id",intentId).maybeSingle():{data:null};
  if(!intent)return new Response(JSON.stringify({error:"PAYMENT_INTENT_NOT_FOUND"}),{status:404,headers:cors});
+ if(intent.country_code!=="AO")return new Response(JSON.stringify({error:"PROVIDER_NAO_CONFIGURADO_NESTE_PAIS",country_code:intent.country_code}),{status:409,headers:cors});
  if(Number(intent.amount_total)!==amount||intent.currency!=="AOA")return new Response(JSON.stringify({error:"AMOUNT_MISMATCH"}),{status:409,headers:cors});
  const rawType=String(payment.event_type||payment.status||"PAYMENT_RECEIVED").toUpperCase(); const eventType=rawType.includes("REFUND")?"REFUND_CONFIRMED":"PAYMENT_RECEIVED"; const {error:ie}=await db.from("marketplace_payment_events").insert({payment_intent_id:intent.id,provider:"PROXYPAY",external_event_id:externalEventId,event_type:eventType,amount,currency:"AOA",raw_payload:payment,signature_valid:true,processed_at:new Date().toISOString()});
  if(ie&&ie.code!=="23505")return new Response(JSON.stringify({error:ie.message}),{status:500,headers:cors});
- if(!ie)return await finalizar();
+ if(!ie){ await db.rpc("marketplace_reconcile_payment",{p_payment_id:intent.id}); return await finalizar(); }
  return new Response(JSON.stringify({ok:true,idempotent_replay:true}),{headers:cors});
 
  async function finalizar(){
