@@ -23,7 +23,6 @@ export const SEPARADORES = [
   'guardados',
   'entrega',
   'minhas-entregas',
-  'marketplace',
   'campo',
   'validar',
   'admin',
@@ -38,9 +37,9 @@ export const KYC_VERIFICADO = 'ID_VERIFIED';
 export type NivelGarantia = 'aal1' | 'aal2';
 
 /** O que qualquer pessoa vê, mesmo sem nada confirmado. */
-export const SEPARADORES_MINIMOS: readonly Separador[] = ['mapa', 'marketplace', 'definicoes'];
+export const SEPARADORES_MINIMOS: readonly Separador[] = ['mapa', 'definicoes'];
 
-const DO_CIDADAO: readonly Separador[] = ['guardados', 'entrega', 'minhas-entregas', 'marketplace'];
+const DO_CIDADAO: readonly Separador[] = ['guardados', 'entrega', 'minhas-entregas'];
 
 const POR_CARGO: Partial<Record<Cargo, readonly Separador[]>> = {
   tecnico_campo: ['campo', 'guardados'],
@@ -70,9 +69,9 @@ function porOrdem(conjunto: Set<Separador>): Separador[] {
  * Separadores permitidos pelos cargos e pelo KYC (as mesmas regras do site):
  * - super_admin → todos;
  * - sempre: mapa e definicoes;
- * - sem cargos (cidadão) → mais guardados, entrega, minhas-entregas e marketplace
+ * - sem cargos (cidadão) → mais guardados, entrega e minhas-entregas
  *   (o cidadão nunca é bloqueado por KYC);
- * - staff com KYC diferente de "ID_VERIFIED" → mapa, marketplace e definicoes;
+ * - staff com KYC diferente de "ID_VERIFIED" → mapa e definicoes;
  * - staff verificado → os separadores de cada cargo que tem.
  */
 export function separadoresPermitidos(
