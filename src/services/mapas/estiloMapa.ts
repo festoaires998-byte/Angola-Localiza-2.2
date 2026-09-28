@@ -83,3 +83,12 @@ export function criarEstiloSatelite(): StyleSpecification {
     layers: [{ id: 'satelite', type: 'raster', source: 'satelite' }],
   };
 }
+/** Mapa online de contingência para países ainda sem pacote PMTiles offline. */
+export function criarEstiloOnlineOSM(): StyleSpecification {
+  return {
+    version: 8,
+    name: 'Localiza · Mapa online',
+    sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: ATRIBUICAO_OSM } },
+    layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+  };
+}
