@@ -187,6 +187,25 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ flagged: results }), { headers: cors });
     }
 
+    if (action === "register_device") {
+      const { device_id, public_key_jwk } = body;
+      if (typeof device_id !== "string" || device_id.trim().length < 16 || device_id.trim().length > 128) {
+        return new Response(JSON.stringify({ error: "DEVICE_ID_INVALID" }), { status: 400, headers: cors });
+      }
+      if (!public_key_jwk || typeof public_key_jwk !== "object") {
+        return new Response(JSON.stringify({ error: "PUBLIC_KEY_REQUIRED" }), { status: 400, headers: cors });
+      }
+      const { data: existing } = await supabase.from("signing_keys").select("id, device_id").eq("user_id", callerId).eq("device_id", device_id.trim()).maybeSingle();
+      if (existing) return new Response(JSON.stringify({ ok: true, id: existing.id, device_id: existing.device_id, existing: true }), { headers: cors });
+      const { data, error } = await supabase.from("signing_keys").insert({
+        user_id: callerId,
+        device_id: device_id.trim(),
+        public_key_jwk,
+      }).select("id, device_id").single();
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      return new Response(JSON.stringify({ ok: true, id: data.id, device_id: data.device_id, existing: false }), { headers: cors });
+    }
+
     if (action === "list_streets_in_quadra") {
       const { latitude, longitude } = body;
       if (typeof latitude !== "number" || typeof longitude !== "number") return new Response(JSON.stringify({ error: "latitude e longitude sao obrigatorios" }), { status: 400, headers: cors });
