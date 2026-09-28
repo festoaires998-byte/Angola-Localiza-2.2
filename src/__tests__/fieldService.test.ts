@@ -87,4 +87,14 @@ describe('field-service: o bairro do registo chega à base de dados', () => {
   const fonte = ler('supabase/functions/field-service/index.ts');
   const submit = fonte.slice(fonte.indexOf('if (action === "submit") {\n      const {'), fonte.indexOf('if (action === "check_duplicates")'));
 
-  test('submit lê neighborhood_name (cidadãos e técnicos, sem distinção) e grava-o no field_record', () => {
+  test('submit lê neighborhood_name (cidadãos e técnicos, sem distinção) e grava-o no field_record', () => {  test('submit lê neighborhood_name (cidadãos e técnicos, sem distinção) e grava-o no field_record', () => {
+    expect(submit).toMatch(/const \{[^}]*\bneighborhood_name\b[^}]*\} = body;/);
+    expect(submit).toMatch(/street_id: streetId, neighborhood_name,/);
+    // Não há ramo só para técnicos a decidir o bairro.
+    expect(submit).not.toMatch(/tecnico_campo[\s\S]*neighborhood_name/);
+  });
+
+  test('list_streets_in_quadra devolve os bairros perto (neighborhoods_nearby) que a app mostra', () => {
+    expect(fonte).toContain('neighborhoods_nearby: neighborhoodsNearby');
+  });
+});
