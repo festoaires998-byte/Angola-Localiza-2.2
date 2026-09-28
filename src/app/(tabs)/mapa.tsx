@@ -29,7 +29,7 @@ import type { InfoLocal } from '@/services/location/infoLocal';
 import { criarEstilo, criarEstiloOnlineOSM, criarEstiloSatelite } from '@/services/mapas/estiloMapa';
 import { criarMapaDoPais, type EstadoMapaOffline } from '@/services/mapas/mapaOffline';
 import { mapaDoPais } from '@/services/mapas/catalogoMapas';
-import { dentroDaRegiao, REGIAO_HUAMBO } from '@/services/mapas/regioes';
+import { dentroDaRegiao } from '@/services/mapas/regioes';
 import type { Visibilidade } from '@/services/moradas/moradas';
 import { mudancasMoradas, servicoMoradas } from '@/services/moradas/moradasApp';
 import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
@@ -262,8 +262,6 @@ function ResultadosPesquisa({ resultados, aoEscolher, localidade }: { resultados
     </View>
   );
 }
-
-const CENTRO_HUAMBO = { latitude: REGIAO_HUAMBO.centro[1], longitude: REGIAO_HUAMBO.centro[0] };
 
 export default function Mapa() {
   const [configPais, setConfigPais] = useState(CONFIG_AO_OFFLINE_TESTE);
