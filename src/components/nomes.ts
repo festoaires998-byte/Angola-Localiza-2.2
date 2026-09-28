@@ -8,6 +8,7 @@ export const NOMES_SEPARADORES: Record<Separador, string> = {
   guardados: 'Moradas',
   entrega: 'Enviar',
   'minhas-entregas': 'Entregas',
+  marketplace: 'Marketplace',
   campo: 'Campo',
   validar: 'Validar',
   admin: 'Gestão',
