@@ -62,7 +62,7 @@ function CartaoMapaOffline({ mapa, estado, online, nomePais }: { mapa: ReturnTyp
     if (!estado.novo) return null;
     return (
       <Cartao>
-        <Texto>{`Há uma versão nova do mapa do Huambo (${megas(estado.novo.bytes)}).`}</Texto>
+        <Texto>{`Há uma versão nova do mapa de ${nomePais} (${megas(estado.novo.bytes)}).`}</Texto>
         {erroAtualizar ? <Caixa tipo="erro">{erroAtualizar}</Caixa> : null}
         {online ? <Botao titulo="Atualizar o mapa" variante="secundario" onPress={descarregar} /> : null}
       </Cartao>
@@ -80,13 +80,13 @@ function CartaoMapaOffline({ mapa, estado, online, nomePais }: { mapa: ReturnTyp
     );
   }
   const remoto = estado.remoto;
-  const regiaoAtual = mapa.regiao;
+  const regiaoAtual = mapaDoPais(paisAtual()).regiao;
   return (
     <Cartao>
       <Subtitulo>Mapa para usar sem rede</Subtitulo>
       <Texto>
         {remoto
-          ? `Descarrega o mapa de ${regiao.nome} (${megas(remoto.bytes)}) para o veres mesmo sem internet.`
+          ? `Descarrega o mapa de ${regiaoAtual.nome} (${megas(remoto.bytes)}) para o veres mesmo sem internet.`
           : `Descarrega o mapa de ${regiaoAtual.nome} para o veres mesmo sem internet.`}
       </Texto>
       {estado.estado === 'erro' ? <Caixa tipo="erro">{estado.mensagem}</Caixa> : null}
@@ -561,7 +561,7 @@ export default function Mapa() {
           </View>
         ) : null}
         {posicao && !dentroDaRegiao(regiaoAtual, posicao.latitude, posicao.longitude) ? (
-          <Caixa tipo="info">{`Estás fora da zona do mapa (${REGIAO_HUAMBO.nome}). O teu código continua a funcionar.`}</Caixa>
+          <Caixa tipo="info">{`Estás fora da zona do mapa (${regiaoAtual.nome}). O teu código continua a funcionar.`}</Caixa>
         ) : null}
 
         {/* 7. Privacidade, Categoria e Guardar como favorito */}
