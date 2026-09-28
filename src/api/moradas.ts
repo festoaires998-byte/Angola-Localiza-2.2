@@ -3,6 +3,7 @@ import type { NovoFavoritoComMorada } from '@/services/moradas/moradas';
 
 import { lerFavoritosDoServidor, SELECAO_FAVORITOS, type FavoritoDoServidor } from './moradasNucleo';
 import { obterConfigPais } from '@/config/pais';
+import { paisAtual } from '@/state/pais';
 import { supabase } from './supabase';
 
 export type { DadosMorada, FavoritoDoServidor } from './moradasNucleo';
@@ -46,7 +47,7 @@ export async function removerFavorito(id: string): Promise<void> {
  */
 export async function criarFavoritoComMorada(userId: string, novo: NovoFavoritoComMorada): Promise<void> {
   const m = novo.morada;
-  const pais = await obterConfigPais();
+  const pais = await obterConfigPais(paisAtual());
   const { error: erroMorada } = await supabase.from('addresses').insert({
     id: m.id,
     latitude: m.latitude,
