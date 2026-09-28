@@ -60,6 +60,7 @@ export default function NovoEnvio() {
   const [confirmar, setConfirmar] = useState(false);
   const [cotacao, setCotacao] = useState<CotacaoEntrega | null>(null);
   const [cotacaoErro, setCotacaoErro] = useState<string | null>(null);
+  const [carga, setCarga] = useState({ tipo:'Encomenda', descricao:'', quantidade:'', pesoKg:'', comprimentoCm:'', larguraCm:'', alturaCm:'', valorDeclarado:'', tipoVeiculo:'', capacidadeVeiculoKg:'' });
   const destinoSelecionado = useMemo(() => (moradas.itens ?? []).find((i) => i.morada?.id === dados.moradaId)?.morada ?? null, [moradas.itens, dados.moradaId]);
 
   useEffect(() => {
@@ -185,7 +186,8 @@ export default function NovoEnvio() {
     setErro(null);
     setAEnviar(true);
     try {
-      const r = await servicoEnvios.enviar(userId, dados, online === true);
+      const dadosComCarga: DadosEnvio = { ...dados, carga: { tipo:carga.tipo, descricao:carga.descricao, quantidade:carga.quantidade?Number(carga.quantidade):null, pesoKg:carga.pesoKg?Number(carga.pesoKg):null, comprimentoCm:carga.comprimentoCm?Number(carga.comprimentoCm):null, larguraCm:carga.larguraCm?Number(carga.larguraCm):null, alturaCm:carga.alturaCm?Number(carga.alturaCm):null, valorDeclarado:carga.valorDeclarado?Number(carga.valorDeclarado):null, tipoVeiculo:carga.tipoVeiculo||null, capacidadeVeiculoKg:carga.capacidadeVeiculoKg?Number(carga.capacidadeVeiculoKg):null } };
+      const r = await servicoEnvios.enviar(userId, dadosComCarga, online === true);
       if (r.tipo === 'enviado') {
         guardarEnvio(r.envio, r.pin, { tipo: 'sucesso', texto: 'Pedido enviado. Dá o PIN só a quem vai receber a encomenda.' });
         router.replace({ pathname: '/entrega/[id]', params: { id: r.envio.id } });
@@ -308,6 +310,28 @@ export default function NovoEnvio() {
           <Botao titulo="Abrir as Moradas" variante="secundario" onPress={() => router.push('/guardados')} />
         </>
       ) : null}
+
+      <Subtitulo>Carga</Subtitulo>
+      <Opcoes grupo="Tipo de carga" opcoes={[
+        { valor: 'Encomenda', nome: '📦 Encomenda' }, { valor: 'Documentos', nome: '📄 Documentos' },
+        { valor: 'Alimentos', nome: '🍎 Alimentos' }, { valor: 'Frágil', nome: '⚠️ Frágil' },
+        { valor: 'Mobiliário', nome: '🪑 Mobiliário' }, { valor: 'Outro', nome: 'Outro' },
+      ]} valor={carga.tipo} aoEscolher={(v) => setCarga((x) => ({ ...x, tipo: String(v) }))} />
+      <Campo rotulo="Descrição da carga (opcional)" value={carga.descricao} onChangeText={(v) => setCarga((x) => ({ ...x, descricao: v }))} placeholder="Ex.: caixa de roupas" />
+      <Campo rotulo="Quantidade" value={carga.quantidade} onChangeText={(v) => setCarga((x) => ({ ...x, quantidade: v }))} keyboardType="numeric" placeholder="Ex.: 2" />
+      <Campo rotulo="Peso total (kg)" value={carga.pesoKg} onChangeText={(v) => setCarga((x) => ({ ...x, pesoKg: v }))} keyboardType="decimal-pad" placeholder="Ex.: 15" />
+      <Texto suave>Dimensões opcionais (cm).</Texto>
+      <Campo rotulo="Comprimento" value={carga.comprimentoCm} onChangeText={(v) => setCarga((x) => ({ ...x, comprimentoCm: v }))} keyboardType="decimal-pad" placeholder="cm" />
+      <Campo rotulo="Largura" value={carga.larguraCm} onChangeText={(v) => setCarga((x) => ({ ...x, larguraCm: v }))} keyboardType="decimal-pad" placeholder="cm" />
+      <Campo rotulo="Altura" value={carga.alturaCm} onChangeText={(v) => setCarga((x) => ({ ...x, alturaCm: v }))} keyboardType="decimal-pad" placeholder="cm" />
+      <Campo rotulo="Valor declarado (Kz, opcional)" value={carga.valorDeclarado} onChangeText={(v) => setCarga((x) => ({ ...x, valorDeclarado: v }))} keyboardType="decimal-pad" placeholder="Ex.: 50000" />
+      <Subtitulo>Veículo pretendido</Subtitulo>
+      <Opcoes grupo="Tipo de veículo" opcoes={[
+        { valor: 'moto', nome: '🏍️ Moto' }, { valor: 'carro', nome: '🚗 Carro' },
+        { valor: 'carrinha', nome: '🚐 Carrinha' }, { valor: 'furgão', nome: '🚚 Furgão' },
+        { valor: 'camião', nome: '🚛 Camião' },
+      ]} valor={carga.tipoVeiculo || null} aoEscolher={(v) => setCarga((x) => ({ ...x, tipoVeiculo: String(v) }))} />
+      <Campo rotulo="Capacidade mínima pretendida (kg, opcional)" value={carga.capacidadeVeiculoKg} onChangeText={(v) => setCarga((x) => ({ ...x, capacidadeVeiculoKg: v }))} keyboardType="decimal-pad" placeholder="Ex.: 500" />
 
       <Subtitulo>Quem vai receber?</Subtitulo>
       <Campo
