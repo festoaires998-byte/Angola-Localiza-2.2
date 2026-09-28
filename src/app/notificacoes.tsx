@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import { useSessao } from '@/hooks/useSessao';
-import { listarNotificacoes, marcarNotificacaoComoLida, marcarTodasNotificacoesComoLidas, type Notificacao } from '@/services/notificacoes/notificacoes';
+import { listarNotificacoes, marcarNotificacaoComoLida, marcarTodasNotificacoesComoLidas, subscreverNotificacoesRealtime, type Notificacao } from '@/services/notificacoes/notificacoes';
 
 function formatarData(valor: string): string {
   return new Intl.DateTimeFormat('pt-PT', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(valor));
@@ -26,7 +26,7 @@ export default function Notificacoes() {
     finally { setAAtualizar(false); }
   }, []);
 
-  useEffect(() => { if (estado.utilizador) void atualizar(); }, [estado.utilizador, atualizar]);
+  useEffect(() => { if (!estado.utilizador) return; void atualizar(); return subscreverNotificacoesRealtime(estado.utilizador.id, (nova) => setItens((atual) => [nova, ...(atual ?? [])].slice(0, 50))); }, [estado.utilizador, atualizar]);
   if (!estado.carregado) return <EcraCarregamento />;
   if (!estado.utilizador) return <Redirect href="/entrar" />;
 
