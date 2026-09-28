@@ -101,6 +101,11 @@ export async function atribuirEstafeta(deliveryId: string, driverId: string): Pr
   await chamarFuncao('deliveries', 'assign_driver', { body: { delivery_id: deliveryId, driver_id: driverId } });
 }
 
+/** Permite ao próprio estafeta aceitar um pedido disponível. O servidor garante exclusividade atómica. */
+export async function aceitarEntrega(deliveryId: string): Promise<void> {
+  await chamarFuncao('deliveries', 'accept_delivery', { body: { delivery_id: deliveryId } });
+}
+
 /** Reabre uma entrega falhada para uma nova tentativa, seguindo a mesma transição usada pelo site. */
 export async function reagendarTentativa(deliveryId: string): Promise<void> {
   await chamarFuncao('deliveries', 'update_status', { body: { delivery_id: deliveryId, new_status: 'ASSIGNED' } });
