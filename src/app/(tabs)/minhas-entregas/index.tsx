@@ -226,5 +226,9 @@ const estilos = StyleSheet.create({
     color: CORES.primaria,
   },
   etiquetaAviso: { backgroundColor: CORES.avisoFundo, color: CORES.avisoTexto },
+  etiquetaCompativel: { backgroundColor: CORES.infoFundo, color: CORES.primaria },
   etiquetaErro: { backgroundColor: CORES.erroFundo, color: CORES.perigo },
+  disponiveis: { gap: 10, marginTop: 8 },
+  aceitar: { marginTop: 8, borderRadius: TAMANHOS.raio, paddingVertical: 11, paddingHorizontal: 14, backgroundColor: CORES.primaria },
+  aceitarTexto: { color: CORES.fundo, fontSize: 14, fontWeight: '800', textAlign: 'center' },
 });
