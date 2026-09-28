@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CORES, TAMANHOS } from '@/components/tema';
@@ -12,6 +12,8 @@ import { useRealtimeEntregas } from '@/hooks/useRealtimeEntregas';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import { acoesDaEntrega, type AcaoNaFila } from '@/services/entregas/estafeta';
+import { limparHistoricoEntregas } from '@/api/entregas';
+import { useFilaSync } from '@/hooks/useFilaSync';
 import { servicoEstafeta } from '@/services/entregas/estafetaApp';
 import { definirAvisoEstafeta } from '@/state/estafeta';
 
@@ -69,6 +71,7 @@ export default function Entregas() {
   const eEstafeta = cargos.includes('estafeta');
   const visaoOrganizacao = cargos.includes('operador_postal') || cargos.includes('super_admin');
   const router = useRouter();
+  const sync = useFilaSync();
   const estado = useEntregasEstafeta(eEstafeta ? userId : null, online);
   const atualizarOrganizacao = useCallback(() => recarregarEntregasOrganizacao().catch(() => undefined), []);
   useRealtimeEntregas(visaoOrganizacao ? userId : null, 'organizacao', online === true, atualizarOrganizacao);
@@ -146,6 +149,24 @@ export default function Entregas() {
             <Titulo>{visaoOrganizacao ? 'Entregas da organização' : 'As minhas entregas'}</Titulo>
             <Texto suave>{`Hoje: ${hojeEntregas.length} entregas · ${concluidasHoje} com prova · ${sucesso}% sucesso`}</Texto>
             <Texto suave>{`${porFazer.length} por fazer`}</Texto>
+            <View style={estilos.operacao}>
+              <Texto suave>{online === false ? '🔴 Offline' : sync.aSincronizar ? '🟠 A sincronizar…' : `🟢 Ligado · ${sync.pendentes} pendentes`}</Texto>
+              {sync.pendentes > 0 ? <Pressable accessibilityRole="button" onPress={() => void sync.sincronizarAgora()} style={estilos.acaoSecundaria}><Text style={estilos.acaoTexto}>🔄 Sincronizar agora</Text></Pressable> : null}
+            </View>
+            {eEstafeta ? <Pressable onPress={() => router.push({ pathname: '/chat-organizacao', params: { tipo: 'ORG_ESTAFETA' } })} style={estilos.acaoSecundaria}><Text style={estilos.acaoTexto}>💬 Falar com a organização</Text></Pressable> : null}
+            {visaoOrganizacao && cargos.includes('super_admin') ? (
+              <Pressable onPress={() => Alert.alert('Limpar histórico de entregas', 'Esta ação elimina todas as entregas do sistema, incluindo provas e livro-razão. Esta ação é potencialmente irreversível.', [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Continuar', style: 'destructive', onPress: () => Alert.prompt('Confirmação', 'Escreve exatamente ELIMINAR TUDO', [
+                  { text: 'Cancelar', style: 'cancel' },
+                  { text: 'Confirmar', onPress: async (value) => {
+                    if (value !== 'ELIMINAR TUDO') { Alert.alert('Não confirmado', 'Nada foi apagado.'); return; }
+                    try { const deleted = await limparHistoricoEntregas(); Alert.alert('Concluído', `${deleted} entrega(s) eliminada(s).`); await recarregarEntregasOrganizacao(); }
+                    catch (e) { Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível limpar o histórico.'); }
+                  } },
+                ], 'plain-text') },
+              ])} style={estilos.acaoPerigo}><Text style={estilos.acaoPerigoTexto}>🗑️ Limpar histórico de entregas (super admin)</Text></Pressable>
+            ) : null}
             {eEstafeta && online === true && estado.pedidosDisponiveis.length > 0 ? (
               <View style={estilos.disponiveis}>
                 <Titulo>Pedidos disponíveis</Titulo>
@@ -228,6 +249,11 @@ const estilos = StyleSheet.create({
   etiquetaAviso: { backgroundColor: CORES.avisoFundo, color: CORES.avisoTexto },
   etiquetaCompativel: { backgroundColor: CORES.infoFundo, color: CORES.primaria },
   etiquetaErro: { backgroundColor: CORES.erroFundo, color: CORES.perigo },
+  operacao: { gap: 6 },
+  acaoSecundaria: { alignSelf: 'stretch', borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: CORES.fundoSuave },
+  acaoTexto: { color: CORES.texto, fontWeight: '700', textAlign: 'center' },
+  acaoPerigo: { alignSelf: 'stretch', borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: CORES.erroFundo },
+  acaoPerigoTexto: { color: CORES.perigo, fontWeight: '800', textAlign: 'center' },
   disponiveis: { gap: 10, marginTop: 8 },
   aceitar: { marginTop: 8, borderRadius: TAMANHOS.raio, paddingVertical: 11, paddingHorizontal: 14, backgroundColor: CORES.primaria },
   aceitarTexto: { color: CORES.fundo, fontSize: 14, fontWeight: '800', textAlign: 'center' },
