@@ -135,6 +135,7 @@ export function codigoPostalProvisorio(
   latitude: number,
   longitude: number,
   nomeProvincia?: string | null,
+  countryCode = 'AO',
 ): CodigoPostalProvisorio {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     throw new Error('Coordenada inválida: latitude e longitude têm de ser números.');
@@ -142,5 +143,5 @@ export function codigoPostalProvisorio(
   const sigla = siglaProvincia(nomeProvincia);
   const grelha = codificarGrelha(latitude, longitude);
   const controlo = digitosControlo(`${sigla}-${grelha}`);
-  return { codigo: `AO-${sigla}-${grelha}-${controlo}`, sigla, grelha, controlo };
+  return { codigo: `${countryCode.trim().toUpperCase()}-${sigla}-${grelha}-${controlo}`, sigla, grelha, controlo };
 }
