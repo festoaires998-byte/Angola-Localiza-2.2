@@ -11,6 +11,10 @@ concurrency:
 env:
   MAXZOOM: '11'
   LIMITE_GB: '2'
+  SUPABASE_URL: https://qntbknegicaghnbnghyw.supabase.co
+  S3_ENDPOINT: https://qntbknegicaghnbnghyw.storage.supabase.co/storage/v1/s3
+  S3_REGION: eu-west-1
+  BUCKET: mapas
 jobs:
   mapa:
     name: Gerar mapa ${{ matrix.pais }}
@@ -79,3 +83,25 @@ jobs:
           name: mapa-${{ matrix.pais }}-${{ steps.build.outputs.versao }}
           path: saida/${{ matrix.regiao }}/
           retention-days: 30
+      - name: Publicar no Supabase Storage
+        if: github.event_name != 'pull_request'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.S3_REGION }}
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          set -euo pipefail
+          test -n "${AWS_ACCESS_KEY_ID:-}" || { echo '::error::Secret SUPABASE_S3_ACCESS_KEY_ID não configurado'; exit 1; }
+          test -n "${AWS_SECRET_ACCESS_KEY:-}" || { echo '::error::Secret SUPABASE_S3_SECRET_ACCESS_KEY não configurado'; exit 1; }
+          aws configure set default.s3.addressing_style path
+          aws --endpoint-url "$S3_ENDPOINT" s3api head-bucket --bucket "$BUCKET"
+          f=$(find "saida/${{ matrix.regiao }}" -name '*.pmtiles' -print -quit)
+          m="saida/${{ matrix.regiao }}/manifesto.json"
+          aws --endpoint-url "$S3_ENDPOINT" s3 cp "$f" "s3://$BUCKET/${{ matrix.regiao }}/$(basename "$f")" --content-type application/octet-stream --cache-control 'max-age=31536000, immutable' --only-show-errors
+          aws --endpoint-url "$S3_ENDPOINT" s3 cp "$m" "s3://$BUCKET/${{ matrix.regiao }}/manifesto.json" --content-type application/json --cache-control 'no-cache' --only-show-errors
+          url="$SUPABASE_URL/storage/v1/object/public/$BUCKET/${{ matrix.regiao }}/manifesto.json"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+          test "$code" = 200 || { echo "::error::Manifesto não está público: HTTP $code"; exit 1; }
+          echo "Publicado: $url" >> "$GITHUB_STEP_SUMMARY"
