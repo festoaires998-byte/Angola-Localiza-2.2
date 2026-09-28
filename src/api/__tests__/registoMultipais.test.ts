@@ -1,8 +1,8 @@
 import { describe, expect, jest, test } from '@jest/globals';
 
-const mockSignUp = jest.fn();
+const mockSignUp = jest.fn<Promise<unknown>, [unknown]>();
 
-jest.mock('../api/supabase', () => ({
+jest.mock('../supabase', () => ({
   supabase: {
     auth: {
       signUp: (args: unknown) => mockSignUp(args),
@@ -14,7 +14,7 @@ jest.mock('@/services/cofre/cofreApp', () => ({ cofreApp: {} }));
 jest.mock('../adesao', () => ({ criarAdesao: () => ({ guardar: jest.fn(), consumir: jest.fn(async () => ({ status: 'nenhum' })) }) }));
 jest.mock('../edge/chamarFuncao', () => ({ chamarFuncao: jest.fn() }));
 
-const { criarConta } = require('../api/auth') as typeof import('../api/auth');
+const { criarConta } = require('../auth') as typeof import('../api/auth');
 
 describe('registo multipaís', () => {
   test.each([
