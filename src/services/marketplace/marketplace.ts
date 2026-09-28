@@ -14,6 +14,7 @@ export const marketplace={
  categories:()=>chamarFuncao<{categories:MarketplaceCategory[]}>('marketplace','categories',{tempoMaximo:20000}),
  list:(body?:{q?:string;category?:string;province?:string;city?:string;min_price?:number;max_price?:number;sort?:string})=>
    chamarFuncao<{country_code:string;currency:string;listings:MarketplaceListing[]}>('marketplace','list',{body,tempoMaximo:20000}),
+ detail:(listing_id:string)=>chamarFuncao<{listing:MarketplaceListing;images:{id:string;storage_path:string;sort_order:number;url:string}[];similar:MarketplaceListing[]}>('marketplace','detail',{body:{listing_id},tempoMaximo:20000}),
  mine:()=>chamarFuncao<{listings:MarketplaceListing[]}>('marketplace','mine',{tempoMaximo:20000}),
  create:(body:Partial<MarketplaceListing>&{title:string;description:string;category:string;price?:number|null})=>
    chamarFuncao<{listing:MarketplaceListing}>('marketplace','create',{body,tempoMaximo:20000}),
