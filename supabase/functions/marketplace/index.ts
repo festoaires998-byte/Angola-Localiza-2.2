@@ -133,6 +133,18 @@ Deno.serve(async req=>{
    let q=db.from("marketplace_service_bookings").select("*").eq("country_code",country);q=ids.length?q.or("client_id.eq."+uid+",provider_id.in.("+ids.join(",")+")"):q.eq("client_id",uid);
    const {data:b,error}=await q.order("created_at",{ascending:false}).limit(100);if(error)throw error;return out({bookings:b||[]});
   }
+  if(action==="save-payout-account"){
+   const {data:profile}=await db.from("marketplace_service_profiles").select("id,country_code").eq("owner_id",uid).eq("active",true).maybeSingle();if(!profile)return out({error:"PERFIL_PRESTADOR_NAO_ENCONTRADO"},404);
+   if(profile.country_code!==country)return out({error:"PAIS_DA_CONTA_DIVERGENTE"},403);
+   const {data:cfg}=await db.from("country_configs").select("currency_code,is_active").eq("country_code",country).maybeSingle();if(!cfg)return out({error:"PAIS_NAO_CONFIGURADO"},422);
+   const type=body.destination_type==="MOBILE_MONEY"?"MOBILE_MONEY":"BANK_ACCOUNT";const masked=typeof body.masked_destination==="string"?body.masked_destination.trim():"";const holder=typeof body.holder_name==="string"?body.holder_name.trim():"";
+   if(!masked||masked.length>80||!holder||holder.length>120)return out({error:"DADOS_DA_CONTA_INVALIDOS"},422);
+   const {data:rule}=await db.from("marketplace_payout_country_rules").select("*").eq("country_code",country).maybeSingle();if(!rule)return out({error:"REGRAS_DE_PAYOUT_NAO_CONFIGURADAS"},409);
+   if(type==="MOBILE_MONEY"&&!rule.mobile_money_enabled)return out({error:"MOBILE_MONEY_NAO_DISPONIVEL_NESTE_PAIS"},409);
+   const token=typeof body.provider_token==="string"?body.provider_token.trim():null;
+   const {data:account,error}=await db.from("marketplace_payout_accounts").insert({provider_id:profile.id,country_code:country,currency:cfg.currency_code,destination_type:type,holder_name:holder,masked_destination:masked,provider_token:token,kyc_status:"PENDING",status:"PENDING",is_default:false}).select("id,country_code,currency,destination_type,holder_name,masked_destination,kyc_status,status,is_default").single();if(error)throw error;
+   return out({account,message:"Conta registada e aguarda verificação."});
+  }
   if(action==="request-payout"){
    const {data:profile}=await db.from("marketplace_service_profiles").select("id,country_code").eq("owner_id",uid).eq("active",true).maybeSingle();if(!profile)return out({error:"PERFIL_PRESTADOR_NAO_ENCONTRADO"},404);
    if(profile.country_code!==country)return out({error:"PAIS_DA_CONTA_DIVERGENTE"},403);
