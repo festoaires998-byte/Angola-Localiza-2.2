@@ -24,9 +24,9 @@ export default function Marketplace(){
  const [province,setProvince]=useState(''); const [city,setCity]=useState(''); const [neighborhood,setNeighborhood]=useState('');
  const [files,setFiles]=useState<ImagePicker.ImagePickerAsset[]>([]); const [busy,setBusy]=useState(false);
  const [contact,setContact]=useState(''); const [selected,setSelected]=useState<MarketplaceListing|null>(null);
- const [detail,setDetail]=useState<{listing:MarketplaceListing;images:{id:string;storage_path:string;sort_order:number;url:string}[];similar:MarketplaceListing[]}|null>(null);
+ const [providerRating,setProviderRating]=useState<{average:number;count:number}|null>(null); const [detail,setDetail]=useState<{listing:MarketplaceListing;images:{id:string;storage_path:string;sort_order:number;url:string}[];similar:MarketplaceListing[]}|null>(null);
  const [detailLoading,setDetailLoading]=useState(false);
- const [serviceRequestOpen,setServiceRequestOpen]=useState(false); const [requestTitle,setRequestTitle]=useState(''); const [requestDescription,setRequestDescription]=useState(''); const [requestBudget,setRequestBudget]=useState(''); const [requestDate,setRequestDate]=useState(''); const [requestBusy,setRequestBusy]=useState(false); const [bookings,setBookings]=useState<Array<Record<string,unknown>>>([]);
+ const [serviceRequestOpen,setServiceRequestOpen]=useState(false); const [serviceRequests,setServiceRequests]=useState<any[]>([]); const [openRequests,setOpenRequests]=useState<any[]>([]); const [proposals,setProposals]=useState<any[]>([]); const [proposalMessage,setProposalMessage]=useState(''); const [proposalAmount,setProposalAmount]=useState(''); const [proposalBusy,setProposalBusy]=useState(false); const [rating,setRating]=useState(''); const [reviewComment,setReviewComment]=useState(''); const [requestTitle,setRequestTitle]=useState(''); const [requestDescription,setRequestDescription]=useState(''); const [requestBudget,setRequestBudget]=useState(''); const [requestDate,setRequestDate]=useState(''); const [requestBusy,setRequestBusy]=useState(false); const [bookings,setBookings]=useState<Array<Record<string,unknown>>>([]);
 
  const carregar=useCallback(async()=>{
   setLoading(true);setErro(null);
@@ -43,6 +43,20 @@ export default function Marketplace(){
    setMensagem('Pedido de serviço publicado. Os prestadores compatíveis poderão enviar propostas.');setRequestTitle('');setRequestDescription('');setRequestBudget('');setRequestDate('');setServiceRequestOpen(false);
   }catch(e){setErro(e instanceof Error?e.message:'Não foi possível publicar o pedido.');}finally{setRequestBusy(false);}
  }
+ async function carregarFluxoServico(){
+  setLoading(true);setErro(null);
+  try{const [mine,open,props]=await Promise.all([marketplaceServices.myRequests(),marketplaceServices.openRequests(),marketplaceServices.myProposals()]);setServiceRequests(mine.requests||[]);setOpenRequests(open.requests||[]);setProposals(props.proposals||[]);}
+  catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar pedidos e propostas.');}finally{setLoading(false);}
+ }
+ async function verPropostas(requestId:string){try{const r=await marketplaceServiceFlow.requestDetail(requestId);setProposals(r.proposals||[]);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar as propostas.');}}
+ async function aceitarProposta(id:string){setProposalBusy(true);setErro(null);try{await marketplaceServiceFlowAccept(id);await carregarFluxoServico();await carregarAgendamentos();setMensagem('Proposta aceite e agendamento criado.');}catch(e){setErro(e instanceof Error?e.message:'Não foi possível aceitar a proposta.');}finally{setProposalBusy(false);}}
+ async function enviarProposta(requestId:string){if(proposalMessage.trim().length<2){setErro('Escreve uma mensagem para a proposta.');return;}setProposalBusy(true);try{const amount=proposalAmount.trim()===''?null:Number(proposalAmount.replace(',','.'));if(amount!==null&&(!Number.isFinite(amount)||amount<0))throw new Error('VALOR_INVALIDO');await marketplaceServiceFlowPropose(requestId,proposalMessage.trim(),amount);setProposalMessage('');setProposalAmount('');setMensagem('Proposta enviada.');await carregarFluxoServico();}catch(e){setErro(e instanceof Error?e.message:'Não foi possível enviar a proposta.');}finally{setProposalBusy(false);}}
+ async function avaliar(bookingId:string){const n=Number(rating);if(!Number.isInteger(n)||n<1||n>5){setErro('A avaliação deve ser de 1 a 5 estrelas.');return;}try{await marketplaceServiceFlow.review(bookingId,n,reviewComment.trim()||undefined);setRating('');setReviewComment('');setMensagem('Avaliação registada.');}catch(e){setErro(e instanceof Error?e.message:'Não foi possível registar a avaliação.');}}
+ async function marketplaceServiceFlowAccept(id:string){await marketplaceServiceFlow.updateBooking; const r=await marketplaceServiceFlow.requestDetail; return (await chamarAceite(id));}
+ async function chamarAceite(id:string){const r=await marketplaceServiceFlowAcceptProposal(id);return r;}
+ async function marketplaceServiceFlowPropose(requestId:string,message:string,amount:number|null){return marketplaceServiceFlowProposeInternal(requestId,message,amount);}
+ async function marketplaceServiceFlowProposeInternal(requestId:string,message:string,amount:number|null){return marketplaceServices.propose({request_id:requestId,message,amount});}
+ async function marketplaceServiceFlowAcceptProposal(id:string){return marketplaceServices.acceptProposal(id);}
  async function carregarAgendamentos(){try{const r=await marketplaceServiceFlow.bookings();setBookings(r.bookings);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar os agendamentos.');}}
  async function carregarServicos(){
   setLoading(true);setErro(null);
@@ -110,12 +124,17 @@ export default function Marketplace(){
     <Campo rotulo="Data pretendida (opcional)" value={requestDate} onChangeText={setRequestDate} placeholder="AAAA-MM-DD" />
     <Botao titulo="Publicar pedido" aCarregar={requestBusy} onPress={()=>void criarPedidoServico()} /><Botao titulo="Cancelar" onPress={()=>setServiceRequestOpen(false)} />
    </Cartao>:null}
-   <Botao titulo="Meus agendamentos" onPress={()=>void carregarAgendamentos()} />
+   <Botao titulo="Pedidos e propostas" onPress={()=>void carregarFluxoServico()} />
+   {serviceRequests.map(r=><Cartao key={'mine-'+r.id}><Subtitulo>{r.title}</Subtitulo><Texto>{r.status}</Texto><Botao titulo="Ver propostas" onPress={()=>void verPropostas(r.id)} /></Cartao>)}
+   {openRequests.map(r=><Cartao key={'open-'+r.id}><Subtitulo>Pedido: {r.title}</Subtitulo><Texto>{r.description}</Texto><Campo rotulo="Mensagem da proposta" value={proposalMessage} onChangeText={setProposalMessage} placeholder="Como podes ajudar?" multiline /><Campo rotulo="Valor" value={proposalAmount} onChangeText={setProposalAmount} keyboardType="decimal-pad" placeholder={currency||"Moeda local"} /><Botao titulo="Enviar proposta" aCarregar={proposalBusy} onPress={()=>void enviarProposta(r.id)} /></Cartao>)}
+   {proposals.map(p=><Cartao key={'prop-'+p.id}><Subtitulo>Proposta</Subtitulo><Texto>{p.message}</Texto><Texto>{p.amount!==null?String(p.amount)+' '+String(p.currency||currency):'Valor sob consulta'}</Texto><Texto suave>{p.status}</Texto>{p.status==='PENDING'?<Botao titulo="Aceitar proposta" aCarregar={proposalBusy} onPress={()=>void aceitarProposta(p.id)} />:null}</Cartao>)}
+      <Botao titulo="Meus agendamentos" onPress={()=>void carregarAgendamentos()} />
   </Cartao>:null}
   {modo==='servicos'&&bookings.map((b,i)=><Cartao key={String(b.id||i)}>
    <Subtitulo>Agendamento</Subtitulo><Texto>{String(b.status||'')}</Texto><Texto suave>{b.scheduled_date?String(b.scheduled_date):'Data a combinar'}</Texto>
    {b.status==='SCHEDULED'?<Botao titulo="Iniciar serviço" onPress={async()=>{await marketplaceServiceFlow.updateBooking(String(b.id),'IN_PROGRESS');await carregarAgendamentos();}} />:null}
    {b.status==='IN_PROGRESS'?<Botao titulo="Marcar como concluído" onPress={async()=>{await marketplaceServiceFlow.updateBooking(String(b.id),'COMPLETED');await carregarAgendamentos();}} />:null}
+   {b.status==='COMPLETED'?<><Campo rotulo="Avaliação (1-5)" value={rating} onChangeText={setRating} keyboardType="number-pad" placeholder="5" /><Campo rotulo="Comentário (opcional)" value={reviewComment} onChangeText={setReviewComment} placeholder="Como foi o serviço?" multiline /><Botao titulo="Avaliar serviço" onPress={()=>void avaliar(String(b.id))} /></>:null}
   </Cartao>)}
   {modo==='servicos'?providers.map(p=><Cartao key={p.id}>
    <Subtitulo>{p.display_name}{p.verified?' ✓':''}</Subtitulo>
