@@ -2,6 +2,7 @@ import { lerDadosMorada, type DadosMorada, type FavoritoDoServidor } from '@/api
 import type { CategoriaFavorito, Favorito, RepositorioFavoritos } from '@/database/repositories/favoritos';
 import type { Morada, RepositorioMoradas } from '@/database/repositories/moradas';
 import type { TipoOperacao } from '@/database/repositories/filaSaida';
+import { paisAtual } from '@/state/pais';
 
 /**
  * Separador Moradas: os favoritos do utilizador, guardados no telemóvel para
@@ -196,7 +197,7 @@ export function criarServicoMoradas(deps: DependenciasMoradas) {
           postal_code: morada.codigo_postal,
           accuracy_meters: morada.precisao_m,
           visibility_level: escolhas.visibilidade,
-          country_code: 'AO',
+          country_code: paisAtual(),
         },
         category: favorito.categoria,
         label: favorito.nome.trim() || null,
