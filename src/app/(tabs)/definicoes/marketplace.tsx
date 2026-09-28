@@ -49,6 +49,7 @@ export default function Marketplace(){
   catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar pedidos e propostas.');}finally{setLoading(false);}
  }
  async function verPropostas(requestId:string){try{const r=await marketplaceServiceFlow.requestDetail(requestId);setProposals(r.proposals||[]);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar as propostas.');}}
+ async function carregarOperacoes(){try{const [a,b]=await Promise.all([marketplaceServices.listClientBookings(),marketplaceServices.listProviderBookings()]);const seen=new Set<string>();setOperacoes([...a,...b].filter(x=>!seen.has(x.booking_id)&&seen.add(x.booking_id)));}catch{setOperacoes([]);}}
  async function aceitarProposta(id:string){setProposalBusy(true);setErro(null);try{await marketplaceServices.acceptProposal(id);await carregarFluxoServico();await carregarAgendamentos();setMensagem('Proposta aceite e agendamento criado.');}catch(e){setErro(e instanceof Error?e.message:'Não foi possível aceitar a proposta.');}finally{setProposalBusy(false);}}
  async function enviarProposta(requestId:string){if(proposalMessage.trim().length<2){setErro('Escreve uma mensagem para a proposta.');return;}setProposalBusy(true);try{const amount=proposalAmount.trim()===''?null:Number(proposalAmount.replace(',','.'));if(amount!==null&&(!Number.isFinite(amount)||amount<0))throw new Error('VALOR_INVALIDO');await marketplaceServices.propose({request_id:requestId,message:proposalMessage.trim(),amount});setProposalMessage('');setProposalAmount('');setMensagem('Proposta enviada.');await carregarFluxoServico();}catch(e){setErro(e instanceof Error?e.message:'Não foi possível enviar a proposta.');}finally{setProposalBusy(false);}}
  async function avaliar(bookingId:string){const n=Number(rating);if(!Number.isInteger(n)||n<1||n>5){setErro('A avaliação deve ser de 1 a 5 estrelas.');return;}try{await marketplaceServiceFlow.review(bookingId,n,reviewComment.trim()||undefined);setRating('');setReviewComment('');setMensagem('Avaliação registada.');}catch(e){setErro(e instanceof Error?e.message:'Não foi possível registar a avaliação.');}}
@@ -90,7 +91,17 @@ export default function Marketplace(){
   {erro?<Caixa tipo='erro'>{erro}</Caixa>:null}
   <Titulo>{detail.listing.title}</Titulo>
   <Texto suave>{detail.listing.category+' · '+(detail.listing.condition==='NEW'?'Novo':detail.listing.condition==='REFURBISHED'?'Recondicionado':'Usado')}</Texto>
-  {detail.images.length>0?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.galeria}>{detail.images.map(im=><Image key={im.id} source={{uri:im.url}} style={s.imagem} />)}</ScrollView>:<Caixa tipo='erro'>Este anúncio ainda não tem fotografias.</Caixa>}
+  {detail.images.length>0?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.galeria}>{detail.images.map(im=><Image key={im.id} source={{uri:im.url}} style={s.imagem} />)}<View style={{marginTop:24,padding:16,borderRadius:16,backgroundColor:'#f5f5f5'}}>
+<Text style={{fontSize:18,fontWeight:'700',marginBottom:10}}>Acompanhar serviços</Text>
+{operacoes.length===0?<Text>Nenhum serviço agendado.</Text>:operacoes.map((op)=>(
+<View key={op.booking_id} style={{paddingVertical:10,borderBottomWidth:1,borderBottomColor:'#ddd'}}>
+<Text style={{fontWeight:'700'}}>Serviço {op.status}</Text>
+<Text>Entrega: {op.delivery_id ? (op.delivery_status||'CRIADA') : 'Ainda não solicitada'}</Text>
+{op.scheduled_date?<Text>Agendado: {new Date(op.scheduled_date).toLocaleString()}</Text>:null}
+</View>
+))}
+</View>
+</ScrollView>:<Caixa tipo='erro'>Este anúncio ainda não tem fotografias.</Caixa>}
   {detail.listing.price!==null?<Titulo>{detail.listing.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+detail.listing.currency}</Titulo>:<Subtitulo>Preço sob consulta</Subtitulo>}
   <Cartao><Subtitulo>Descrição</Subtitulo><Texto>{detail.listing.description||'Sem descrição.'}</Texto></Cartao>
   <Cartao><Subtitulo>Localização</Subtitulo><Texto>{[detail.listing.neighborhood,detail.listing.city,detail.listing.province].filter(Boolean).join(' · ')||'Não indicada'}</Texto><Texto suave>{detail.listing.views_count+' visualizações'}</Texto></Cartao>
