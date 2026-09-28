@@ -44,7 +44,7 @@ describe('estado da sessão', () => {
   test('começa fechado e sem utilizador', () => {
     const { s } = montar({});
     expect(s.loja.obter()).toMatchObject({ carregado: false, utilizador: null });
-    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'marketplace', 'definicoes']);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
   });
 
   test('cidadão confirmado: abre os separadores do cidadão', async () => {
@@ -67,7 +67,7 @@ describe('estado da sessão', () => {
     });
     emitir(ANA);
     await esperar();
-    expect(s.loja.obter().acesso).toMatchObject({ faltaMfa: true, passoMfa: 'verificar', separadores: ['mapa', 'marketplace', 'definicoes'] });
+    expect(s.loja.obter().acesso).toMatchObject({ faltaMfa: true, passoMfa: 'verificar', separadores: ['mapa', 'definicoes'] });
   });
 
   test('staff em AAL1 sem fator: falta MFA (inscrever)', async () => {
@@ -87,7 +87,7 @@ describe('estado da sessão', () => {
     emitir(ANA);
     await esperar();
     expect(s.loja.obter()).toMatchObject({ perfilConfirmadoAgora: false });
-    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'marketplace', 'definicoes']);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
   });
 
   test('trocar de utilizador não deixa passar o perfil do anterior', async () => {
@@ -112,10 +112,10 @@ describe('estado da sessão', () => {
     // Enquanto o perfil do Rui não chega, não herda o super_admin da Ana.
     expect(s.loja.obter().utilizador).toEqual(RUI);
     expect(s.loja.obter().perfil).toBeNull();
-    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'marketplace', 'definicoes']);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
     soltarRui();
     await esperar();
-    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'marketplace', 'definicoes']);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
   });
 
   test('um resultado atrasado de antes de sair é ignorado', async () => {
@@ -134,7 +134,7 @@ describe('estado da sessão', () => {
     soltar();
     await esperar();
     expect(s.loja.obter()).toMatchObject({ utilizador: null, perfil: null });
-    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'marketplace', 'definicoes']);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
   });
 
   test('sem rede: abre logo com o último perfil guardado neste telemóvel', async () => {
@@ -161,7 +161,7 @@ describe('estado da sessão', () => {
     expect(s.loja.obter()).toMatchObject({ carregado: true, perfilLido: false });
     await new Promise((r) => setTimeout(r, 40));
     expect(s.loja.obter().perfilLido).toBe(true);
-    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'marketplace', 'definicoes']);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
   });
 
   test('o perfil guardado de outro utilizador nunca é usado', async () => {
@@ -174,7 +174,7 @@ describe('estado da sessão', () => {
     emitir(ANA);
     await esperar();
     expect(s.loja.obter().perfil).toBeNull();
-    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'marketplace', 'definicoes']);
+    expect(s.loja.obter().acesso.separadores).toEqual(['mapa', 'definicoes']);
     s.parar();
   });
 });
