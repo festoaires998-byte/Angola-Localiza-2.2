@@ -131,7 +131,7 @@ export function criarSessao(deps: DependenciasSessao): ControloSessao {
 
     loja.definir((a) => ({
       ...a,
-      utilizador: { ...a.utilizador, countryCode: utilizador.countryCode ?? a.utilizador?.countryCode },
+      utilizador: { ...utilizador, countryCode: utilizador.countryCode ?? a.utilizador?.countryCode },
       perfil: resultado.perfil,
       perfilLido: true,
       perfilConfirmadoAgora: resultado.confirmadoAgora,
