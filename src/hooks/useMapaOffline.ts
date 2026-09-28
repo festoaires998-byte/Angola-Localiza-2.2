@@ -2,21 +2,17 @@ import { useEffect, useSyncExternalStore } from 'react';
 
 import { mapaHuambo, type EstadoMapaOffline } from '@/services/mapas/mapaOffline';
 
-/**
- * Estado do mapa do Huambo no telemóvel. Ao abrir, vê o que está guardado
- * (sem rede); com rede, lê o manifesto (tamanho / versão nova).
- */
-export function useMapaOffline(online: boolean | null): EstadoMapaOffline {
-  const estado = useSyncExternalStore(
-    mapaHuambo.estado.subscrever,
-    mapaHuambo.estado.obter,
-    mapaHuambo.estado.obter,
-  );
+const SEM_MAPA: EstadoMapaOffline = { estado: 'sem_mapa', remoto: null };
+
+/** Estado do pacote offline da região atualmente suportada. Nunca inicializa Huambo para outro país. */
+export function useMapaOffline(online: boolean | null, paisCodigo = 'AO'): EstadoMapaOffline {
+  const ativo = paisCodigo.toUpperCase() === 'AO';
+  const estado = useSyncExternalStore(mapaHuambo.estado.subscrever, mapaHuambo.estado.obter, mapaHuambo.estado.obter);
   useEffect(() => {
-    void mapaHuambo.iniciar();
-  }, []);
+    if (ativo) void mapaHuambo.iniciar();
+  }, [ativo]);
   useEffect(() => {
-    if (online) void mapaHuambo.verificarRemoto();
-  }, [online]);
-  return estado;
+    if (ativo && online) void mapaHuambo.verificarRemoto();
+  }, [ativo, online]);
+  return ativo ? estado : SEM_MAPA;
 }
