@@ -33,7 +33,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: CORES.fundo } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: CORES.fundo } }}>
+        <Stack.Screen name="chat-organizacao" options={{ title: 'Falar com a organização' }} />
+      </Stack>
     </SafeAreaProvider>
   );
 }
