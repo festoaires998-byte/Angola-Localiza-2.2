@@ -93,6 +93,12 @@ Deno.serve(async req=>{
    const {data:pp}=await db.from("marketplace_service_profiles").select("owner_id").eq("id",b.provider_id).maybeSingle();if(pp?.owner_id)await notificar(db,pp.owner_id,"Entrega associada","Foi criada uma entrega associada ao teu serviço.","marketplace_delivery",payload.id);
    return out({logistics:log,delivery:payload});
   }
+  if(action==="provider-bookings"){
+   const {data:profile,error:pe}=await db.from("marketplace_service_profiles").select("id").eq("owner_id",uid).maybeSingle();if(pe)throw pe;if(!profile)return out({bookings:[]});
+   const {data:bookings,error:be}=await db.from("marketplace_service_bookings").select("id,request_id,status,scheduled_date,provider_id,client_id").eq("provider_id",profile.id).eq("country_code",country).order("created_at",{ascending:false});if(be)throw be;
+   const ids=(bookings||[]).map((b:any)=>b.id);let logistics:any[]=[];if(ids.length){const {data:l,error:le}=await db.from("marketplace_service_logistics").select("booking_id,delivery_id,status").in("booking_id",ids);if(le)throw le;logistics=l||[];}
+   const enriched=(bookings||[]).map((b:any)=>{const l=logistics.find(x=>x.booking_id===b.id);return {...b,delivery_id:l?.delivery_id??null,delivery_status:l?.status??null,role:"PRESTADOR"};});return out({bookings:enriched});
+  }
   if(action==="booking-list"){
    const {data:p}=await db.from("marketplace_service_profiles").select("id").eq("owner_id",uid).eq("country_code",country);const ids=(p||[]).map((x:any)=>x.id);
    let q=db.from("marketplace_service_bookings").select("*").eq("country_code",country);q=ids.length?q.or("client_id.eq."+uid+",provider_id.in.("+ids.join(",")+")"):q.eq("client_id",uid);
