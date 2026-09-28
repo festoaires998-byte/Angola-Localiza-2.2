@@ -10,7 +10,7 @@ import { supabase } from './supabase';
 
 /** Colunas que quem criou pode ler diretamente (as mesmas que o site pede). */
 const COLUNAS =
-  'id, tracking_code, status, recipient_name, recipient_phone, instructions, is_urgent, created_by, assigned_driver, created_at, updated_at, origin_latitude, origin_longitude, origin_postal_code, origin_plus_code, addresses(postal_code, plus_code, reference, latitude, longitude)';
+  'id, tracking_code, status, recipient_name, recipient_phone, instructions, is_urgent, created_by, assigned_driver, created_at, updated_at, origin_latitude, origin_longitude, origin_postal_code, origin_plus_code, cargo_type, cargo_description, cargo_quantity, cargo_weight_kg, cargo_length_cm, cargo_width_cm, cargo_height_cm, cargo_declared_value, requested_vehicle_type, requested_vehicle_capacity_kg, addresses(postal_code, plus_code, reference, latitude, longitude)';
 
 /** Cria a entrega. A resposta traz o PIN, que só se mostra (não se guarda). */
 export async function criarEnvio(pedido: PedidoEnvio): Promise<{ envio: Envio; pin: PinEnvio | null }> {
@@ -99,6 +99,46 @@ export async function listarEstafetasDisponiveis(deliveryId: string): Promise<Es
 
 export async function atribuirEstafeta(deliveryId: string, driverId: string): Promise<void> {
   await chamarFuncao('deliveries', 'assign_driver', { body: { delivery_id: deliveryId, driver_id: driverId } });
+}
+
+/** Permite ao próprio estafeta aceitar um pedido disponível. O servidor garante exclusividade atómica. */
+export type PedidoDisponivelEstafeta = Envio & {
+  compatibilidade: 'COMPATIVEL' | 'ALTERNATIVA';
+  motivos: string[];
+};
+
+export async function listarPedidosDisponiveisEstafeta(): Promise<{
+  pedidos: PedidoDisponivelEstafeta[];
+  estafeta: { online: boolean; status: string; vehicle_type: string | null; vehicle_capacity_kg: number | null };
+}> {
+  const r = await chamarFuncao<{
+    deliveries?: unknown[];
+    driver?: { online?: boolean; status?: string; vehicle_type?: string | null; vehicle_capacity_kg?: number | null };
+  }>('deliveries', 'list_available_for_driver');
+  const d = r?.driver ?? {};
+  return {
+    pedidos: Array.isArray(r?.deliveries)
+      ? r.deliveries.map((x) => {
+          const e = lerEnvio(x);
+          const raw = x as Record<string, unknown>;
+          return {
+            ...e,
+            compatibilidade: raw.compatibilidade === 'COMPATIVEL' ? 'COMPATIVEL' : 'ALTERNATIVA',
+            motivos: Array.isArray(raw.motivos) ? raw.motivos.filter((m): m is string => typeof m === 'string') : [],
+          };
+        })
+      : [],
+    estafeta: {
+      online: d.online === true,
+      status: d.status ?? 'PENDING',
+      vehicle_type: d.vehicle_type ?? null,
+      vehicle_capacity_kg: typeof d.vehicle_capacity_kg === 'number' ? d.vehicle_capacity_kg : null,
+    },
+  };
+}
+
+export async function aceitarEntrega(deliveryId: string): Promise<void> {
+  await chamarFuncao('deliveries', 'accept_delivery', { body: { delivery_id: deliveryId } });
 }
 
 /** Reabre uma entrega falhada para uma nova tentativa, seguindo a mesma transição usada pelo site. */

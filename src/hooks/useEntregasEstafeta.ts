@@ -10,11 +10,14 @@ import { usePosicao } from './usePosicao';
 
 /** Lê as entregas atribuídas e as ações na fila e guarda-as na loja partilhada. */
 export async function recarregarEstafeta(userId: string, online: boolean): Promise<void> {
-  const [lista, acoes] = await Promise.all([
+  const [lista, acoes, disponiveis] = await Promise.all([
     servicoEstafeta.listar(userId, online),
     servicoEstafeta.acoes(userId).catch(() => []),
+    online
+      ? servicoEstafeta.listarDisponiveis().catch(() => ({ pedidos: [], estafeta: { online: false, status: 'PENDING', vehicle_type: null, vehicle_capacity_kg: null } }))
+      : Promise.resolve({ pedidos: [], estafeta: { online: false, status: 'PENDING', vehicle_type: null, vehicle_capacity_kg: null } }),
   ]);
-  lojaEstafeta.definir((e) => ({ ...e, entregas: lista.entregas, doServidor: lista.doServidor, erro: lista.erro, acoes }));
+  lojaEstafeta.definir((e) => ({ ...e, entregas: lista.entregas, pedidosDisponiveis: disponiveis.pedidos, doServidor: lista.doServidor, erro: lista.erro, acoes }));
 }
 
 /** Carrega a visão administrativa das entregas da organização. */

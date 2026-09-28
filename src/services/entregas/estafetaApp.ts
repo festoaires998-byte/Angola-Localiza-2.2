@@ -1,4 +1,4 @@
-import { listarAtribuidas } from '@/api/entregas';
+import { aceitarEntrega, listarAtribuidas, listarPedidosDisponiveisEstafeta } from '@/api/entregas';
 import { abrirBaseDados } from '@/database/client';
 import { criarRepositorioEntregas } from '@/database/repositories/entregas';
 import { assinarProva, paraCamposProva } from '@/services/crypto';
@@ -10,7 +10,7 @@ const entregas = () => abrirBaseDados().then((db) => criarRepositorioEntregas(db
 
 /** Serviço do separador Entregas (estafeta) ligado à base de dados, à fila, à chave do aparelho e ao Supabase. */
 export const servicoEstafeta = criarServicoEstafeta({
-  servidor: { listarAtribuidas },
+  servidor: { listarAtribuidas, listarDisponiveis: listarPedidosDisponiveisEstafeta, aceitar: aceitarEntrega },
   entregas: {
     guardarVarias: async (e) => (await entregas()).guardarVarias(e),
     listar: async () => (await entregas()).listar(),
