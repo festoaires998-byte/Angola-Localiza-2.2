@@ -60,7 +60,7 @@ export default function Marketplace(){
   {erro?<Caixa tipo='erro'>{erro}</Caixa>:null}
   <Titulo>{detail.listing.title}</Titulo>
   <Texto suave>{detail.listing.category+' · '+(detail.listing.condition==='NEW'?'Novo':detail.listing.condition==='REFURBISHED'?'Recondicionado':'Usado')}</Texto>
-  {detail.images.length>0?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.galeria}>{detail.images.map(im=><Image key={im.id} source={{uri:im.url}} style={s.imagem} /></ScrollView>:<Caixa>Este anúncio ainda não tem fotografias.</Caixa>}
+  {detail.images.length>0?<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.galeria}>{detail.images.map(im=><Image key={im.id} source={{uri:im.url}} style={s.imagem} />)}</ScrollView>:<Caixa>Este anúncio ainda não tem fotografias.</Caixa>}
   {detail.listing.price!==null?<Titulo>{detail.listing.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+detail.listing.currency}</Titulo>:<Subtitulo>Preço sob consulta</Subtitulo>}
   <Cartao><Subtitulo>Descrição</Subtitulo><Texto>{detail.listing.description||'Sem descrição.'}</Texto></Cartao>
   <Cartao><Subtitulo>Localização</Subtitulo><Texto>{[detail.listing.neighborhood,detail.listing.city,detail.listing.province].filter(Boolean).join(' · ')||'Não indicada'}</Texto><Texto suave>{detail.listing.views_count+' visualizações'}</Texto></Cartao>
