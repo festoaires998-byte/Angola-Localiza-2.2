@@ -31,6 +31,10 @@ export default function Motorista() {
   const userId: string = utilizador.id;
 
   async function foto(chave:DocKey,label:string){
+    if (estado?.application?.status === 'PENDING_REVIEW' || estado?.application?.status === 'APPROVED') {
+      setErro('A candidatura já está em revisão ou aprovada. Não são permitidas novas alterações.');
+      return;
+    }
     setErro(null);
     const p=await ImagePicker.requestCameraPermissionsAsync();
     if(!p.granted){setErro('Autoriza a câmara para enviar este documento.');return;}
@@ -48,6 +52,10 @@ export default function Motorista() {
   }
 
   async function enviar(){
+    if (estado?.application?.status === 'PENDING_REVIEW' || estado?.application?.status === 'APPROVED') {
+      setErro('Esta candidatura já foi enviada e não pode ser duplicada.');
+      return;
+    }
     setErro(null);setOk(null);
     const missing=(['id','licenseFront','licenseBack','vehicle','selfie'] as DocKey[]).filter(k=>!docs[k]);
     if(missing.length){setErro('Faltam documentos/fotografias obrigatórios.');return;}
