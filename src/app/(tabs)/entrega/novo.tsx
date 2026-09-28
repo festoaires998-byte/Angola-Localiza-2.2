@@ -330,7 +330,7 @@ export default function NovoEnvio() {
         { valor: 'Entrada lateral', nome: 'Entrada lateral' },
         { valor: 'Ligar à chegada', nome: 'Ligar à chegada' },
         { valor: 'Entregar após 17h', nome: 'Entregar após 17h' },
-      ]} aoEscolher={(v) => mudar({ instrucoes: [dados.instrucoes, String(v)].filter(Boolean).join('\n') })} />
+      ]} valor={null} aoEscolher={(v) => mudar({ instrucoes: [dados.instrucoes, String(v)].filter(Boolean).join('\n') })} />
       <Campo
         rotulo={`Instruções para o estafeta (opcional, até ${MAX_INSTRUCOES} letras)`}
         value={dados.instrucoes}
