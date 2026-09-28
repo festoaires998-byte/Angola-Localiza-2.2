@@ -15,7 +15,7 @@ export default function Campo() {
   const sessao = useSessao();
   const gps = usePosicao();
   const posicao = gps.estado === 'ok' ? gps.posicao : gps.estado === 'a_procurar' ? gps.ultima : null;
-  const info = useInfoLocal(posicao ? { latitude: posicaoAtual.latitude, longitude: posicaoAtual.longitude } : null, online === true, posicao?.precisao != null && posicaoAtual.precisao <= 10);
+  const info = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao != null && posicao.precisao <= 10);
   const [contexto, setContexto] = useState<ContextoCampo | null>(null);
   const [foto, setFoto] = useState<string | null>(null);
   const [referencia, setReferencia] = useState('');
@@ -78,10 +78,10 @@ export default function Campo() {
       {foto ? <Caixa tipo="info">Fotografia preparada e será marcada com posição, país e código.</Caixa> : null}
       <CampoInput rotulo="Referência do local" value={referencia} onChangeText={setReferencia} placeholder="Ex.: casa azul ao lado da escola" multiline />
       <CampoInput rotulo="Bairro" value={bairro} onChangeText={setBairro} placeholder={contexto?.neighborhoods_nearby?.[0] ?? 'Nome do bairro'} />
-      <Campo rotulo="Rua" value={rua} onChangeText={setRua} placeholder={contexto?.streets?.[0]?.name ?? 'Nome da rua'} />
+      <CampoInput rotulo="Rua" value={rua} onChangeText={setRua} placeholder={contexto?.streets?.[0]?.name ?? 'Nome da rua'} />
       {contexto?.streets?.length ? <Caixa tipo="info">{'Ruas próximas: ' + contexto.streets.slice(0, 5).map((s) => s.name).join(', ')}</Caixa> : null}
       <Botao titulo={ruaNova ? 'Usar rua sem nome: SIM' : 'Usar rua sem nome: NÃO'} variante="secundario" onPress={() => setRuaNova((v) => !v)} />
-      {posicaoAtual.precisao != null && posicaoAtual.precisao > 15 ? <Campo rotulo="Justificação da precisão GPS" value={precisaoJustificacao} onChangeText={setPrecisaoJustificacao} placeholder="Explica porque a recolha continua." multiline /> : null}
+      {posicaoAtual.precisao != null && posicaoAtual.precisao > 15 ? <CampoInput rotulo="Justificação da precisão GPS" value={precisaoJustificacao} onChangeText={setPrecisaoJustificacao} placeholder="Explica porque a recolha continua." multiline /> : null}
       <CampoCodigo valor={codigo} aoMudar={setCodigo} />
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
       {resultado ? <Caixa tipo="sucesso">{resultado}</Caixa> : null}
