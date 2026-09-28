@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GuardarFavorito } from '@/components/mapa/GuardarFavorito';
@@ -533,6 +533,12 @@ export default function Mapa() {
         {alvo ? (
           <View style={estilos.linhaAlvo}>
             <Text style={[estilos.nota, estilos.flex]}>{`No mapa: ${alvo.titulo}`}</Text>
+            <Botao titulo="Navegar" variante="secundario" onPress={() => {
+              void Linking.openURL("https://www.google.com/maps/dir/?api=1&destination=" + alvo.latitude + "," + alvo.longitude);
+            }} />
+            <Botao titulo="Partilhar" variante="secundario" onPress={() => {
+              void Share.share({ message: alvo.titulo + "\nhttps://www.google.com/maps/search/?api=1&query=" + alvo.latitude + "," + alvo.longitude });
+            }} />
             <Botao titulo="Tirar do mapa" variante="secundario" onPress={() => setAlvo(null)} />
           </View>
         ) : null}
