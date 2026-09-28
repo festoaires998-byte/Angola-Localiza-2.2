@@ -28,7 +28,7 @@ export default function Motorista() {
   useEffect(()=>{void ler();},[online]);
 
   if(!utilizador) return <EcraCarregamento texto="A abrir…" />;
-  const userId = userId;
+  const userId: string = utilizador.id;
 
   async function foto(chave:DocKey,label:string){
     setErro(null);
