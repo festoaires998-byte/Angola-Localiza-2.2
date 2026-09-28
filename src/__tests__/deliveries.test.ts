@@ -83,6 +83,9 @@ function cenario(entrega: Record<string, unknown> = {}) {
         { user_id: ADMIN, role: 'admin_nacional', organization_id: 'org-1' },
         { user_id: SUPER, role: 'super_admin', organization_id: 'org-1' },
       ],
+      driver_profiles: [
+        { user_id: ESTAFETA, status: 'APPROVED', country_code: 'AO', online: false },
+      ],
       user_identity: [
         { user_id: REMETENTE, status: null, citizen_id_verified: true },
         { user_id: OUTRO, status: null, citizen_id_verified: false },
