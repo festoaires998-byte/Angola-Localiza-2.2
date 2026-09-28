@@ -37,3 +37,12 @@ export async function marcarTodasNotificacoesComoLidas(): Promise<void> {
     .eq('user_id', userId).is('read_at', null);
   if (error) throw error;
 }
+
+
+export function subscreverNotificacoesRealtime(userId: string, onNova: (notificacao: Notificacao) => void) {
+  const channel = supabase.channel('notificacoes-' + userId)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + userId },
+      (payload) => onNova(payload.new as Notificacao))
+    .subscribe();
+  return () => { void supabase.removeChannel(channel); };
+}
