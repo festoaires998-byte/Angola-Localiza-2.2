@@ -133,6 +133,17 @@ Deno.serve(async req=>{
    let q=db.from("marketplace_service_bookings").select("*").eq("country_code",country);q=ids.length?q.or("client_id.eq."+uid+",provider_id.in.("+ids.join(",")+")"):q.eq("client_id",uid);
    const {data:b,error}=await q.order("created_at",{ascending:false}).limit(100);if(error)throw error;return out({bookings:b||[]});
   }
+  if(action==="payout-eligibility"){
+   const {data:profile}=await db.from("marketplace_service_profiles").select("id,country_code").eq("owner_id",uid).eq("active",true).maybeSingle();if(!profile)return out({eligible:false,reason:"PERFIL_PRESTADOR_NAO_ENCONTRADO"},404);
+   const {data:cfg}=await db.from("country_configs").select("currency_code,is_active").eq("country_code",profile.country_code).maybeSingle();
+   const {data:rule}=await db.from("marketplace_payout_country_rules").select("*").eq("country_code",profile.country_code).maybeSingle();
+   const {data:kyc}=await db.rpc("marketplace_sync_provider_kyc",{p_provider_id:profile.id});
+   const {data:accounts}=await db.from("marketplace_payout_accounts").select("id,destination_type,currency,masked_destination,kyc_status,status,is_default").eq("provider_id",profile.id).eq("status","ACTIVE");
+   const {data:rows}=await db.from("marketplace_provider_ledger").select("provider_amount").eq("provider_id",profile.id).eq("status","AVAILABLE").eq("currency",cfg?.currency_code||"");
+   const available=(rows||[]).reduce((s,x)=>s+Number(x.provider_amount||0),0);
+   const eligible=Boolean(cfg?.is_active&&rule&&(rule.kyc_required?kyc?.status==="VERIFIED":true)&&accounts?.length);
+   return out({eligible,country_code:profile.country_code,currency:cfg?.currency_code||null,kyc_status:kyc?.status||"PENDING",accounts:accounts||[],available_balance:available,minimum_payout:rule?.minimum_payout??null,maximum_payout:rule?.maximum_payout??null});
+  }
   if(action==="save-payout-account"){
    const {data:profile}=await db.from("marketplace_service_profiles").select("id,country_code").eq("owner_id",uid).eq("active",true).maybeSingle();if(!profile)return out({error:"PERFIL_PRESTADOR_NAO_ENCONTRADO"},404);
    if(profile.country_code!==country)return out({error:"PAIS_DA_CONTA_DIVERGENTE"},403);
@@ -152,7 +163,7 @@ Deno.serve(async req=>{
    if(!countryCfg.is_active)return out({error:"PAGAMENTOS_NAO_ATIVOS_NESTE_PAIS"},409);
    const {data:rule}=await db.from("marketplace_payout_country_rules").select("*").eq("country_code",country).maybeSingle();if(!rule)return out({error:"REGRAS_DE_PAYOUT_NAO_CONFIGURADAS"},409);
    const {data:account}=await db.from("marketplace_payout_accounts").select("id,destination_type,currency,kyc_status,status,masked_destination").eq("id",body.payout_account_id||"").eq("provider_id",profile.id).eq("country_code",country).maybeSingle();if(!account)return out({error:"CONTA_DE_PAYOUT_NAO_ENCONTRADA"},404);
-   if(account.status!=="ACTIVE"||account.kyc_status!=="VERIFIED")return out({error:"CONTA_DE_PAYOUT_NAO_VERIFICADA"},409);
+   if(account.status!=="ACTIVE"||account.kyc_status!=="VERIFIED")return out({error:"CONTA_DE_PAYOUT_NAO_VERIFICADA"},409); const {data:kyc}=await db.rpc("marketplace_sync_provider_kyc",{p_provider_id:profile.id}); if(rule.kyc_required&&kyc?.status!=="VERIFIED")return out({error:"KYC_FINANCEIRO_NAO_VERIFICADO",kyc_status:kyc?.status||"PENDING"},409);
    const destinationType=account.destination_type;if(destinationType==="MOBILE_MONEY"&&!rule.mobile_money_enabled)return out({error:"MOBILE_MONEY_NAO_DISPONIVEL_NESTE_PAIS"},409);if(destinationType==="BANK_ACCOUNT"&&!rule.bank_account_enabled)return out({error:"CONTA_BANCARIA_NAO_DISPONIVEL_NESTE_PAIS"},409);
    const {data:rows}=await db.from("marketplace_provider_ledger").select("id,provider_amount,currency").eq("provider_id",profile.id).eq("status","AVAILABLE").eq("currency",countryCfg.currency_code).order("created_at",{ascending:true});
    const available=(rows||[]).reduce((s,x)=>s+Number(x.provider_amount||0),0);const amount=Number(body.amount);
