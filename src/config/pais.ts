@@ -8,6 +8,8 @@ export interface ConfigPais {
   address_hierarchy: string[]; territorial_levels: NivelTerritorial[]; is_active: boolean;
 }
 export const PAIS_PADRAO: CodigoPais = 'AO';
+/** Países PALOP suportados pelo registo multipaís. */
+export const PAISES_PALOP = ['AO', 'MZ', 'CV', 'GW', 'ST'] as const;
 
 export function nomeDaMarca(config: Pick<ConfigPais, 'country_name'>): string {
   return `${config.country_name} Localiza`;
