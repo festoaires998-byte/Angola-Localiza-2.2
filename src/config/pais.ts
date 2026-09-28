@@ -20,7 +20,7 @@ const CONFIG_AO_OFFLINE: ConfigPais = {
   ], is_active: true,
 };
 let cache: ConfigPais | null = null;
-let pedido: Promise<ConfigPais> | null = null;
+const pedidos = new Map<CodigoPais, Promise<ConfigPais>>();
 const texto = (v: unknown): string | null => typeof v === 'string' && v.trim() ? v.trim() : null;
 function normalizarNiveis(v: unknown): NivelTerritorial[] {
   if (!Array.isArray(v)) return [];
@@ -53,12 +53,14 @@ async function carregarConfigPais(countryCode: CodigoPais): Promise<ConfigPais> 
 export function obterConfigPais(countryCode: CodigoPais = PAIS_PADRAO): Promise<ConfigPais> {
   const codigo = countryCode.trim().toUpperCase() || PAIS_PADRAO;
   if (cache?.country_code === codigo) return Promise.resolve(cache);
-  if (pedido) return pedido;
-  pedido = carregarConfigPais(codigo).then((config) => { cache = config; return config; }).finally(() => { pedido = null; });
+  const existente = pedidos.get(codigo);
+  if (existente) return existente;
+  const pedido = carregarConfigPais(codigo).then((config) => { cache = config; return config; }).finally(() => { pedidos.delete(codigo); });
+  pedidos.set(codigo, pedido);
   return pedido;
 }
 export function inicializarConfigPais(countryCode: CodigoPais = PAIS_PADRAO): Promise<ConfigPais> { return obterConfigPais(countryCode); }
-export function limparCacheConfigPais(): void { cache = null; pedido = null; }
+export function limparCacheConfigPais(): void { cache = null; }
 export function paisTemNivel(config: ConfigPais, nivel: string): boolean { return config.address_hierarchy.includes(nivel); }
 export function nivelLocalidade(config: ConfigPais): NivelTerritorial | null {
   return config.territorial_levels.find((nivel) => nivel.is_locality) ?? null;
