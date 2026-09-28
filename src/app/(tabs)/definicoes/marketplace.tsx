@@ -1,75 +1,66 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Botao, Caixa, Cartao, Campo, Subtitulo, Texto, Titulo } from '@/components/ui';
-import { marketplace, type MarketplaceListing } from '@/services/marketplace/marketplace';
+import { marketplace, type MarketplaceCategory, type MarketplaceListing } from '@/services/marketplace/marketplace';
 
-export default function Marketplace() {
-  const [items,setItems]=useState<MarketplaceListing[]>([]);
-  const [country,setCountry]=useState('—');
-  const [loading,setLoading]=useState(true);
-  const [erro,setErro]=useState<string|null>(null);
-  const [title,setTitle]=useState('');
-  const [category,setCategory]=useState('');
-  const [description,setDescription]=useState('');
-  const [price,setPrice]=useState('');
-  const [quantity,setQuantity]=useState('1');
-  const [creating,setCreating]=useState(false);
-  const [mensagem,setMensagem]=useState<string|null>(null);
+type Aba='descobrir'|'favoritos'|'meus'|'publicar';
 
-  const carregar=useCallback(async()=>{
-    setLoading(true);setErro(null);
-    try{const r=await marketplace.list();setCountry(r.country_code);setItems(r.listings);}
-    catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar o Marketplace.');}
-    finally{setLoading(false);}
-  },[]);
-  useEffect(()=>{void carregar();},[carregar]);
+export default function Marketplace(){
+ const [aba,setAba]=useState<Aba>('descobrir');
+ const [items,setItems]=useState<MarketplaceListing[]>([]);
+ const [cats,setCats]=useState<MarketplaceCategory[]>([]);
+ const [country,setCountry]=useState('—'); const [currency,setCurrency]=useState('');
+ const [q,setQ]=useState(''); const [category,setCategory]=useState('');
+ const [loading,setLoading]=useState(true); const [erro,setErro]=useState<string|null>(null); const [mensagem,setMensagem]=useState<string|null>(null);
+ const [title,setTitle]=useState(''); const [description,setDescription]=useState(''); const [price,setPrice]=useState('');
+ const [condition,setCondition]=useState<'NEW'|'USED'|'REFURBISHED'>('USED');
+ const [province,setProvince]=useState(''); const [city,setCity]=useState(''); const [neighborhood,setNeighborhood]=useState('');
+ const [files,setFiles]=useState<ImagePicker.ImagePickerAsset[]>([]); const [busy,setBusy]=useState(false);
+ const [contact,setContact]=useState(''); const [selected,setSelected]=useState<MarketplaceListing|null>(null);
 
-  async function criar(){
-    setMensagem(null);setErro(null);
-    const valor=Number(price.replace(',','.'));const qtd=Number(quantity);
-    if(title.trim().length<3||!category.trim()){setErro('Indica título e categoria.');return;}
-    if(!Number.isFinite(valor)||valor<0||!Number.isInteger(qtd)||qtd<0){setErro('Preço ou quantidade inválidos.');return;}
-    setCreating(true);
-    try{
-      const r=await marketplace.create({title,category,description,price:valor,quantity:qtd});
-      await marketplace.publish(r.listing.id);
-      setMensagem('Anúncio publicado no país da tua conta.');
-      setTitle('');setCategory('');setDescription('');setPrice('');setQuantity('1');
-      await carregar();
-    }catch(e){setErro(e instanceof Error?e.message:'Não foi possível publicar o anúncio.');}
-    finally{setCreating(false);}
-  }
-
-  return <ScrollView contentContainerStyle={estilos.conteudo} refreshControl={<RefreshControl refreshing={loading} onRefresh={()=>void carregar()} />}>
-    <Titulo>Marketplace</Titulo>
-    <Texto suave>{`Anúncios ativos em ${country}. O país é determinado pelo perfil da tua conta.`}</Texto>
-    {erro?<Caixa tipo="erro">{erro}</Caixa>:null}{mensagem?<Caixa tipo="sucesso">{mensagem}</Caixa>:null}
-
-    <Cartao>
-      <Subtitulo>Publicar anúncio</Subtitulo>
-      <Campo rotulo="Título" value={title} onChangeText={setTitle} placeholder="Ex.: Telemóvel usado" />
-      <Campo rotulo="Categoria" value={category} onChangeText={setCategory} placeholder="Eletrónica, roupa, serviços…" />
-      <Campo rotulo="Descrição" value={description} onChangeText={setDescription} placeholder="Descrição do produto ou serviço" />
-      <Campo rotulo="Preço" value={price} onChangeText={setPrice} placeholder="0,00" keyboardType="decimal-pad" />
-      <Campo rotulo="Quantidade" value={quantity} onChangeText={setQuantity} placeholder="1" keyboardType="number-pad" />
-      <Botao titulo={creating?'A publicar…':'Publicar anúncio'} aCarregar={creating} onPress={()=>void criar()} />
-      <Texto suave>O anúncio começa como rascunho e só é publicado depois de passar pela validação do servidor.</Texto>
-    </Cartao>
-
-    <Cartao>
-      <Subtitulo>Anúncios disponíveis</Subtitulo>
-      {items.length===0&&!loading?<Texto>Não há anúncios ativos neste país.</Texto>:null}
-      {items.map(item=><View key={item.id} style={estilos.item}>
-        <Subtitulo>{item.title}</Subtitulo>
-        <Texto>{item.description||'Sem descrição.'}</Texto>
-        <Texto>{item.price.toLocaleString('pt-PT',{minimumFractionDigits:2})} {item.currency} · {item.quantity} disponível(s)</Texto>
-        <Texto suave>{item.category}</Texto>
-      </View>)}
-    </Cartao>
-  </ScrollView>;
+ const carregar=useCallback(async()=>{
+  setLoading(true);setErro(null);
+  try{const [r,c]=await Promise.all([marketplace.list({q:q||undefined,category:category||undefined}),marketplace.categories()]);
+   setCountry(r.country_code);setCurrency(r.currency);setItems(r.listings);setCats(c.categories);
+  }catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar o Marketplace.');} finally{setLoading(false);}
+ },[q,category]);
+ useEffect(()=>{void carregar();},[carregar]);
+ async function favoritos(){setErro(null);setLoading(true);try{const r=await marketplace.favorites();setItems(r.listings);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar favoritos.');}finally{setLoading(false);}}
+ async function meus(){setErro(null);setLoading(true);try{const r=await marketplace.mine();setItems(r.listings);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível carregar os teus anúncios.');}finally{setLoading(false);}}
+ useEffect(()=>{if(aba==='favoritos')void favoritos();if(aba==='meus')void meus();},[aba]);
+ async function escolherFotos(){
+  const p=await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if(!p.granted){setErro('É necessário permitir acesso às fotografias para adicionar imagens.');return;}
+  const r=await ImagePicker.launchImageLibraryAsync({mediaTypes:ImagePicker.MediaTypeOptions.Images,allowsMultipleSelection:true,selectionLimit:10,quality:0.82});
+  if(!r.canceled)setFiles(r.assets.slice(0,10));
+ }
+ async function publicar(){
+  setBusy(true);setErro(null);setMensagem(null);
+  try{
+   const valor=price.trim()===''?null:Number(price.replace(',','.'));
+   if(valor!==null&&(!Number.isFinite(valor)||valor<0))throw new Error('PRECO_INVALIDO');
+   const r=await marketplace.create({title,description,category,price:valor,condition,province,city,neighborhood,contact_message:true});
+   for(let i=0;i<files.length;i++)await marketplace.enviarImagem(r.listing.id,{uri:files[i].uri,name:files[i].fileName||('imagem-'+i+'.jpg'),type:files[i].mimeType},i);
+   await marketplace.publish(r.listing.id);
+   setMensagem('Anúncio publicado com sucesso.');setTitle('');setDescription('');setPrice('');setProvince('');setCity('');setNeighborhood('');setFiles([]);setCategory('');setAba('meus');
+  }catch(e){setErro(e instanceof Error?e.message:'Não foi possível publicar o anúncio.');}finally{setBusy(false);}
+ }
+ async function interesse(){
+  if(!selected||!contact.trim())return;setBusy(true);setErro(null);
+  try{await marketplace.interest(selected.id,contact.trim());setMensagem('Mensagem enviada ao anunciante.');setContact('');setSelected(null);}
+  catch(e){setErro(e instanceof Error?e.message:'Não foi possível contactar o anunciante.');}finally{setBusy(false);}
+ }
+ const tituloAba=useMemo(()=>({descobrir:'Descobrir',favoritos:'Favoritos',meus:'Meus anúncios',publicar:'Publicar anúncio'}[aba]),[aba]);
+ return <ScrollView contentContainerStyle={s.conteudo} refreshControl={<RefreshControl refreshing={loading} onRefresh={()=>aba==='descobrir'?void carregar():aba==='favoritos'?void favoritos():void meus()} />}>
+  <Titulo>Marketplace</Titulo><Texto suave>{country!=='—'?'Marketplace de '+country+' · '+currency:'Marketplace'}</Texto>
+  <View style={s.tabs}>{(['descobrir','favoritos','meus','publicar'] as Aba[]).map(x=><Botao key={x} titulo={{descobrir:'Descobrir',favoritos:'Favoritos',meus:'Meus',publicar:'Publicar'}[x]} onPress={()=>setAba(x)} />)}</View>
+  {erro?<Caixa tipo='erro'>{erro}</Caixa>:null}{mensagem?<Caixa tipo='sucesso'>{mensagem}</Caixa>:null}<Subtitulo>{tituloAba}</Subtitulo>
+  {aba==='descobrir'?<Cartao><Campo rotulo='Pesquisar' value={q} onChangeText={setQ} placeholder='O que procuras?' /><Campo rotulo='Categoria' value={category} onChangeText={setCategory} placeholder='ex.: eletronica' /><Botao titulo='Pesquisar' aCarregar={loading} onPress={()=>void carregar()} />{cats.length>0?<Texto suave>Categorias: {cats.map(c=>c.name).join(' · ')}</Texto>:null}</Cartao>:null}
+  {aba==='publicar'?<Cartao><Subtitulo>O teu anúncio</Subtitulo><Campo rotulo='Título' value={title} onChangeText={setTitle} placeholder='Ex.: Toyota Corolla 2018' /><Campo rotulo='Descrição' value={description} onChangeText={setDescription} placeholder='Descreve claramente o anúncio…' multiline /><Campo rotulo='Categoria' value={category} onChangeText={setCategory} placeholder='ex.: veiculos' /><Campo rotulo='Preço (opcional)' value={price} onChangeText={setPrice} placeholder={'Valor em '+(currency||'moeda local')} keyboardType='decimal-pad' /><Campo rotulo='Província' value={province} onChangeText={setProvince} placeholder='Província' /><Campo rotulo='Cidade' value={city} onChangeText={setCity} placeholder='Cidade' /><Campo rotulo='Bairro' value={neighborhood} onChangeText={setNeighborhood} placeholder='Bairro (opcional)' /><Texto suave>Estado: {condition==='NEW'?'Novo':condition==='REFURBISHED'?'Recondicionado':'Usado'}</Texto><Botao titulo='Escolher fotografias' onPress={()=>void escolherFotos()} />{files.length>0?<Texto>{files.length} fotografia(s) selecionada(s).</Texto>:null}<Botao titulo={busy?'A publicar…':'Publicar anúncio'} aCarregar={busy} onPress={()=>void publicar()} /><Texto suave>O servidor valida o país da conta e as imagens permanecem privadas.</Texto></Cartao>:null}
+  {aba!=='publicar'&&items.map(item=><Cartao key={item.id}><Subtitulo>{item.title}</Subtitulo><Texto>{item.description||'Sem descrição.'}</Texto><Texto suave>{item.category+' · '+(item.condition==='NEW'?'Novo':item.condition==='REFURBISHED'?'Recondicionado':'Usado')+' · '+(item.city||item.province||'Localização não indicada')}</Texto>{item.price!==null?<Texto>{item.price.toLocaleString('pt-PT',{minimumFractionDigits:2})+' '+item.currency}</Texto>:<Texto>Preço sob consulta</Texto>}<Botao titulo='Contactar anunciante' onPress={()=>setSelected(item)} />{aba==='meus'&&item.status==='ACTIVE'?<Botao titulo='Pausar anúncio' onPress={async()=>{await marketplace.pause(item.id);await meus();}} />:null}{aba==='meus'&&item.status==='PAUSED'?<Botao titulo='Publicar novamente' onPress={async()=>{await marketplace.publish(item.id);await meus();}} />:null}</Cartao>)}
+  {items.length===0&&!loading&&aba!=='publicar'?<Texto>Não há anúncios para mostrar.</Texto>:null}
+  {selected?<Cartao><Subtitulo>Contactar: {selected.title}</Subtitulo><Campo rotulo='Mensagem' value={contact} onChangeText={setContact} placeholder='Olá, ainda está disponível?' multiline /><Botao titulo='Enviar mensagem' aCarregar={busy} onPress={()=>void interesse()} /><Botao titulo='Fechar' onPress={()=>setSelected(null)} /></Cartao>:null}
+ </ScrollView>;
 }
-
-const estilos=StyleSheet.create({
-  conteudo:{padding:16,gap:12},
-  item:{paddingVertical:12,borderBottomWidth:1,borderBottomColor:'#ddd',gap:4},
-});
+const s=StyleSheet.create({conteudo:{padding:16,gap:12},tabs:{flexDirection:'row',flexWrap:'wrap',gap:6}});
