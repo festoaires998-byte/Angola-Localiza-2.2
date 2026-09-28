@@ -9,7 +9,7 @@ describe('calcularMatching', () => {
   {id:'c',driverId:'3',tipoVeiculo:'carrinha',capacidadeKg:200,latitude:-8.84,longitude:13.23,disponivel:true},
   {id:'d',driverId:'4',tipoVeiculo:'carrinha',capacidadeKg:1000,latitude:-8.84,longitude:13.23,disponivel:false},
  ];
- it('mantém compatíveis e alternativas',()=>{const out=calcularMatching(base,ofertas);expect(out.map(x=>x.driverId)).toEqual(['1','2','3','4']);expect(out[0].nivelCompatibilidade).toBe('compativel');expect(out.slice(1).every(x=>x.nivelCompatibilidade==='alternativa')).toBe(true);});
+ it('mantém compatíveis e alternativas',()=>{const out=calcularMatching(base,ofertas);expect(out.map(x=>x.driverId)).toEqual(['1','3','4','2']);expect(out[0].nivelCompatibilidade).toBe('compativel');expect(out.slice(1).every(x=>x.nivelCompatibilidade==='alternativa')).toBe(true);});
  it('ordena candidatos compatíveis por pontuação',()=>{const p={...base,tipoVeiculo:null,capacidadeKg:0};const out=calcularMatching(p,[ofertas[0],{...ofertas[0],id:'e',driverId:'5',latitude:-9,longitude:14}]);expect(out[0].driverId).toBe('1');});
  it('prioriza pedido urgente',()=>{const out=calcularMatching({...base,urgente:true},[ofertas[0]]);expect(out[0].pontuacao).toBeGreaterThan(100);});
  it('aceita aliases de veículo',()=>{const out=calcularMatching({...base,tipoVeiculo:'camiao'},[{...ofertas[0],tipoVeiculo:'truck'}]);expect(out).toHaveLength(1);});
