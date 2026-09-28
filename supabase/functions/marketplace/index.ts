@@ -20,6 +20,27 @@ Deno.serve(async req=>{
   const body=await req.json();
   const {data:account}=await db.from("user_country_profiles").select("country_code").eq("user_id",uid).maybeSingle();
   if(!account?.country_code||!countries.includes(account.country_code))return out({error:"PAIS_DA_CONTA_EM_FALTA"},422);
+  if(action==="image-upload-url"){
+   if(typeof body.listing_id!=="string")return out({error:"ANUNCIO_INVALIDO"},422);
+   const {data:l}=await db.from("marketplace_listings").select("id").eq("id",body.listing_id).eq("seller_id",uid).eq("country_code",account.country_code).maybeSingle();
+   if(!l)return out({error:"ANUNCIO_NAO_ENCONTRADO"},404);
+   const ext=typeof body.extension==="string"?body.extension.toLowerCase():"";
+   if(!["jpg","jpeg","png","webp"].includes(ext))return out({error:"FORMATO_IMAGEM_NAO_SUPORTADO"},422);
+   const path=uid+"/"+body.listing_id+"/"+crypto.randomUUID()+"."+ext;
+   const {data,error}=await db.storage.from("marketplace-media").createSignedUploadUrl(path);
+   if(error||!data)throw error||new Error("UPLOAD_URL_INDISPONIVEL");
+   return out({path,token:data.token});
+  }
+  if(action==="register-image"){
+   if(typeof body.listing_id!=="string"||typeof body.storage_path!=="string")return out({error:"IMAGEM_INVALIDA"},422);
+   if(!body.storage_path.startsWith(uid+"/"+body.listing_id+"/"))return out({error:"CAMINHO_IMAGEM_INVALIDO"},403);
+   const {data:l}=await db.from("marketplace_listings").select("id").eq("id",body.listing_id).eq("seller_id",uid).eq("country_code",account.country_code).maybeSingle();
+   if(!l)return out({error:"ANUNCIO_NAO_ENCONTRADO"},404);
+   const {count}=await db.from("marketplace_listing_images").select("id",{count:"exact",head:true}).eq("listing_id",body.listing_id);
+   if((count??0)>=10)return out({error:"LIMITE_DE_IMAGENS_ATINGIDO"},422);
+   const {data,error}=await db.from("marketplace_listing_images").insert({listing_id:body.listing_id,owner_id:uid,storage_path:body.storage_path,sort_order:Math.max(0,Number(body.sort_order)||0)}).select("id,storage_path,sort_order").single();
+   if(error)throw error; return out({image:data});
+  }
   if(action==="create"){
    if(typeof body.title!=="string"||body.title.trim().length<3||body.title.trim().length>120)return out({error:"TITULO_INVALIDO"},422);
    if(typeof body.category!=="string"||!body.category.trim())return out({error:"CATEGORIA_OBRIGATORIA"},422);
