@@ -505,25 +505,10 @@ function Auditoria({ cargos, onError }: { cargos: string[]; onError: (v: string 
   const actions = useMemo(() => Array.from(new Set(logs.map((x) => x.action).filter(Boolean))), [logs]);
   const shown = filter ? logs.filter((x) => x.action === filter) : logs;
 
-  const clearAll = () => Alert.alert('Eliminar toda a auditoria?', 'Esta operação é permanente.', [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Eliminar tudo', style: 'destructive', onPress: async () => {
-      try { await chamarAdmin('clear_audit_logs', { confirm: 'ELIMINAR TUDO' }); await load(); }
-      catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-    }},
-  ]);
 
-  const removeOne = (id: string) => Alert.alert('Eliminar registo?', 'O registo será removido.', [
-    { text: 'Cancelar', style: 'cancel' },
-    { text: 'Eliminar', style: 'destructive', onPress: async () => {
-      try { await chamarAdmin('delete_audit_log', { log_id: id }); await load(); }
-      catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-    }},
-  ]);
 
   return <>
     {cargos.includes('auditor') ? <Caixa tipo="info">Só os administradores podem aprovar ou recusar verificações de identidade.</Caixa> : null}
-    {cargos.includes('super_admin') ? <Botao titulo="🗑️ Eliminar toda a auditoria" variante="perigo" onPress={clearAll} /> : null}
     <Cartao>
       <Text style={estilos.cabecalhoCard}>Filtrar ação</Text>
       <View style={estilos.opcoes}>
@@ -535,7 +520,6 @@ function Auditoria({ cargos, onError }: { cargos: string[]; onError: (v: string 
       <Cartao key={String(log.id ?? i)}>
         <Texto>{AUDIT_LABELS[log.action] || log.action || '—'}</Texto>
         <Texto suave>{log.entity_type || '—'} · {log.created_at ? new Date(log.created_at).toLocaleString('pt-PT') : '—'}</Texto>
-        {cargos.includes('super_admin') ? <Botao titulo="🗑️ Eliminar registo" variante="perigo" onPress={() => removeOne(log.id)} /> : null}
       </Cartao>
     ))}
     <Botao titulo="Atualizar auditoria" variante="secundario" onPress={() => void load()} />
