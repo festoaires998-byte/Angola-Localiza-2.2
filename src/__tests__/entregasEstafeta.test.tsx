@@ -32,6 +32,10 @@ const mockFalhar = jest.fn(async (..._a: unknown[]) => 'op-3');
 jest.mock('@/services/entregas/estafetaApp', () => ({
   servicoEstafeta: {
     listar: async () => ({ entregas: mockEntregas, doServidor: true, erro: null }),
+    listarDisponiveis: async () => ({
+      pedidos: [],
+      estafeta: { online: true, status: 'APPROVED', vehicle_type: 'MOTO', vehicle_capacity_kg: 20 },
+    }),
     acoes: async () => mockAcoes,
     guardarFicheiro: async (f: { uri: string }) => ficheiro(f.uri),
     avancar: (u: string, e: Envio, p: Passo, f: FicheiroProva | null, l: LocalProva | null) => mockAvancar(u, e, p, f, l),
