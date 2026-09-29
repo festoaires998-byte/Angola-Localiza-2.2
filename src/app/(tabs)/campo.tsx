@@ -272,6 +272,8 @@ export default function Campo() {
         </Caixa>
       ) : null}
 
+      <View style={estilos.numeroCard}><Text style={estilos.numeroTitulo}>🔢 Número da porta</Text><Text style={estilos.numeroVerde}>Número: a atribuir na aprovação ✓</Text><Text style={estilos.textoSuave}>Nunca digitado — o sistema atribui-o quando o supervisor aprovar, sem buracos nem repetições.</Text></View>
+
       <Botao titulo={foto ? 'Refazer fotografia da fachada' : '📷 Fotografar fachada'} onPress={() => void tirarFoto()} />
       {foto ? <Image source={{ uri: foto }} style={estilos.foto} /> : null}
       {foto ? <Caixa tipo="info">Fotografia preparada; será marcada com posição, país e código antes do envio.</Caixa> : null}
@@ -329,4 +331,7 @@ const estilos = StyleSheet.create({
   check: { color: '#fff', fontWeight: '900' },
   checkboxTexto: { flex: 1, color: '#333' },
   foto: { width: '100%', height: 220, borderRadius: 12, marginVertical: 8 },
+  numeroCard: { backgroundColor: '#f4ead4', borderRadius: 12, padding: 14, gap: 4 },
+  numeroTitulo: { fontSize: 14, fontWeight: '700', color: '#333' },
+  numeroVerde: { fontSize: 14, fontWeight: '700', color: '#237a4b' },
 });
