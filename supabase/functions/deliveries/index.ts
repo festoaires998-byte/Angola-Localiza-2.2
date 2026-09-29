@@ -155,6 +155,20 @@ Deno.serve(async (req: Request) => {
   const { data: authData } = await supabase.auth.getUser(token);
   const callerId = authData?.user?.id;
   if (!callerId) return new Response(JSON.stringify({ error: "sessao invalida - inicia sessao novamente" }), { status: 401, headers: cors });
+ 
+  const adminCanManageDelivery = async (deliveryId: string): Promise<boolean> => {
+    const { data: d } = await supabase.from("deliveries").select("organization_id,address_id").eq("id", deliveryId).maybeSingle();
+    if (!d) return false;
+    const { data: address } = await supabase.from("addresses").select("country_code,province_id,municipality_id").eq("id", d.address_id).maybeSingle();
+    const { data: memberships } = await supabase.from("organization_members").select("role,organization_id,scope_province_id,scope_municipality_id").eq("user_id", callerId);
+    for (const m of memberships ?? []) {
+      if (m.role === "super_admin" || m.role === "admin_nacional") return true;
+      if (m.role === "admin_provincial" && m.scope_province_id && m.scope_province_id === address?.province_id) return true;
+      if (m.role === "admin_municipal" && m.scope_municipality_id && m.scope_municipality_id === address?.municipality_id) return true;
+      if (m.organization_id && m.organization_id === d.organization_id && ["operador_postal","supervisor"].includes(m.role)) return true;
+    }
+    return false;
+  };
 
   try {
     const url = new URL(req.url);
@@ -166,8 +180,8 @@ Deno.serve(async (req: Request) => {
       if (!delivery_id) return new Response(JSON.stringify({ error: "delivery_id e obrigatorio" }), { status: 400, headers: cors });
       const { data: delivery } = await supabase.from("deliveries").select("created_by, status, is_urgent").eq("id", delivery_id).maybeSingle();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
-      const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
-      if (delivery.created_by !== callerId && !isAdminRes) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
+      const scopedAdmin = await adminCanManageDelivery(delivery_id);
+      if (delivery.created_by !== callerId && !scopedAdmin) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       if (delivery.status === "DELIVERED" || delivery.status === "CANCELLED") {
         return new Response(JSON.stringify({ error: "nao e possivel alterar urgencia de uma entrega terminada" }), { status: 409, headers: cors });
       }
@@ -642,13 +656,13 @@ Deno.serve(async (req: Request) => {
       const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, zone_code, payer_organization_id").eq("id", delivery_id).single();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
 
-      const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
+      const scopedAdmin = await adminCanManageDelivery(delivery_id);
       const isDriver = delivery.assigned_driver === callerId;
       if (isDriver && !(await motoristaAprovado(supabase, callerId))) {
         return new Response(JSON.stringify({ error: "MOTORISTA_KYC_NAO_APROVADO" }), { status: 403, headers: cors });
       }
       const isOwnerCancelling = delivery.created_by === callerId && new_status === "CANCELLED";
-      if (!isAdminRes && !isDriver && !isOwnerCancelling) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
+      if (!scopedAdmin && !isDriver && !isOwnerCancelling) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
 
       // Idempotência offline: se esta mesma operação já criou a prova,
       // devolver sucesso sem repetir transição, cobrança ou auditoria.
