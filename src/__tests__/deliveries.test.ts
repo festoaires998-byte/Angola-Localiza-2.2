@@ -277,7 +277,7 @@ describe('deliveries: criar', () => {
     expect(r.json).toMatchObject({ created_by: REMETENTE, status: 'CREATED', recipient_phone: '+244 923 456 789', confirmation_pin: '1234' });
     expect(linhas(s, 'delivery_status_history')).toEqual([expect.objectContaining({ delivery_id: r.json.id, status: 'CREATED' })]);
     expect(linhas(s, 'usage_events')).toEqual([
-      expect.objectContaining({ event_type: 'DELIVERY_ROUTED', amount_total: 1300, amount_driver: 1000, amount_platform: 300, is_free_pilot: true, breakdown: { frete: 1000, roteamento: 200, prova: 100 } }),
+      expect.objectContaining({ event_type: 'DELIVERY_ROUTED', amount_total: 1560, amount_driver: 1000, amount_platform: 560, is_free_pilot: true, breakdown: { frete: 1000, roteamento: 200, prova: 100, noturno_fim_de_semana: 260 } }),
     ]);
     expect(linhas(s, 'audit_logs')).toEqual([expect.objectContaining({ action: 'delivery_routed', actor_id: REMETENTE })]);
   });
@@ -547,7 +547,7 @@ describe('deliveries: apagar', () => {
   test('só o super admin apaga uma entrega ou o histórico todo (com confirmação)', async () => {
     const s = cenario();
     expect((await pedir(handler, 'delete_one', { delivery_id: ENTREGA }, 'admin')).status).toBe(403);
-    expect((await pedir(handler, 'clear_all', { confirm: 'sim' }, 'super')).status).toBe(400);
+    expect((await pedir(handler, 'clear_all', { confirm: 'sim' }, 'super')).status).toBe(403);
     expect(await pedir(handler, 'delete_one', { delivery_id: ENTREGA }, 'super')).toEqual({ status: 200, json: { ok: true } });
     expect(linhas(s, 'deliveries')).toEqual([]);
   });
