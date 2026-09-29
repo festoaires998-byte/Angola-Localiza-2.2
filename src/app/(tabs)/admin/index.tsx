@@ -101,14 +101,20 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
   const load = useCallback(async () => {
     setLoading(true); onError(null);
     try {
-      const [s, p, d, e, k] = await Promise.all([
+      const [s, p, d, e, k] = await Promise.allSettled([
         chamarAdminGet('statistics'),
         restGet<any[]>('addresses?status=eq.PROPOSED&select=id,postal_code,plus_code,latitude,longitude,reference,created_at,source&order=created_at.desc&limit=20'),
         chamarAdmin('list_unassigned_deliveries'),
         chamarAdmin('list_estafetas'),
         listarPedidosKyc(),
       ]);
-      setStats(s); setPending(Array.isArray(p) ? p : []); setDeliveries(d.deliveries ?? []); setDrivers(e.estafetas ?? []); setKyc(k ?? []);
+      if (s.status === 'fulfilled') setStats(s.value);
+      if (p.status === 'fulfilled') setPending(Array.isArray(p.value) ? p.value : []);
+      if (d.status === 'fulfilled') setDeliveries(d.value.deliveries ?? []);
+      if (e.status === 'fulfilled') setDrivers(e.value.estafetas ?? []);
+      if (k.status === 'fulfilled') setKyc(k.value ?? []);
+      const firstError = [s, p, d, e, k].find((x) => x.status === 'rejected');
+      if (firstError && firstError.status === 'rejected') onError(firstError.reason instanceof Error ? firstError.reason.message : String(firstError.reason));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
   }, [onError]);
