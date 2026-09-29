@@ -191,6 +191,19 @@ export interface Envio {
     latitude?: number | null;
     longitude?: number | null;
   } | null;
+  /** Dados da carga pedidos pelo remetente. */
+  carga?: {
+    tipo: string | null;
+    descricao: string | null;
+    quantidade: number | null;
+    pesoKg: number | null;
+    comprimentoCm: number | null;
+    larguraCm: number | null;
+    alturaCm: number | null;
+    valorDeclarado: number | null;
+    tipoVeiculo: string | null;
+    capacidadeVeiculoKg: number | null;
+  } | null;
 }
 
 /** O PIN de confirmação (só quem criou o vê; nunca fica guardado no telemóvel). */
