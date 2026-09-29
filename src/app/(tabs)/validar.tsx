@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Botao, Caixa, Ecra, Titulo } from '@/components/ui';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { listarValidacoesPendentes, validarLevantamento, type DecisaoValidacao, type ValidacaoCampo } from '@/services/validacao/validacao';
+import { usePosicao } from '@/hooks/usePosicao';
+import { listarQuadraAtual, listarValidacoesPendentes, validarLevantamento, type ContextoQuadraValidacao, type DecisaoValidacao, type ValidacaoCampo } from '@/services/validacao/validacao';
 
 export default function Validar() {
   const [registos, setRegistos] = useState<ValidacaoCampo[]>([]);
@@ -10,6 +11,9 @@ export default function Validar() {
   const [atualizar, setAtualizar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [processando, setProcessando] = useState<string | null>(null);
+  const gps = usePosicao();
+  const [quadra, setQuadra] = useState<ContextoQuadraValidacao | null>(null);
+  const [aCarregarQuadra, setACarregarQuadra] = useState(false);
   const load = useCallback(async () => {
     setErro(null);
     try { setRegistos(await listarValidacoesPendentes()); }
@@ -30,6 +34,23 @@ export default function Validar() {
     {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
     <View style={s.row}><Text style={s.count}>{registos.length} por validar</Text><Pressable accessibilityRole="button" onPress={() => {setAtualizar(true); void load();}}><Text style={s.link}>Atualizar</Text></Pressable></View>
     {atualizar ? <ActivityIndicator color={CORES.primaria}/> : null}
+    <View style={s.gestao}>
+      <Text style={s.gestaoTitulo}>📍 Gestão de quadra/ruas</Text>
+      <Botao titulo="Ver a quadra onde estou agora" onPress={async () => {
+        const p = gps.estado === 'ok' ? gps.posicao : gps.estado === 'a_procurar' ? gps.ultima : null;
+        if (!p) { setErro('É necessário permitir o GPS e aguardar uma posição.'); return; }
+        setACarregarQuadra(true); setErro(null);
+        try { setQuadra(await listarQuadraAtual(p.latitude, p.longitude)); }
+        catch (e) { setErro(e instanceof Error ? e.message : 'Não foi possível carregar a quadra.'); }
+        finally { setACarregarQuadra(false); }
+      }} desativado={aCarregarQuadra} aCarregar={aCarregarQuadra}/>
+      {quadra ? <View style={s.quadraCard}>
+        <Text style={s.place}>Quadra {quadra.quadra_code}</Text>
+        <Text style={s.coords}>Tipo: {quadra.kind} · ≈{Math.round(quadra.area_m2)} m²</Text>
+        <Text style={s.gestaoTitulo}>Ruas</Text>
+        {quadra.streets.length ? quadra.streets.map(x => <Text key={x.id} style={s.coords}>• {x.name} · {x.numbering_mode}</Text>) : <Text style={s.coords}>Nenhuma rua registada nesta quadra.</Text>}
+        {quadra.neighborhoods_nearby.length ? <Text style={s.coords}>Bairros próximos: {quadra.neighborhoods_nearby.join(', ')}</Text> : null}
+      </View> : null}
     {!registos.length ? <Caixa tipo="sucesso">Não há levantamentos pendentes de validação.</Caixa> : null}
     {registos.map(r => {
       const dup = !!r.duplicate_of_address_id || !!r.duplicate_override_reason;
@@ -66,5 +87,5 @@ const s=StyleSheet.create({
  warn:{borderRadius:TAMANHOS.raio,borderWidth:1,borderColor:CORES.avisoBorda,backgroundColor:CORES.avisoFundo,padding:12},
  warnText:{fontSize:TAMANHOS.textoPequeno,lineHeight:22,color:CORES.avisoTexto,fontWeight:'700'},place:{fontSize:TAMANHOS.subtitulo,fontWeight:'700',color:CORES.texto},
  coords:{fontSize:TAMANHOS.textoPequeno,color:CORES.textoSuave},number:{fontSize:TAMANHOS.texto,color:CORES.primaria,fontWeight:'700'},ref:{fontSize:TAMANHOS.texto,color:CORES.texto},
- photo:{width:'100%',height:220,borderRadius:TAMANHOS.raio,backgroundColor:CORES.fundoSuave},footer:{fontSize:TAMANHOS.textoPequeno,lineHeight:22,color:CORES.textoSuave,paddingBottom:20}
+ photo:{width:'100%',height:220,borderRadius:TAMANHOS.raio,backgroundColor:CORES.fundoSuave},gestao:{gap:10,paddingTop:4},gestaoTitulo:{fontSize:TAMANHOS.texto,fontWeight:'700',color:CORES.texto},quadraCard:{borderWidth:1,borderColor:CORES.primaria,borderRadius:TAMANHOS.raio,padding:14,gap:8,backgroundColor:CORES.infoFundo},footer:{fontSize:TAMANHOS.textoPequeno,lineHeight:22,color:CORES.textoSuave,paddingBottom:20}
 });
