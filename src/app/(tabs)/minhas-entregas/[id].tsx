@@ -143,6 +143,7 @@ export default function DetalheEntrega() {
   return (
     <Ecra>
       {estado.aviso ? <Caixa tipo={estado.aviso.tipo}>{estado.aviso.texto}</Caixa> : null}
+      <Botao titulo="💬 Falar com o criador da encomenda" variante="secundario" onPress={() => router.push({ pathname: '/chat-organizacao', params: { tipo: 'DELIVERY', chave: entrega.id, titulo: 'Chat da entrega' } })} />
       <Cartao>
         <Linha nome="Para" valor={entrega.destinatario} />
         <Linha nome="Estado" valor={nomeEstadoEntrega(efetivo)} />
