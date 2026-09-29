@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 const root=join(__dirname,'..');
 const ler=(p:string)=>readFileSync(join(root,p),'utf8');
+const lerRepo=(p:string)=>readFileSync(join(root,'..',p),'utf8');
 describe('módulo Validar na APP',()=>{
  test('o ecrã deixou de ser EmConstrucao e contém as decisões do site',()=>{
   const s=ler('app/(tabs)/validar.tsx');
@@ -17,7 +18,7 @@ describe('módulo Validar na APP',()=>{
   expect(s).toContain('Gestão de quadra/ruas');
  });
  test('o backend mantém duplicados automáticos em revisão até decisão final',()=>{
-   const s=ler('supabase/functions/field-service/index.ts');
+   const s=lerRepo('supabase/functions/field-service/index.ts');
    expect(s).toContain('status.eq.PENDING_REVIEW');
    expect(s).toContain('status.eq.DUPLICATE');
    expect(s).toContain('validated_at.is.null');
