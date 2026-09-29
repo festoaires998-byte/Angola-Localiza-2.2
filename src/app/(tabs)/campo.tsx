@@ -70,13 +70,14 @@ export default function Campo() {
   const [referencia, setReferencia] = useState('');
   const [bairro, setBairro] = useState('');
   const [rua, setRua] = useState('');
-  const [ruaNova, setRuaNova] = useState(false);
-  const [bairroNovo, setBairroNovo] = useState(false);
+  const [ruaNomeNova, setRuaNomeNova] = useState('');
+  const [bairroNomeNovo, setBairroNomeNovo] = useState('');
   const [portaIntercalada, setPortaIntercalada] = useState(false);
   const [numeroBase, setNumeroBase] = useState('');
   const [numerosRua, setNumerosRua] = useState<number[]>([]);
   const [duplicado, setDuplicado] = useState<{ found: boolean; distance_meters?: number; postal_code?: string | null } | null>(null);
   const [duplicadoJustificacao, setDuplicadoJustificacao] = useState('');
+  const [duplicadoDecidido, setDuplicadoDecidido] = useState(false);
   const [precisaoJustificacao, setPrecisaoJustificacao] = useState('');
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -152,16 +153,9 @@ export default function Campo() {
     finally { setMapaADescarregar(false); }
   }
 
-  function selecionarRua(v: string) {
-    setRua(v);
-    if (!v.startsWith('__')) setRuaNova(false);
-    else setRuaNova(v === '__new_unnamed__' || v === '__new_named__');
-  }
+  function selecionarRua(v: string) { setRua(v); setRuaNomeNova(''); }
 
-  function selecionarBairro(v: string) {
-    setBairro(v);
-    setBairroNovo(v === '__new_named__');
-  }
+  function selecionarBairro(v: string) { setBairro(v); setBairroNomeNovo(''); }
 
   async function enviar() {
     setErro(null); setResultado(null);
@@ -171,6 +165,7 @@ export default function Campo() {
     if (!rua) return setErro('Escolhe a rua ou uma opção de rua sem nome.');
     if (portaIntercalada && !numeroBase) return setErro('Escolhe entre qual número a porta fica intercalada.');
     if (!bairro) return setErro('Escolhe o bairro ou uma opção de bairro sem nome.');
+    if (duplicado?.found && !duplicadoDecidido) return setErro('Há uma morada próxima. Escolhe “Vincular e completar existente” ou confirma que é um ponto diferente.');
     if (posicaoSegura.precisao > 15 && precisaoJustificacao.trim().length < 10) return setErro('A precisão do GPS é baixa. Explica em pelo menos 10 caracteres porque continuas.');
     if (duplicado?.found && duplicadoJustificacao.trim().length > 0 && duplicadoJustificacao.trim().length < 10) return setErro('A justificação do ponto diferente deve ter pelo menos 10 caracteres.');
     setAEnviar(true);
@@ -182,8 +177,8 @@ export default function Campo() {
       const nome = sessao.utilizador.id + '/' + marca.sha256 + '.jpg';
       const url = await enviarFotoCampo(marca.uri, nome);
 
-      const streetChoice = rua === '__new_named__' ? { streetName: '' } : rua === '__new_unnamed__' ? { newUnnamedStreet: true } : { streetId: rua };
-      const bairroChoice = bairro === '__new_named__' ? undefined : bairro === '__new_unnamed__' ? undefined : bairro.trim();
+      const streetChoice = rua === '__new_named__' ? { streetName: ruaNomeNova } : rua === '__new_unnamed__' ? { newUnnamedStreet: true } : { streetId: rua };
+      const bairroChoice = bairro === '__new_named__' ? bairroNomeNovo : bairro === '__new_unnamed__' ? undefined : bairro.trim();
 
       const r = await enviarCampo({
         latitude: posicaoSegura.latitude,
@@ -198,7 +193,7 @@ export default function Campo() {
         reference: referencia,
         placeKind: undefined,
         watermarkMatch: true,
-        overrideDuplicate: !!duplicadoJustificacao.trim(),
+        overrideDuplicate: !!duplicadoJustificacao.trim() && duplicadoDecidido,
         duplicateJustification: duplicadoJustificacao.trim() || undefined,
         infillBaseHouseNumber: portaIntercalada ? Number(numeroBase) : null,
       });
@@ -211,8 +206,8 @@ export default function Campo() {
 
   function proximaPorta() {
     setResultado(null); setErro(null); setFoto(null); setReferencia(''); setRua(''); setBairro('');
-    setRuaNova(false); setBairroNovo(false); setPortaIntercalada(false); setNumeroBase('');
-    setDuplicado(null); setDuplicadoJustificacao(''); setPrecisaoJustificacao('');
+    setRuaNomeNova(''); setBairroNomeNovo(''); setPortaIntercalada(false); setNumeroBase('');
+    setDuplicado(null); setDuplicadoJustificacao(''); setDuplicadoDecidido(false); setPrecisaoJustificacao('');
     setCodigoPrevisto(''); setContexto(null);
     // O hook mantém a última posição, por isso pede explicitamente uma nova medição.
     capturaGps.medirDeNovo();
@@ -268,9 +263,9 @@ export default function Campo() {
         <Caixa tipo="erro">
           <Text style={estilos.negrito}>⚠️ Já existe uma morada perto</Text>
           <Text>A {Math.round(duplicado.distance_meters ?? 0)} m: {duplicado.postal_code || '(sem código)'}</Text>
-          <Botao titulo="Vincular e completar existente" variante="secundario" onPress={() => setDuplicadoJustificacao('')} />
-          <Botao titulo="É um ponto diferente" variante="secundario" onPress={() => setDuplicadoJustificacao(duplicadoJustificacao || ' ')} />
-          {duplicadoJustificacao.trim().length > 0 ? <CampoInput rotulo="Justificação do ponto diferente (mín. 10 caracteres)" value={duplicadoJustificacao.trim()} onChangeText={setDuplicadoJustificacao} placeholder="Explica porque é fisicamente diferente." multiline /> : null}
+          <Botao titulo="Vincular e completar existente" variante="secundario" onPress={() => { setDuplicadoDecidido(true); setDuplicadoJustificacao(''); }} />
+          <Botao titulo="É um ponto diferente" variante="secundario" onPress={() => setDuplicadoDecidido(true)} />
+          {duplicadoDecidido && !duplicadoJustificacao.trim() ? <CampoInput rotulo="Justificação do ponto diferente (mín. 10 caracteres)" value={duplicadoJustificacao} onChangeText={setDuplicadoJustificacao} placeholder="Explica porque é fisicamente diferente." multiline /> : null}
         </Caixa>
       ) : null}
 
@@ -280,16 +275,14 @@ export default function Campo() {
 
       <CampoInput rotulo="Referência do local" value={referencia} onChangeText={setReferencia} placeholder="Ponto de referência" multiline />
       <Seletor label="Rua *" value={rua} placeholder={contexto ? 'Escolhe uma rua…' : 'Captura o GPS primeiro…'} options={streetOptions} onChange={selecionarRua} />
-      {rua === '__new_named__' ? <CampoInput rotulo="Nome da nova rua" value="" onChangeText={(v) => setRua(v)} placeholder="Nome da nova rua" /> : null}
+      {rua === '__new_named__' ? <CampoInput rotulo="Nome da nova rua" value={ruaNomeNova} onChangeText={setRuaNomeNova} placeholder="Nome da nova rua" /> : null}
       <Pressable onPress={() => setPortaIntercalada((v) => !v)} style={estilos.checkboxLinha}>
         <View style={[estilos.checkbox, portaIntercalada && estilos.checkboxAtivo]}>{portaIntercalada ? <Text style={estilos.check}>✓</Text> : null}</View>
         <Text style={estilos.checkboxTexto}>Porta intercalada (entre duas já existentes)</Text>
       </Pressable>
       {portaIntercalada && rua && !rua.startsWith('__') ? <Seletor label="Entre qual número?" value={numeroBase} placeholder="Escolhe o número base…" options={numeroOptions} onChange={setNumeroBase} /> : null}
       <Seletor label="Bairro *" value={bairro} placeholder={contexto ? 'Escolhe um bairro…' : 'Captura o GPS primeiro…'} options={bairroOptions} onChange={selecionarBairro} />
-      {bairro === '__new_named__' ? <CampoInput rotulo="Nome do novo bairro" value="" onChangeText={(v) => setBairro(v)} placeholder="Nome do novo bairro" /> : null}
-      <CampoInput rotulo="Referência *" value={referencia} onChangeText={setReferencia} placeholder="Ponto de referência" />
-
+      {bairro === '__new_named__' ? <CampoInput rotulo="Nome do novo bairro" value={bairroNomeNovo} onChangeText={setBairroNomeNovo} placeholder="Nome do novo bairro" /> : null}
       {posicaoSegura && posicaoSegura.precisao > 15 ? <CampoInput rotulo="Justificação da precisão GPS" value={precisaoJustificacao} onChangeText={setPrecisaoJustificacao} placeholder="Explica porque a recolha continua." multiline /> : null}
 
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
