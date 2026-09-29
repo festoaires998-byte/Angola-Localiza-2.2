@@ -39,6 +39,33 @@ Deno.serve(async (req: Request) => {
       const { data } = await supabase.from("organization_members").select("role").eq("user_id", id);
       return (data ?? []).some((m) => m.role === "super_admin");
     }
+
+    type AdminScope = { all: boolean; provinces: string[]; municipalities: string[] };
+    async function getAdminScope(id: string): Promise<AdminScope> {
+      const { data, error } = await supabase.from("organization_members")
+        .select("role, scope_province_id, scope_municipality_id").eq("user_id", id);
+      if (error) throw error;
+      const members = data ?? [];
+      if (members.some((m) => m.role === "super_admin" || m.role === "admin_nacional")) {
+        return { all: true, provinces: [], municipalities: [] };
+      }
+      return {
+        all: false,
+        provinces: [...new Set(members.filter((m) => m.role === "admin_provincial").map((m) => m.scope_province_id).filter(Boolean))],
+        municipalities: [...new Set(members.filter((m) => m.role === "admin_municipal").map((m) => m.scope_municipality_id).filter(Boolean))],
+      };
+    }
+    async function scopedAddressIds(scope: AdminScope): Promise<string[]> {
+      let q = supabase.from("addresses").select("id");
+      if (!scope.all) {
+        if (scope.municipalities.length) q = q.in("municipality_id", scope.municipalities);
+        else if (scope.provinces.length) q = q.in("province_id", scope.provinces);
+        else return [];
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []).map((x) => x.id);
+    }
     async function logAudit(actorId: string, actionName: string, entityType: string, entityId: string, before: unknown, after: unknown) {
       await supabase.from("audit_logs").insert({ actor_id: actorId, action: actionName, entity_type: entityType, entity_id: entityId, before, after });
     }
@@ -100,7 +127,10 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list_estafetas") {
       if (!(await requireAdmin(callerId))) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
-      const { data: members } = await supabase.from("organization_members").select("user_id").eq("role", "estafeta");
+      const scope = await getAdminScope(callerId);
+      let memberQuery = supabase.from("organization_members").select("user_id, scope_province_id, scope_municipality_id").eq("role", "estafeta");
+      if (!scope.all) memberQuery = scope.municipalities.length ? memberQuery.in("scope_municipality_id", scope.municipalities) : scope.provinces.length ? memberQuery.in("scope_province_id", scope.provinces) : memberQuery.eq("user_id", "00000000-0000-0000-0000-000000000000");
+      const { data: members } = await memberQuery;
       const ids = (members ?? []).map((m) => m.user_id);
       const results = [];
       for (const id of ids) { const { data: u } = await supabase.auth.admin.getUserById(id); if (u?.user) results.push({ id: u.user.id, email: u.user.email }); }
@@ -109,9 +139,12 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list_staff") {
       if (!(await requireAdmin(callerId))) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
-      const { data: members } = await supabase.from("organization_members")
+      const scope = await getAdminScope(callerId);
+      let memberQuery = supabase.from("organization_members")
         .select("user_id, role, onboarded_via, organizations(name), scope_province_id, scope_municipality_id")
         .order("role").limit(100);
+      if (!scope.all) memberQuery = scope.municipalities.length ? memberQuery.in("scope_municipality_id", scope.municipalities) : scope.provinces.length ? memberQuery.in("scope_province_id", scope.provinces) : memberQuery.eq("user_id", "00000000-0000-0000-0000-000000000000");
+      const { data: members } = await memberQuery;
       const results = [];
       for (const m of members ?? []) {
         const { data: u } = await supabase.auth.admin.getUserById(m.user_id);
@@ -125,7 +158,9 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list_unassigned_deliveries") {
       if (!(await requireAdmin(callerId))) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
-      const { data, error } = await supabase.from("deliveries").select("id, tracking_code, recipient_name, status, address_id, addresses(confidence_score,status,flagged_for_review,quadra_id,latitude,longitude)").eq("status", "CREATED").order("created_at", { ascending: false }).limit(20);
+      const scope = await getAdminScope(callerId);
+      const addressIds = await scopedAddressIds(scope);
+      const { data, error } = await supabase.from("deliveries").select("id, tracking_code, recipient_name, status, address_id, addresses(confidence_score,status,flagged_for_review,quadra_id,latitude,longitude)").eq("status", "CREATED").in("address_id", addressIds.length ? addressIds : ["00000000-0000-0000-0000-000000000000"]).order("created_at", { ascending: false }).limit(20);
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
       return new Response(JSON.stringify({ deliveries: data }), { headers: cors });
     }
@@ -180,7 +215,9 @@ Deno.serve(async (req: Request) => {
 
     if (action === "dados_resumo") {
       if (!(await requireAdmin(callerId))) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
-      const { data: rows } = await supabase.from("addresses").select("status, provinces(name)");
+      const scope = await getAdminScope(callerId);
+      const addressIds = await scopedAddressIds(scope);
+      const { data: rows } = await supabase.from("addresses").select("status, provinces(name)").in("id", addressIds.length ? addressIds : ["00000000-0000-0000-0000-000000000000"]);
       const byProvince: Record<string, number> = {};
       const byStatus: Record<string, number> = {};
       (rows ?? []).forEach((r: any) => {
@@ -193,11 +230,14 @@ Deno.serve(async (req: Request) => {
 
     if (action === "statistics") {
       if (!(await requireAdmin(callerId))) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
+      const scope = await getAdminScope(callerId);
+      const addressIds = await scopedAddressIds(scope);
+      const safeIds = addressIds.length ? addressIds : ["00000000-0000-0000-0000-000000000000"];
       const [addresses, statuses, deliveries, deliveryStatuses, fieldPending, kycPending] = await Promise.all([
-        supabase.from("addresses").select("*", { count: "exact", head: true }),
-        supabase.from("addresses").select("status"),
-        supabase.from("deliveries").select("*", { count: "exact", head: true }),
-        supabase.from("deliveries").select("status"),
+        supabase.from("addresses").select("*", { count: "exact", head: true }).in("id", safeIds),
+        supabase.from("addresses").select("status").in("id", safeIds),
+        supabase.from("deliveries").select("*", { count: "exact", head: true }).in("address_id", safeIds),
+        supabase.from("deliveries").select("status").in("address_id", safeIds),
         supabase.from("field_records").select("*", { count: "exact", head: true }).eq("status", "PENDING_REVIEW"),
         supabase.from("identity_verifications").select("*", { count: "exact", head: true }).eq("status", "SUBMITTED"),
       ]);
