@@ -158,7 +158,7 @@ describe('Admin: verificações por rever', () => {
     // Volta à lista, com o aviso, e o pedido sai dela.
     await waitFor(() => expect(r.getPathname()).toBe('/admin'));
     expect(screen.getByText(/Verificação de Ana Silva aprovada ✅/)).toBeTruthy();
-    expect(screen.queryByText('Ana Silva')).toBeNull();
+    expect(screen.queryByText('Rever Ana Silva')).toBeNull();
     expect(screen.getByText('bento@exemplo.ao')).toBeTruthy();
     alerta.mockRestore();
   });
