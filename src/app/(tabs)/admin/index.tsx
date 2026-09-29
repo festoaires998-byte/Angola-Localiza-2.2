@@ -9,7 +9,6 @@ import {
   chamarAdminGet,
   chamarFuncao,
   restGet,
-  restPatch,
   type AdminTab,
 } from '@/api/adminGestao';
 import { listarPedidosKyc } from '@/api/revisaoKyc';
@@ -141,7 +140,7 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
       <Cartao><Text style={estilos.statLabel}>Moradas</Text><Text style={estilos.stat}>{numero(stats?.addresses_total ?? stats?.total_addresses)}</Text></Cartao>
       <Cartao><Text style={estilos.statLabel}>Entregas</Text><Text style={estilos.stat}>{numero(stats?.deliveries_total ?? stats?.total_deliveries)}</Text></Cartao>
       <Cartao><Text style={estilos.statLabel}>Por aprovar</Text><Text style={estilos.stat}>{numero(stats?.addresses_by_status?.PROPOSED ?? pending.length)}</Text></Cartao>
-      <Cartao><Text style={estilos.statLabel}>Capturas</Text><Text style={estilos.stat}>{numero(stats?.field_pending ?? stats?.field_pending_count ?? '—')}</Text></Cartao>
+      <Cartao><Text style={estilos.statLabel}>Capturas</Text><Text style={estilos.stat}>{numero(stats?.field_records_pending ?? stats?.field_pending ?? stats?.field_pending_count ?? '—')}</Text></Cartao>
     </View>
 
     <Text style={estilos.secao}>Moradas por aprovar</Text>
@@ -303,7 +302,7 @@ function Dados({ onError }: { onError: (v: string | null) => void }) {
 
   const consultar = async () => {
     if (!codigo.trim()) return;
-    try { setHistorico(await chamarAdmin('address_history', { postal_code: codigo.trim() })); }
+    try { setHistorico(await chamarEndpoint('address-history', { postal_code: codigo.trim() })); }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
 
