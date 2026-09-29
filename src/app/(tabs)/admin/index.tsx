@@ -99,7 +99,7 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
   const load = useCallback(async () => {
     setLoading(true); onError(null);
     try {
-      const [s, p, d, e] = await Promise.all([
+      const [s, p, d, e, k] = await Promise.all([
         chamarAdminGet('statistics'),
         restGet<any[]>('addresses?status=eq.PROPOSED&select=id,postal_code,plus_code,latitude,longitude,reference,created_at,source&order=created_at.desc&limit=20'),
         chamarAdmin('list_unassigned_deliveries'),
