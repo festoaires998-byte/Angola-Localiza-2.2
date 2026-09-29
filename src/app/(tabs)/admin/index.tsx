@@ -7,6 +7,7 @@ import {
   ROLE_LABELS,
   chamarAdmin,
   chamarAdminGet,
+  chamarEndpoint,
   chamarFuncao,
   restGet,
   type AdminTab,
