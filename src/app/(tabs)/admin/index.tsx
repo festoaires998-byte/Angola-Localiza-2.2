@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 import {
   AUDIT_LABELS,
@@ -203,6 +205,8 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
   const [orgs, setOrgs] = useState<any[]>([]);
   const [provinces, setProvinces] = useState<any[]>([]);
   const [municipalities, setMunicipalities] = useState<any[]>([]);
+  const [municipalitiesAll, setMunicipalitiesAll] = useState<any[]>([]);
+  const [staffFilter, setStaffFilter] = useState('');
   const [organizationId, setOrganizationId] = useState('');
   const [provinceId, setProvinceId] = useState('');
   const [municipalityId, setMunicipalityId] = useState('');
@@ -224,14 +228,19 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
       ]);
       setStaff(s.staff ?? []); setLinks(l.links ?? []); setProvinces(p ?? []);
       if (best === 'super_admin') setOrgs(await restGet<any[]>('organizations?select=id,name,type&order=name.asc'));
-      if (role === 'admin_municipal') setMunicipalities(await restGet<any[]>('municipalities?select=id,name,province_id&order=name.asc'));
+      if (role === 'admin_municipal') { const ms = await restGet<any[]>('municipalities?select=id,name,province_id&order=name.asc'); setMunicipalitiesAll(ms ?? []); setMunicipalities((ms ?? []).filter((m: any) => !provinceId || m.province_id === provinceId)); }
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-  }, [best, onError, role]);
+  }, [best, onError, role, provinceId]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (!inviteRoles.includes(role)) setRole(inviteRoles[0] ?? 'tecnico_campo');
   }, [inviteRoles.join('|')]);
+  useEffect(() => {
+    if (role !== 'admin_municipal') { setMunicipalityId(''); return; }
+    setMunicipalities((municipalitiesAll ?? []).filter((m: any) => !provinceId || m.province_id === provinceId));
+    if (municipalityId && provinceId && !(municipalitiesAll ?? []).some((m: any) => m.id === municipalityId && m.province_id === provinceId)) setMunicipalityId('');
+  }, [role, provinceId, municipalitiesAll]);
 
   const invite = async () => {
     if (!email.trim()) { setMsg('Introduz o email.'); return; }
@@ -271,6 +280,8 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
         <View style={estilos.opcoes}>{provinces.map((p) => <Pressable key={p.id} onPress={() => setProvinceId(p.id)} style={[estilos.opcao, provinceId === p.id && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{p.name}</Text></Pressable>)}</View>
       </> : null}
       {role === 'admin_municipal' ? <>
+        <Text style={estilos.rotulo}>Província de referência</Text>
+        <View style={estilos.opcoes}>{provinces.map((p) => <Pressable key={p.id} onPress={() => setProvinceId(p.id)} style={[estilos.opcao, provinceId === p.id && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{p.name}</Text></Pressable>)}</View>
         <Text style={estilos.rotulo}>Município (âmbito)</Text>
         <View style={estilos.opcoes}>{municipalities.map((m) => <Pressable key={m.id} onPress={() => setMunicipalityId(m.id)} style={[estilos.opcao, municipalityId === m.id && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{m.name}</Text></Pressable>)}</View>
       </> : null}
@@ -299,7 +310,8 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
 
     <Cartao>
       <Text style={estilos.cabecalhoCard}>👥 Utilizadores e cargos</Text>
-      {staff.length === 0 ? <Texto suave>Sem utilizadores.</Texto> : staff.map((s, i) => <View key={String(s.id ?? i)} style={estilos.item}><Texto>{s.email || '—'}</Texto><Texto suave>{ROLE_LABELS[s.role] || s.role || '—'} · {s.sector || '—'}</Texto><Texto suave>{s.identity_status || '—'} · entrou via {s.onboarded_via || '—'}</Texto></View>)}
+      <Campo rotulo="Pesquisar utilizador" value={staffFilter} onChangeText={setStaffFilter} placeholder="Email, nome ou cargo" />
+      {staff.length === 0 ? <Texto suave>Sem utilizadores.</Texto> : staff.filter((s) => { const q = staffFilter.trim().toLowerCase(); return !q || String(s.email ?? '').toLowerCase().includes(q) || String(s.nome ?? '').toLowerCase().includes(q) || String(s.role ?? '').toLowerCase().includes(q); }).map((s, i) => <View key={String(s.id ?? i)} style={estilos.item}><Texto>{s.email || '—'}</Texto><Texto suave>{ROLE_LABELS[s.role] || s.role || '—'} · {s.sector || '—'}</Texto><Texto suave>{s.identity_status || '—'} · entrou via {s.onboarded_via || '—'}</Texto></View>)}
       <Botao titulo="Atualizar pessoas" variante="secundario" onPress={() => void load()} />
     </Cartao>
   </>;
@@ -335,9 +347,19 @@ function Dados({ onError }: { onError: (v: string | null) => void }) {
   const exportar = async (format: 'csv' | 'geojson') => {
     try {
       const r = await chamarEndpoint('exports', { format });
-      setMsg(`${r.row_count ?? 0} moradas exportadas. A resposta está pronta para partilha.`);
-      // Mantemos o conteúdo na app para não criar um ficheiro sem autorização explícita.
-      Alert.alert(`Exportação ${format.toUpperCase()}`, String(r.content ?? '').slice(0, 4000));
+      const content = String(r.content ?? '');
+      if (!content) throw new Error('O servidor não devolveu conteúdo para exportação.');
+      const base = FileSystem.cacheDirectory;
+      if (!base) throw new Error('O armazenamento temporário da APP não está disponível.');
+      const ext = format === 'geojson' ? 'geojson' : 'csv';
+      const uri = `${base}angola-localiza-moradas-${Date.now()}.${ext}`;
+      await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: format === 'geojson' ? 'application/geo+json' : 'text/csv', dialogTitle: `Exportar moradas · ${format.toUpperCase()}` });
+        setMsg(`${r.row_count ?? 0} moradas exportadas e prontas para partilha.`);
+      } else {
+        setMsg(`Ficheiro criado: ${uri}`);
+      }
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
 
