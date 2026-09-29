@@ -100,6 +100,7 @@ export default function DetalheEnvio() {
   return (
     <Ecra>
       {estado.aviso?.tipo === 'sucesso' && pin ? <Caixa tipo="sucesso">{estado.aviso.texto}</Caixa> : null}
+      <Botao titulo="💬 Falar com o estafeta" variante="secundario" onPress={() => router.push({ pathname: '/chat-organizacao', params: { tipo: 'DELIVERY', chave: envio.id, titulo: 'Chat da entrega' } })} />
       <Cartao>
         {envio.origem ? (
           <Linha
