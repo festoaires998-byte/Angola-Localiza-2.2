@@ -39,9 +39,17 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "send_otp") {
-      const { phone } = body;
-      if (!phone || !/^\+244\d{9}$/.test(phone.trim())) {
-        return new Response(JSON.stringify({ error: "numero invalido - usa o formato +2449XXXXXXXX" }), { status: 422, headers: cors });
+      const { phone, country_code = "AO" } = body;
+      const cc = String(country_code).toUpperCase();
+      const { data: country } = await supabase.from("country_configs").select("country_code,phone_country_code,enabled,is_active").eq("country_code", cc).maybeSingle();
+      if (!country || !country.enabled || !country.is_active || !country.phone_country_code) {
+        return new Response(JSON.stringify({ error: "country_not_active" }), { status: 409, headers: cors });
+      }
+      const prefix = String(country.phone_country_code).replace(/\D/g, "");
+      const digits = String(phone || "").replace(/\s+/g, "");
+      const phoneRegex = new RegExp("^\\+" + prefix + "\\d{7,12}$");
+      if (!phoneRegex.test(digits)) {
+        return new Response(JSON.stringify({ error: "numero_invalido", country_code: cc, expected_prefix: "+" + prefix }), { status: 422, headers: cors });
       }
       const { data: existing } = await supabase.from("user_identity").select("phone_otp_sent_at").eq("user_id", callerId).maybeSingle();
       if (existing?.phone_otp_sent_at && (Date.now() - new Date(existing.phone_otp_sent_at).getTime()) < 60000) {
