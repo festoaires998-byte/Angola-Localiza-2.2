@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -10,6 +11,7 @@ import {
   restPatch,
   type AdminTab,
 } from '@/api/adminGestao';
+import { listarPedidosKyc } from '@/api/revisaoKyc';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { useSessao } from '@/hooks/useSessao';
@@ -188,6 +190,8 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
   const [provinceId, setProvinceId] = useState('');
   const [municipalityId, setMunicipalityId] = useState('');
   const [staff, setStaff] = useState<any[]>([]);
+  const [kyc, setKyc] = useState<any[]>([]);
+  const router = useRouter();
   const [links, setLinks] = useState<any[]>([]);
   const [linkRole, setLinkRole] = useState('tecnico_campo');
   const [maxUses, setMaxUses] = useState('10');
@@ -195,12 +199,13 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
 
   const load = useCallback(async () => {
     try {
-      const [s, l, p] = await Promise.all([
+      const [s, l, p, k] = await Promise.all([
         chamarAdmin('list_staff'),
         chamarFuncao('join-link', 'list'),
         restGet<any[]>('provinces?select=id,name&order=name.asc'),
+        listarPedidosKyc(),
       ]);
-      setStaff(s.staff ?? []); setLinks(l.links ?? []); setProvinces(p ?? []);
+      setStaff(s.staff ?? []); setLinks(l.links ?? []); setProvinces(p ?? []); setKyc(k ?? []);
       if (best === 'super_admin') setOrgs(await restGet<any[]>('organizations?select=id,name,type&order=name.asc'));
       if (role === 'admin_municipal') setMunicipalities(await restGet<any[]>('municipalities?select=id,name,province_id&order=name.asc'));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
@@ -263,7 +268,7 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
       <Botao titulo="🔗 Gerar link" variante="secundario" onPress={() => void createLink()} />
       {links.slice(0, 10).map((l, i) => <Texto key={String(l.id ?? i)} suave>{l.role || '—'} · {l.used_count ?? 0}/{l.max_uses ?? '—'} · {l.expires_at ? new Date(l.expires_at).toLocaleDateString('pt-PT') : '—'}</Texto>)}
     </Cartao>
-    <Cartao>
+    
       <Text style={estilos.cabecalhoCard}>👥 Utilizadores e cargos</Text>
       {staff.length === 0 ? <Texto suave>Sem utilizadores.</Texto> : staff.map((s, i) => <View key={String(s.id ?? i)} style={estilos.item}><Texto>{s.email || '—'}</Texto><Texto suave>{ROLE_LABELS[s.role] || s.role || '—'} · {s.sector || '—'}</Texto><Texto suave>{s.identity_status || '—'} · entrou via {s.onboarded_via || '—'}</Texto></View>)}
       <Botao titulo="Atualizar pessoas" variante="secundario" onPress={() => void load()} />
