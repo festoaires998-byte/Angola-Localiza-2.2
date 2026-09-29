@@ -119,43 +119,6 @@ Deno.serve(async (req: Request) => {
       const consumed = Array.isArray(atomicResult) ? atomicResult[0] : atomicResult;
       if (!consumed?.ok) return new Response(JSON.stringify({ error: "nao foi possivel consumir o link" }), { status: 409, headers: cors });
       return new Response(JSON.stringify({ ok: true, role: consumed.role, requires_mfa: true }), { headers: cors });
-      /*
-      const { data: link } = await supabase.from("join_links").select("*").eq("token", linkToken).maybeSingle();
-      if (!link) return new Response(JSON.stringify({ error: "link nao encontrado" }), { status: 404, headers: cors });
-      if (link.revoked) return new Response(JSON.stringify({ error: "LINK_DEAD: link revogado" }), { status: 410, headers: cors });
-      if (link.use_count >= link.max_uses) return new Response(JSON.stringify({ error: "LINK_DEAD: limite de usos atingido" }), { status: 410, headers: cors });
-      if (new Date(link.expires_at) < new Date()) return new Response(JSON.stringify({ error: "LINK_DEAD: link expirado" }), { status: 410, headers: cors });
-
-      const { data: existing } = await supabase.from("organization_members").select("id").eq("user_id", callerId).eq("organization_id", link.organization_id).maybeSingle();
-      if (!existing) {
-        await supabase.from("organization_members").insert({
-          organization_id: link.organization_id, user_id: callerId, role: link.role,
-          scope_province_id: link.scope_province_id, scope_municipality_id: link.scope_municipality_id,
-          onboarded_via: "INVITE_LINK",
-        });
-      }
-
-      await supabase.from("join_links").update({ use_count: link.use_count + 1 }).eq("id", link.id);
-      await supabase.from("join_link_uses").insert({ join_link_id: link.id, user_id: callerId });
-
-      await supabase.from("audit_logs").insert({
-        actor_id: callerId, action: "joined_via_link", entity_type: "join_link", entity_id: link.id,
-        before: null, after: { role: link.role },
-      });
-
-      // Deteccao de anomalia: >20 usos do mesmo link em 10 minutos
-      const tenMinAgo = new Date(Date.now() - 10 * 60000).toISOString();
-      const { count: recentUses } = await supabase.from("join_link_uses").select("*", { count: "exact", head: true })
-        .eq("join_link_id", link.id).gte("used_at", tenMinAgo);
-      if ((recentUses ?? 0) > 20 && !link.flagged_anomaly) {
-        await supabase.from("join_links").update({ flagged_anomaly: true }).eq("id", link.id);
-        await supabase.from("audit_logs").insert({
-          actor_id: callerId, action: "join_link_anomaly_flagged", entity_type: "join_link", entity_id: link.id,
-          before: null, after: { recent_uses: recentUses },
-        });
-      }
-
-      return new Response(JSON.stringify({ ok: true, role: link.role, requires_mfa: true }), { headers: cors });
     }
 
     return new Response(JSON.stringify({ error: "acao desconhecida" }), { status: 400, headers: cors });
