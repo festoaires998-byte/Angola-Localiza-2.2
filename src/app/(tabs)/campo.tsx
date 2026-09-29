@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Botao, Caixa, Campo as CampoInput, Ecra, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
 import { CampoCodigo } from '@/components/CampoCodigo';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
+import { useCapturaGps } from '@/hooks/useCapturaGps';
 import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useSessao } from '@/hooks/useSessao';
@@ -15,6 +16,7 @@ export default function Campo() {
   const sessao = useSessao();
   const gps = usePosicao();
   const posicao = gps.estado === 'ok' ? gps.posicao : gps.estado === 'a_procurar' ? gps.ultima : null;
+  const capturaGps = useCapturaGps(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude, precisao: posicao.precisao, hora: posicao.hora } : null);
   const info = useInfoLocal(posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : null, online === true, posicao?.precisao != null && posicao.precisao <= 10);
   const [contexto, setContexto] = useState<ContextoCampo | null>(null);
   const [foto, setFoto] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export default function Campo() {
   if (!sessao.utilizador) return <Ecra><Caixa tipo="aviso">Inicia sessão para utilizar o modo Campo.</Caixa></Ecra>;
   if (online === false) return <Ecra><Caixa tipo="aviso">O modo Campo precisa de ligação à internet para sincronizar a recolha com segurança.</Caixa></Ecra>;
   if (!posicaoAtual) return <Ecra><Caixa tipo="aviso">Autoriza a localização e fica ao ar livre alguns segundos para obter uma posição.</Caixa></Ecra>;
-  const posicaoSegura = posicaoAtual;
+  const posicaoSegura = capturaGps.captura;
   async function tirarFoto() {
     setErro(null);
     const permissao = await ImagePicker.requestCameraPermissionsAsync();
@@ -60,6 +62,7 @@ export default function Campo() {
 
   async function enviar() {
     setErro(null); setResultado(null);
+    if (!posicaoSegura) { setErro('Aguarda a captura de 3 leituras GPS boas antes de submeter.'); return; }
     if (!foto) { setErro('A fotografia da fachada é obrigatória.'); return; }
     if (!referencia.trim()) { setErro('Indica uma referência que permita identificar o local.'); return; }
     if (!ruaNova && !rua.trim() && !contexto?.streets.length) { setErro('Indica a rua ou marca “Rua sem nome”.'); return; }
@@ -78,7 +81,8 @@ export default function Campo() {
   return (
     <Ecra>
       <Subtitulo>Campo · {nomePais}</Subtitulo>
-      <Caixa tipo="info">{'Posição: ' + posicaoSegura.latitude.toFixed(6) + ', ' + posicaoSegura.longitude.toFixed(6) + '\nPrecisão: ' + (posicaoSegura.precisao == null ? 'desconhecida' : Math.round(posicaoSegura.precisao) + ' m') + '\nCódigo: ' + (referenciaAutomatica || 'a calcular…')}</Caixa>
+      <Caixa tipo="info">{'Posição: ' + (posicaoSegura ? posicaoSegura.latitude.toFixed(6) + ', ' + posicaoSegura.longitude.toFixed(6) : posicaoAtual ? posicaoAtual.latitude.toFixed(6) + ', ' + posicaoAtual.longitude.toFixed(6) : 'a procurar…') + '\nPrecisão: ' + (posicaoSegura ? Math.round(posicaoSegura.precisao) + ' m · ' + posicaoSegura.leituras + ' leituras' : posicaoAtual?.precisao == null ? 'a medir…' : Math.round(posicaoAtual.precisao) + ' m') + '\nCódigo: ' + (referenciaAutomatica || 'a calcular…')}</Caixa>
+      <Botao titulo={capturaGps.aMedir ? `Capturar GPS (${capturaGps.leiturasBoas} de ${capturaGps.necessarias})` : 'GPS capturado · Medir novamente'} onPress={() => capturaGps.medirDeNovo()} desativado={capturaGps.aMedir && !capturaGps.captura} />
       <Botao titulo={foto ? 'Refazer fotografia da fachada' : 'Fotografar fachada'} onPress={() => void tirarFoto()} />
       {foto ? <Caixa tipo="info">Fotografia preparada e será marcada com posição, país e código.</Caixa> : null}
       <CampoInput rotulo="Referência do local" value={referencia} onChangeText={setReferencia} placeholder="Ex.: casa azul ao lado da escola" multiline />
@@ -86,7 +90,7 @@ export default function Campo() {
       <CampoInput rotulo="Rua" value={rua} onChangeText={setRua} placeholder={contexto?.streets?.[0]?.name ?? 'Nome da rua'} />
       {contexto?.streets?.length ? <Caixa tipo="info">{'Ruas próximas: ' + contexto.streets.slice(0, 5).map((s) => s.name).join(', ')}</Caixa> : null}
       <Botao titulo={ruaNova ? 'Usar rua sem nome: SIM' : 'Usar rua sem nome: NÃO'} variante="secundario" onPress={() => setRuaNova((v) => !v)} />
-      {posicaoSegura.precisao != null && posicaoSegura.precisao > 15 ? <CampoInput rotulo="Justificação da precisão GPS" value={precisaoJustificacao} onChangeText={setPrecisaoJustificacao} placeholder="Explica porque a recolha continua." multiline /> : null}
+      {posicaoSegura && posicaoSegura.precisao > 15 ? <CampoInput rotulo="Justificação da precisão GPS" value={precisaoJustificacao} onChangeText={setPrecisaoJustificacao} placeholder="Explica porque a recolha continua." multiline /> : null}
       <CampoCodigo valor={codigo} aoMudar={setCodigo} />
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
       {resultado ? <Caixa tipo="sucesso">{resultado}</Caixa> : null}
