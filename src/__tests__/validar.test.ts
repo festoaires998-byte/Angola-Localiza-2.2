@@ -13,6 +13,8 @@ describe('módulo Validar na APP',()=>{
   expect(s).toContain('Fundir com existente');
   expect(s).toContain('Aceitar como novo');
   expect(s).toContain('Rejeitar');
+  expect(s).toContain('Ver a quadra onde estou agora');
+  expect(s).toContain('Gestão de quadra/ruas');
    test('o backend mantém duplicados automáticos em revisão até decisão final',()=>{
    const s=ler('supabase/functions/field-service/index.ts');
    expect(s).toContain('status.eq.PENDING_REVIEW');
