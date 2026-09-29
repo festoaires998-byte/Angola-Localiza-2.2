@@ -16,6 +16,8 @@ export interface ContextoCampo {
   neighborhoods_nearby: string[];
 }
 export interface ResultadoCampo { field_record_id: string; status: string; nearby_matches: unknown[]; idempotent_replay?: boolean; }
+export interface DuplicadoCampo { found: boolean; distance_meters?: number; postal_code?: string | null; address_id?: string | null; }
+export interface ReverificacaoCampo { id: string; postal_code?: string | null; plus_code?: string | null; latitude: number; longitude: number; reference?: string | null; reason: string; }
 
 async function obterDeviceId(): Promise<string> {
   const guardado = await cofreApp.getItemAsync(CHAVE_DEVICE);
@@ -36,6 +38,18 @@ export async function prepararDispositivo(): Promise<string> {
     body: { device_id: deviceId, public_key_jwk: { kty: 'device', device_id: deviceId } },
   });
   return deviceId;
+}
+
+export function verificarDuplicadoCampo(latitude: number, longitude: number): Promise<DuplicadoCampo> {
+  return chamarFuncao<DuplicadoCampo>('field-service', 'check_duplicates', { body: { latitude, longitude } });
+}
+
+export function listarNumerosRua(streetId: string): Promise<{ house_numbers: number[] }> {
+  return chamarFuncao<{ house_numbers: number[] }>('field-service', 'nearby_house_numbers', { body: { street_id: streetId } });
+}
+
+export function listarReverificacoesCampo(): Promise<{ flagged: ReverificacaoCampo[] }> {
+  return chamarFuncao<{ flagged: ReverificacaoCampo[] }>('field-service', 'list_flagged_for_reverify');
 }
 
 export function listarContextoCampo(latitude: number, longitude: number): Promise<ContextoCampo> {
@@ -63,6 +77,9 @@ export async function enviarCampo(input: {
   placeKind?: string;
   watermarkMatch?: boolean;
   syncOperationId?: string;
+  overrideDuplicate?: boolean;
+  duplicateJustification?: string;
+  infillBaseHouseNumber?: number | null;
 }): Promise<ResultadoCampo> {
   const deviceId = await prepararDispositivo();
   return chamarFuncao<ResultadoCampo>('field-service', 'submit', {
@@ -81,6 +98,9 @@ export async function enviarCampo(input: {
       reference: input.reference.trim(),
       place_kind: input.placeKind,
       watermark_match: input.watermarkMatch,
+      override_duplicate: input.overrideDuplicate,
+      duplicate_justification: input.duplicateJustification,
+      infill_base_house_number: input.infillBaseHouseNumber ?? null,
       sync_operation_id: input.syncOperationId ?? Crypto.randomUUID(),
     },
   });
