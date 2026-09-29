@@ -210,7 +210,9 @@ export default function Campo() {
         '📍 ' + posicaoSegura.latitude.toFixed(6) + ', ' + posicaoSegura.longitude.toFixed(6) + ' · ' + nomePais,
         '📮 ' + (info?.codigoPostal?.codigo ?? info?.plusCode ?? 'sem código'),
       ], 'campo');
-      const nome = sessao.utilizador.id + '/' + marca.sha256 + '.jpg';
+      const utilizadorId = sessao.utilizador?.id;
+      if (!utilizadorId) throw new Error('Sessão do utilizador não está disponível.');
+      const nome = utilizadorId + '/' + marca.sha256 + '.jpg';
       if (online === false) {
         const payloadOffline: Record<string, unknown> = {
           latitude: posicaoSegura.latitude, longitude: posicaoSegura.longitude, accuracy_meters: posicaoSegura.precisao,
