@@ -237,7 +237,6 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
   const [provinceId, setProvinceId] = useState('');
   const [municipalityId, setMunicipalityId] = useState('');
   const [staff, setStaff] = useState<any[]>([]);
-  const [kyc, setKyc] = useState<any[]>([]);
   const router = useRouter();
   const [links, setLinks] = useState<any[]>([]);
   const [linkRole, setLinkRole] = useState('tecnico_campo');
@@ -250,7 +249,6 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
         chamarAdmin('list_staff'),
         chamarFuncao('join-link', 'list'),
         restGet<any[]>('provinces?select=id,name&order=name.asc'),
-        listarPedidosKyc(),
       ]);
       setStaff(s.staff ?? []); setLinks(l.links ?? []); setProvinces(p ?? []);
       if (best === 'super_admin') setOrgs(await restGet<any[]>('organizations?select=id,name,type&order=name.asc'));
@@ -321,17 +319,6 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
       <Campo rotulo="Máximo de usos" value={maxUses} onChangeText={setMaxUses} keyboardType="number-pad" />
       <Botao titulo="🔗 Gerar link" variante="secundario" onPress={() => void createLink()} />
       {links.slice(0, 10).map((l, i) => <Texto key={String(l.id ?? i)} suave>{l.role || '—'} · {l.used_count ?? 0}/{l.max_uses ?? '—'} · {l.expires_at ? new Date(l.expires_at).toLocaleDateString('pt-PT') : '—'}</Texto>)}
-    </Cartao>
-
-    <Cartao>
-      <Text style={estilos.cabecalhoCard}>🪪 Identidades por validar (Staff KYC)</Text>
-      {kyc.length === 0 ? <Texto suave>Não há identidades por rever.</Texto> : kyc.map((p: any) => (
-        <View key={p.userId} style={estilos.item}>
-          <Texto>{p.nome || p.email || p.userId}</Texto>
-          <Texto suave>{p.email || '—'} · {p.telefone || 'sem telefone'}</Texto>
-          <Botao titulo={`Rever ${p.nome || p.email || p.userId}`} variante="secundario" onPress={() => router.push({ pathname: '/admin/[id]', params: { id: p.userId } })} />
-        </View>
-      ))}
     </Cartao>
 
     <Cartao>
