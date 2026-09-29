@@ -15,6 +15,7 @@ import {
   type AdminTab,
 } from '@/api/adminGestao';
 import { listarPedidosKyc } from '@/api/revisaoKyc';
+import { lojaRevisaoKyc } from '@/state/revisaoKyc';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { useSessao } from '@/hooks/useSessao';
@@ -121,7 +122,11 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
       const firstError = [s, p, d, e].find((x) => x.status === 'rejected');
       if (firstError && firstError.status === 'rejected') onError(firstError.reason instanceof Error ? firstError.reason.message : String(firstError.reason));
       if (podeRever && online !== false) {
-        try { setKyc(await listarPedidosKyc()); }
+        try {
+          const pedidos = await listarPedidosKyc();
+          setKyc(pedidos);
+          lojaRevisaoKyc.definir((e) => ({ ...e, pedidos }));
+        }
         catch (err) { onError(`Não foi possível ler os pedidos: ${err instanceof Error ? err.message : String(err)}`); }
       }
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
