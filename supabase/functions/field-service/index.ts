@@ -150,6 +150,19 @@ Deno.serve(async (req: Request) => {
   const { data: authData } = await supabase.auth.getUser(token);
   const callerId = authData?.user?.id;
   if (!callerId) return new Response(JSON.stringify({ error: "sessao invalida - inicia sessao novamente" }), { status: 401, headers: cors });
+ 
+  const canManageQuadra = async (quadraId: string): Promise<boolean> => {
+    const { data: q } = await supabase.from("quadras").select("scope_province_id,scope_municipality_id").eq("id", quadraId).maybeSingle();
+    if (!q) return false;
+    const { data: memberships } = await supabase.from("organization_members").select("role,scope_province_id,scope_municipality_id").eq("user_id", callerId);
+    return (memberships ?? []).some((m) =>
+      m.role === "super_admin" ||
+      m.role === "admin_nacional" ||
+      (m.role === "admin_provincial" && m.scope_province_id && m.scope_province_id === q.scope_province_id) ||
+      (m.role === "admin_municipal" && m.scope_municipality_id && m.scope_municipality_id === q.scope_municipality_id) ||
+      m.role === "supervisor"
+    );
+  };
 
   const url = new URL(req.url);
   const action = url.searchParams.get("action") || "submit";
@@ -236,13 +249,13 @@ Deno.serve(async (req: Request) => {
     if (action === "nearby_house_numbers") {
       const { street_id } = body;
       if (!street_id) return new Response(JSON.stringify({ error: "street_id e obrigatorio" }), { status: 400, headers: cors });
+      const { data: streetScope } = await supabase.from("streets").select("quadra_id").eq("id", street_id).maybeSingle();
+      if (!streetScope?.quadra_id || !(await canManageQuadra(streetScope.quadra_id))) return new Response(JSON.stringify({ error: "fora do ambito territorial" }), { status: 403, headers: cors });
       const { data } = await supabase.from("addresses").select("house_number").eq("street_id", street_id).order("house_number").limit(20);
       return new Response(JSON.stringify({ house_numbers: (data ?? []).map((r) => r.house_number).filter(Boolean) }), { headers: cors });
     }
 
     if (action === "set_street_mode") {
-      const { data: canValidate } = await supabase.rpc("can_validate_field", { check_user_id: callerId });
-      if (!canValidate) return new Response(JSON.stringify({ error: "apenas supervisores/admins" }), { status: 403, headers: cors });
       const { street_id, numbering_mode, origin_lat, origin_lng, reason } = body;
       if (!["SEQUENCIAL", "METRICO", "FECHADO"].includes(numbering_mode)) return new Response(JSON.stringify({ error: "numbering_mode invalido" }), { status: 400, headers: cors });
       if (numbering_mode === "METRICO" && (origin_lat == null || origin_lng == null)) return new Response(JSON.stringify({ error: "ORIGIN_MISSING" }), { status: 422, headers: cors });
@@ -256,10 +269,9 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "close_quadra") {
-      const { data: canValidate } = await supabase.rpc("can_validate_field", { check_user_id: callerId });
-      if (!canValidate) return new Response(JSON.stringify({ error: "apenas supervisores/admins" }), { status: 403, headers: cors });
       const { quadra_id, confirmed_plates_or_notified } = body;
       if (!quadra_id) return new Response(JSON.stringify({ error: "quadra_id e obrigatorio" }), { status: 400, headers: cors });
+      if (!(await canManageQuadra(quadra_id))) return new Response(JSON.stringify({ error: "fora do ambito territorial" }), { status: 403, headers: cors });
       if (!confirmed_plates_or_notified) return new Response(JSON.stringify({ error: "e preciso confirmar N9" }), { status: 400, headers: cors });
 
       const { data, error } = await supabase.rpc("close_quadra_n9", {
@@ -354,7 +366,7 @@ Deno.serve(async (req: Request) => {
     if (action === "list_pending") {
       const { data: canValidate } = await supabase.rpc("can_validate_field", { check_user_id: callerId });
       if (!canValidate) return new Response(JSON.stringify({ error: "apenas supervisores/admins" }), { status: 403, headers: cors });
-      const { data, error } = await supabase.from("field_records").select("id, latitude, longitude, reference, collected_at, photo_url, photo_qr_url, status, duplicate_of_address_id, duplicate_override_reason, infill_base_house_number, street_id, watermark_match, streets(name), quadras(code)").or("status.eq.PENDING_REVIEW,and(status.eq.DUPLICATE,validated_at.is.null)").order("collected_at", { ascending: false }).limit(30);
+      const { data, error } = await supabase.from("field_records").select("id, latitude, longitude, reference, collected_at, photo_url, photo_qr_url, status, duplicate_of_address_id, duplicate_override_reason, infill_base_house_number, street_id, watermark_match, streets(name), quadras(code)").in("status", ["PENDING_REVIEW", "DUPLICATE"]).order("collected_at", { ascending: false }).limit(30);
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
       const withPreview = [];
       for (const rec of data ?? []) { const preview = await previewHouseNumber(supabase, rec.street_id, rec.latitude, rec.longitude, rec.infill_base_house_number); withPreview.push({ ...rec, preview_house_number: preview }); }
@@ -370,7 +382,7 @@ Deno.serve(async (req: Request) => {
       if (!record) return new Response(JSON.stringify({ error: "registo nao encontrado" }), { status: 404, headers: cors });
 
       // Estados finais são idempotentes: repetir a validação não cria uma nova morada.
-      if (!["PENDING_REVIEW", "DUPLICATE"].includes(record.status) || (record.status === "DUPLICATE" && record.validated_at != null)) {
+      if (record.status !== "PENDING_REVIEW") {
         return new Response(JSON.stringify({
           ok: true,
           status: record.status,
@@ -386,8 +398,7 @@ Deno.serve(async (req: Request) => {
       const { data: claimed } = await supabase.from("field_records")
         .update({ validation_claimed_by: callerId, validation_claimed_at: new Date().toISOString() })
         .eq("id", field_record_id)
-        .in("status", ["PENDING_REVIEW", "DUPLICATE"])
-        .is("validated_at", null)
+        .eq("status", "PENDING_REVIEW")
         .or("validation_claimed_at.is.null,validation_claimed_at.lt." + claimCutoff)
         .select("id")
         .maybeSingle();
