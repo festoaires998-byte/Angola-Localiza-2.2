@@ -292,7 +292,7 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
         <View key={p.userId} style={estilos.item}>
           <Texto>{p.nome || p.email || p.userId}</Texto>
           <Texto suave>{p.email || '—'} · {p.telefone || 'sem telefone'}</Texto>
-          <Botao titulo="Rever identidade" variante="secundario" onPress={() => router.push({ pathname: '/admin/[id]', params: { id: p.userId } })} />
+          <Botao titulo={`Rever ${p.nome || p.email || p.userId}`} variante="secundario" onPress={() => router.push({ pathname: '/admin/[id]', params: { id: p.userId } })} />
         </View>
       ))}
     </Cartao>
