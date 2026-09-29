@@ -221,7 +221,8 @@ export default function Campo() {
         if (rua === '__new_named__') payloadOffline.street_name = ruaNomeNova;
         else if (rua === '__new_unnamed__') payloadOffline.new_unnamed_street = true;
         else if (rua === '__sugestao_externa__') payloadOffline.street_name = sugestaoRuaExterna;
-        else if (!rua.startsWith('offline-')) payloadOffline.street_id = rua;
+        else if (rua.startsWith('offline-')) payloadOffline.street_name = contexto?.streets.find((s) => s.id === rua)?.name;
+        else payloadOffline.street_id = rua;
         if (bairro === '__new_named__') payloadOffline.neighborhood_name = bairroNomeNovo;
         else if (bairro === '__sugestao_externa__') payloadOffline.neighborhood_name = sugestaoBairroExterna;
         else if (bairro !== '__new_unnamed__') payloadOffline.neighborhood_name = bairro;
@@ -232,8 +233,8 @@ export default function Campo() {
       }
       const url = await enviarFotoCampo(marca.uri, nome);
 
-      const streetChoice = rua === '__new_named__' ? { streetName: ruaNomeNova } : rua === '__new_unnamed__' ? { newUnnamedStreet: true } : { streetId: rua };
-      const bairroChoice = bairro === '__new_named__' ? bairroNomeNovo : bairro === '__new_unnamed__' ? undefined : bairro.trim();
+      const streetChoice = rua === '__new_named__' ? { streetName: ruaNomeNova } : rua === '__new_unnamed__' ? { newUnnamedStreet: true } : rua === '__sugestao_externa__' ? { streetName: sugestaoRuaExterna } : { streetId: rua };
+      const bairroChoice = bairro === '__new_named__' ? bairroNomeNovo : bairro === '__new_unnamed__' ? undefined : bairro === '__sugestao_externa__' ? sugestaoBairroExterna : bairro.trim();
 
       const r = await enviarCampo({
         latitude: posicaoSegura.latitude,
