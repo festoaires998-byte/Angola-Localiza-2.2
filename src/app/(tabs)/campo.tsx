@@ -9,7 +9,7 @@ import { useCapturaGps } from '@/hooks/useCapturaGps';
 import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useSessao } from '@/hooks/useSessao';
-import { geocodificarInverso } from '@/api/geocode';
+import { confirmarCodigoPostal, geocodificarInverso } from '@/api/geocode';
 import { fotoComMarcaDeAgua } from '@/services/imagem/fotoComMarca';
 import {
   contarCampoHoje,
