@@ -222,7 +222,7 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
         restGet<any[]>('provinces?select=id,name&order=name.asc'),
         listarPedidosKyc(),
       ]);
-      setStaff(s.staff ?? []); setLinks(l.links ?? []); setProvinces(p ?? []); setKyc(k ?? []);
+      setStaff(s.staff ?? []); setLinks(l.links ?? []); setProvinces(p ?? []);
       if (best === 'super_admin') setOrgs(await restGet<any[]>('organizations?select=id,name,type&order=name.asc'));
       if (role === 'admin_municipal') setMunicipalities(await restGet<any[]>('municipalities?select=id,name,province_id&order=name.asc'));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
