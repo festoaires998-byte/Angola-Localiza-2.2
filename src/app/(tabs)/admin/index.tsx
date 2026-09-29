@@ -18,6 +18,7 @@ import { listarPedidosKyc } from '@/api/revisaoKyc';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { useSessao } from '@/hooks/useSessao';
+import { useOnline } from '@/hooks/useOnline';
 
 const TABS: { id: AdminTab; label: string; icon: string }[] = [
   { id: 'operacao', label: 'Operação', icon: '⚙️' },
@@ -40,6 +41,8 @@ function permitido(tab: AdminTab, cargos: string[]) {
   if (cargos.includes('auditor') && !superAdmin && !nacional) return false;
   return true;
 }
+
+function podeReverKycLocal(cargos: string[]) { return cargos.some((c) => ['super_admin','admin_nacional','admin_provincial','admin_municipal'].includes(c)); }
 
 function numero(v: unknown) {
   return typeof v === 'number' ? v.toLocaleString('pt-PT') : String(v ?? '—');
@@ -88,6 +91,10 @@ export default function GestaoAdmin() {
 }
 
 function Operacao({ onError }: { onError: (v: string | null) => void }) {
+  const { perfil } = useSessao();
+  const cargos = perfil?.cargos ?? [];
+  const online = useOnline();
+  const podeRever = podeReverKycLocal(cargos);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [pending, setPending] = useState<any[]>([]);
@@ -101,23 +108,25 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
   const load = useCallback(async () => {
     setLoading(true); onError(null);
     try {
-      const [s, p, d, e, k] = await Promise.allSettled([
+      const [s, p, d, e] = await Promise.allSettled([
         chamarAdminGet('statistics'),
         restGet<any[]>('addresses?status=eq.PROPOSED&select=id,postal_code,plus_code,latitude,longitude,reference,created_at,source&order=created_at.desc&limit=20'),
         chamarAdmin('list_unassigned_deliveries'),
         chamarAdmin('list_estafetas'),
-        listarPedidosKyc(),
       ]);
       if (s.status === 'fulfilled') setStats(s.value);
       if (p.status === 'fulfilled') setPending(Array.isArray(p.value) ? p.value : []);
       if (d.status === 'fulfilled') setDeliveries(d.value.deliveries ?? []);
       if (e.status === 'fulfilled') setDrivers(e.value.estafetas ?? []);
-      if (k.status === 'fulfilled') setKyc(k.value ?? []);
-      const firstError = [s, p, d, e, k].find((x) => x.status === 'rejected');
+      const firstError = [s, p, d, e].find((x) => x.status === 'rejected');
       if (firstError && firstError.status === 'rejected') onError(firstError.reason instanceof Error ? firstError.reason.message : String(firstError.reason));
+      if (podeRever && online !== false) {
+        try { setKyc(await listarPedidosKyc()); }
+        catch (err) { onError(`Não foi possível ler os pedidos: ${err instanceof Error ? err.message : String(err)}`); }
+      }
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
-  }, [onError]);
+  }, [onError, podeRever, online]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -158,12 +167,15 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
     </View>
 
     <Text style={estilos.secao}>Verificações por rever</Text>
-    {kyc.length === 0 ? <Texto suave>Não há verificações por rever.</Texto> : kyc.map((p: any) => {
+    {!podeRever ? <Caixa tipo="info">Só os administradores podem aprovar ou recusar verificações de identidade.</Caixa> :
+      online === false ? <Caixa tipo="aviso">Sem rede. A revisão das verificações precisa de rede (as fotos não ficam neste telemóvel).</Caixa> :
+      kyc.length === 0 ? <Texto suave>Não há verificações por rever.</Texto> : kyc.map((p: any) => {
       const title = p.nome || p.email || `Cidadão ${String(p.userId || '').slice(0, 8)}`;
       return <Cartao key={p.userId}>
         <Texto>{title}</Texto>
         {p.email ? <Texto suave>{`Email: ${p.email}`}</Texto> : null}
         {p.telefone ? <Texto suave>{`Telefone: ${p.telefone}`}</Texto> : null}
+        <Texto suave>{`Id: ${String(p.userId || '').slice(0, 8)}`}</Texto>
         <Botao titulo={`Rever ${title}`} variante="secundario" onPress={() => router.push({ pathname: '/admin/[id]', params: { id: p.userId } })} />
       </Cartao>;
     })}
