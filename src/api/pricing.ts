@@ -7,6 +7,7 @@ export interface CotacaoEntrega {
 
 /** Pré-visualização de preço usada pelo formulário Enviar, alinhada com o site. */
 export async function cotarEntrega(pontos: {
+  countryCode?: string;
   originLatitude: number | null;
   originLongitude: number | null;
   destinationLatitude: number | null;
@@ -14,6 +15,7 @@ export async function cotarEntrega(pontos: {
 }): Promise<CotacaoEntrega> {
   return chamarFuncao<CotacaoEntrega>('pricing', 'quote', {
     body: {
+      country_code: pontos.countryCode ?? "AO",
       zone_code_hint: null,
       organization_id: null,
       origin_latitude: pontos.originLatitude,
