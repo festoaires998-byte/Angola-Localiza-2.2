@@ -16,7 +16,8 @@ const cors = {
 };
 
 const CHALLENGES = ["pisca os olhos", "sorri", "vira a cabeca para a esquerda", "vira a cabeca para a direita"];
-const KYC_PEPPER = "AL-KYC-2026-pepper-fixo";
+const KYC_PEPPER = Deno.env.get("KYC_PEPPER");
+if (!KYC_PEPPER) throw new Error("KYC_PEPPER secret is not configured");
 const BI_REGEX = /^\d{9}[A-Z]{2}\d{2}$/;
 
 async function sha256(text: string): Promise<string> {
