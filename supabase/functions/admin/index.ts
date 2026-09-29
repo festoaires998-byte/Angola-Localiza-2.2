@@ -99,7 +99,16 @@ Deno.serve(async (req: Request) => {
     if (action === "audit") {
       if (!(await requireAdmin(callerId))) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       const entityType = url.searchParams.get("entity_type");
+      const scope = await getAdminScope(callerId);
       let query = supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(50);
+      if (!scope.all) {
+        let mq = supabase.from("organization_members").select("user_id");
+        mq = scope.municipalities.length ? mq.in("scope_municipality_id", scope.municipalities) : scope.provinces.length ? mq.in("scope_province_id", scope.provinces) : mq.eq("user_id", "00000000-0000-0000-0000-000000000000");
+        const { data: scopedMembers, error: me } = await mq;
+        if (me) return new Response(JSON.stringify({ error: me.message }), { status: 400, headers: cors });
+        const actorIds = (scopedMembers ?? []).map((m) => m.user_id);
+        query = query.in("actor_id", actorIds.length ? actorIds : ["00000000-0000-0000-0000-000000000000"]);
+      }
       if (entityType) query = query.eq("entity_type", entityType);
       const { data, error } = await query;
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
