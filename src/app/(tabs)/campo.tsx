@@ -78,6 +78,7 @@ export default function Campo() {
   const [duplicado, setDuplicado] = useState<{ found: boolean; distance_meters?: number; postal_code?: string | null } | null>(null);
   const [duplicadoJustificacao, setDuplicadoJustificacao] = useState('');
   const [duplicadoDecidido, setDuplicadoDecidido] = useState(false);
+  const [duplicadoOverride, setDuplicadoOverride] = useState(false);
   const [precisaoJustificacao, setPrecisaoJustificacao] = useState('');
   const [aEnviar, setAEnviar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -166,6 +167,7 @@ export default function Campo() {
     if (portaIntercalada && !numeroBase) return setErro('Escolhe entre qual número a porta fica intercalada.');
     if (!bairro) return setErro('Escolhe o bairro ou uma opção de bairro sem nome.');
     if (duplicado?.found && !duplicadoDecidido) return setErro('Há uma morada próxima. Escolhe “Vincular e completar existente” ou confirma que é um ponto diferente.');
+    if (duplicado?.found && duplicadoOverride && duplicadoJustificacao.trim().length < 10) return setErro('A justificação do ponto diferente deve ter pelo menos 10 caracteres.');
     if (posicaoSegura.precisao > 15 && precisaoJustificacao.trim().length < 10) return setErro('A precisão do GPS é baixa. Explica em pelo menos 10 caracteres porque continuas.');
     if (duplicado?.found && duplicadoJustificacao.trim().length > 0 && duplicadoJustificacao.trim().length < 10) return setErro('A justificação do ponto diferente deve ter pelo menos 10 caracteres.');
     setAEnviar(true);
@@ -193,7 +195,7 @@ export default function Campo() {
         reference: referencia,
         placeKind: undefined,
         watermarkMatch: true,
-        overrideDuplicate: !!duplicadoJustificacao.trim() && duplicadoDecidido,
+        overrideDuplicate: duplicadoOverride,
         duplicateJustification: duplicadoJustificacao.trim() || undefined,
         infillBaseHouseNumber: portaIntercalada ? Number(numeroBase) : null,
       });
@@ -207,7 +209,7 @@ export default function Campo() {
   function proximaPorta() {
     setResultado(null); setErro(null); setFoto(null); setReferencia(''); setRua(''); setBairro('');
     setRuaNomeNova(''); setBairroNomeNovo(''); setPortaIntercalada(false); setNumeroBase('');
-    setDuplicado(null); setDuplicadoJustificacao(''); setDuplicadoDecidido(false); setPrecisaoJustificacao('');
+    setDuplicado(null); setDuplicadoJustificacao(''); setDuplicadoDecidido(false); setDuplicadoOverride(false); setPrecisaoJustificacao('');
     setCodigoPrevisto(''); setContexto(null);
     // O hook mantém a última posição, por isso pede explicitamente uma nova medição.
     capturaGps.medirDeNovo();
@@ -263,8 +265,8 @@ export default function Campo() {
         <Caixa tipo="erro">
           <Text style={estilos.negrito}>⚠️ Já existe uma morada perto</Text>
           <Text>A {Math.round(duplicado.distance_meters ?? 0)} m: {duplicado.postal_code || '(sem código)'}</Text>
-          <Botao titulo="Vincular e completar existente" variante="secundario" onPress={() => { setDuplicadoDecidido(true); setDuplicadoJustificacao(''); }} />
-          <Botao titulo="É um ponto diferente" variante="secundario" onPress={() => setDuplicadoDecidido(true)} />
+          <Botao titulo="Vincular e completar existente" variante="secundario" onPress={() => { setDuplicadoDecidido(true); setDuplicadoOverride(false); setDuplicadoJustificacao(''); }} />
+          <Botao titulo="É um ponto diferente" variante="secundario" onPress={() => { setDuplicadoDecidido(true); setDuplicadoOverride(true); }} />
           {duplicadoDecidido && !duplicadoJustificacao.trim() ? <CampoInput rotulo="Justificação do ponto diferente (mín. 10 caracteres)" value={duplicadoJustificacao} onChangeText={setDuplicadoJustificacao} placeholder="Explica porque é fisicamente diferente." multiline /> : null}
         </Caixa>
       ) : null}
