@@ -1,40 +1,40 @@
 # Supabase Edge Functions — deployment manifest
 
-Generated from project `qntbknegicaghnbnghyw` on 2026-09-29.
+Generated from project `qntbknegicaghnbnghyw` on 2026-09-30.
 
-The Git repository is the versioned source of truth. This manifest records the deployed Supabase state that was reconciled into `supabase/functions/`.
+The Git repository is the versioned source of truth. This manifest records the currently deployed Supabase state that has been reconciled into `supabase/functions/`.
 
 | Function | Deployed version | Status | verify_jwt | Deployed SHA256 |
 |---|---:|---|---|---|
 | generate-postal-code | 6 | ACTIVE | false | 3ddc2220e116c415e9e68639aa798c6aec5a6a034ae29eadef6e7244d90a8f55 |
-| qr-service | 4 | ACTIVE | false | 84fdf2edc4d5f96744349240e95c5de7ee20ef81b511695038e6d34e68d861ca |
+| qr-service | 6 | ACTIVE | true | 24eb3d750a1fd8b88e86c1a5bb8503de287f75028a89a3a949cf6abe26dbab77 |
 | search | 5 | ACTIVE | false | 14636a16bc22e9cc97882e755cb3805170d6f8a75c29ea157ab22de8405e7556 |
-| address-card | 5 | ACTIVE | false | d6818f8f6ba12168ac52b76895ffb63c9dd54b857f436ffc883c54842232ef15 |
-| sync | 16 | ACTIVE | false | d9ede80eb6c2c941e603c49c19b6dae185b22f4abd7682d363e35c6e4543e65e |
-| deliveries | 32 | ACTIVE | true | d49cdae4a28f7470d16a1059ce7b006873e82c74a181ddf4126f53850f0ff731 |
-| field-service | 31 | ACTIVE | false | e9f7767d23d1a0fb5f306688b1f89071cb9de27a75f09727aadaefc579c4e95f |
-| admin | 12 | ACTIVE | true | 46db78d40a120edaa8f9acf3baa173f40e5042839bf43f50e83de18dafafaae4 |
-| api-keys | 5 | ACTIVE | false | 84d130a4d45da6f343e9fe723fa8f2058a5fcf206f0441e7d2bf14d23c759ca3 |
+| address-card | 8 | ACTIVE | true | 986c72156fa5197bfe6e64773589ff7444af1236d753daf0b03e53fd8da8b69c |
+| sync | 17 | ACTIVE | true | d9ede80eb6c2c941e603c49c19b6dae185b22f4abd7682d363e35c6e4543e65e |
+| deliveries | 37 | ACTIVE | false | 471d942494b61379607c31b8584f87f294a4fea74b217250c9f30c62261fd83f |
+| field-service | 36 | ACTIVE | true | c8e250e6e6084dfb17d6ae5d454954fd2730cbf865e5682ec38062b59bf44384 |
+| admin | 14 | ACTIVE | true | a85f56948e6e5dd6cabfacbebee63c73bd8a23296fb10232b0d631c504f46374 |
+| api-keys | 6 | ACTIVE | true | a3994e4f9d6a2312342c46e97d83a17606b0581142a48c27c7ee160d478f6e69 |
 | public-api | 8 | ACTIVE | false | 3505c5d57b88709e6607f408617795be1f88fd3c4f492431e7342fa8cffeccf5 |
-| imports | 4 | ACTIVE | false | 29f97f0e7e1f22ee866c83c32f2d68358c42523250f774277a25be8ab3da2ec8 |
-| exports | 4 | ACTIVE | false | 054579d8cb52a238709a5026e4ffd181c4fa1ecca742ba781a753b323eb25a40 |
+| imports | 6 | ACTIVE | true | 1511da93ffdf519f94d094bcef78e7817df3bcacdf6735c00b1ae5d6e8a8b53c |
+| exports | 6 | ACTIVE | true | 79800be60343dc39569d5b3c4c65fe0a892538535bbd3d2098d9bae20ef695a7 |
 | health | 3 | ACTIVE | false | a228198692f5ce30fa9aa553955a1f633d3a938b56bfe626bcf7aa19b7defdc2 |
-| invite-user | 6 | ACTIVE | false | 182c1abc0e2917aa333a11e82458b035e7d8e0be28c19f1ac1613fc2becafdfe |
+| invite-user | 7 | ACTIVE | true | e3b1fe66d39da6c0bdf70e37966f82865a8b56633128806c24d1619318e8ebd7 |
 | pricing | 3 | ACTIVE | false | dc6a6c8795ba37110cbbf411c0acff6ad9448bdb8c1af6fc204144c3dd44e8c9 |
-| join-link | 3 | ACTIVE | false | 41e1b136dc7fdb5013d1247f7e167f5580e027ce9054cd4fdc7d68802cf41ceb |
-| identity-kyc | 4 | ACTIVE | false | f7e27f8582b11a514400e953a7c2a88268218095342f969d31fa5caa16c485a5 |
-| chat | 6 | ACTIVE | false | fa55470176e3afc01722b5f2c1db5c8f5039d4ea49cadadc3094f0959fe23a87 |
+| join-link | 4 | ACTIVE | false | 5029c1f9ad0d3a89cb999a1f6d3e1408c00a901d8b7bec2190dafe8690056dbe |
+| identity-kyc | 5 | ACTIVE | true | bc61b01a696097841d430314454371f261d626b974650ddf8ef2f666fe263c0e |
+| chat | 7 | ACTIVE | false | e76d8f21f14abcab68f1347fe9a4db196eff6dd20de6910db8c653dd7144807c |
 | phone-verify | 3 | ACTIVE | false | d3063ebaf986be150528cf9f3fb09039bc5fc41755e41ad8a4d744d67a747111 |
-| citizen-verify | 6 | ACTIVE | false | f45d91e04191e9eb0337f6c4eedd5921337112cc80dd5495a2f0338859848c85 |
-| signing-keys | 3 | ACTIVE | false | 6d50d8daa2b707d39911c0e7323179e7f4cd0d381e35f382b8f85e385d8d6419 |
-| address-history | 4 | ACTIVE | false | 4214353da065298987542ed2ab41fa551a8a45919c547adfb9b916c0ea993b94 |
+| citizen-verify | 8 | ACTIVE | true | 26d683d5c28c5a7b6ef13548d7753533481ed9e98dcbc09d1f8df47735c94dea |
+| signing-keys | 4 | ACTIVE | true | 7a71a488ec94e8155a4ef12f45df3a0b9cd051eba32030437c541f8b7e13d518 |
+| address-history | 6 | ACTIVE | true | 4692dd58831213ae14bfc5cbdc713b0ee2508c15819911266f62b844ab5b0056 |
 | resolve-address | 4 | ACTIVE | false | fc7bc9439832dbd8685fb017222f30c3bf8d1788eae099c59728c76c799af7d4 |
-| offline-zone | 4 | ACTIVE | false | 4741b258dce09d4905dcd368ee81817b1c10d34a942ffeb5b5f083b7deb09994 |
+| offline-zone | 5 | ACTIVE | true | 3b0d771f133bf44ccb3d0ceeb98cedc0c020e8bacea4733f090ecfe71d02c66a |
 | geocode | 4 | ACTIVE | false | 1a61b335e45bcf3c0d57822c08e0e741a9739f83e300080512c021e374439e1b |
 | pesquisa | 3 | ACTIVE | false | 15a753d583005d112ab022e59261a11cae711e2c10ff0e5a02a6be857a7f8db2 |
-| marketplace | 5 | ACTIVE | false | 24e0d08c0b930b930f77af13de9eb6d99750e490102cca9ffc4d288245f81085 |
+| marketplace | 6 | ACTIVE | true | 24e0d08c0b930b930f77af13de9eb6d99750e490102cca9ffc4d288245f81085 |
 | migrate-legacy-proofs | 1 | ACTIVE | true | 73d0086138cdbc1845b048f86f33dfc90038a607b9dca74b9861c8752e490ece |
-| driver-kyc | 1 | ACTIVE | false | 7c3ed7d58fba4cc88a01d42b151136a1104eee92c3c71cefafffd16a024017ff |
+| driver-kyc | 3 | ACTIVE | true | 2cf3d0900e70c50ad183bfa44b3cee65349e21849bd49de03cd7a14507d55316 |
 
 ## Reconciliation rule
 
