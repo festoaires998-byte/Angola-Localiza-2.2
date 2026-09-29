@@ -13,6 +13,7 @@ import { confirmarCodigoPostal, geocodificarInverso } from '@/api/geocode';
 import { fotoComMarcaDeAgua } from '@/services/imagem/fotoComMarca';
 import {
   contarCampoHoje,
+  prepararDispositivo,
   enviarCampo,
   enviarFotoCampo,
   listarContextoCampo,
@@ -98,6 +99,10 @@ export default function Campo() {
   const posicaoSegura = capturaGps.captura;
   const nomePais = sessao.utilizador?.countryCode ?? 'AO';
   const referenciaAutomatica = info?.codigoPostal?.codigo ?? info?.plusCode ?? '';
+
+  useEffect(() => {
+    if (online === true) void prepararDispositivo().catch(() => undefined);
+  }, [online]);
 
   useEffect(() => {
     void lerZonaCampoOffline().then(setZonaOffline).catch(() => undefined);
