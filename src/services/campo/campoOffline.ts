@@ -97,7 +97,7 @@ export async function sincronizarCampoOffline(): Promise<{ synced: number; pendi
   const fila = await lerJson<Fila>(filaFile, []);
   if (fila.length === 0) return { synced: 0, pending: 0, errors: [] };
 
-  await prepararDispositivo();
+  const deviceId = await prepararDispositivo();
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new Error('Sem sessão iniciada.');
@@ -131,7 +131,7 @@ export async function sincronizarCampoOffline(): Promise<{ synced: number; pendi
         body: JSON.stringify({
           operations: [{
             operation_id: op.operation_id,
-            device_id: 'registered-by-field-service',
+            device_id: deviceId,
             operation_type: 'field_submit',
             payload,
           }],
