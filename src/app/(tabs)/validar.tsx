@@ -51,6 +51,7 @@ export default function Validar() {
         {quadra.streets.length ? quadra.streets.map(x => <Text key={x.id} style={s.coords}>• {x.name} · {x.numbering_mode}</Text>) : <Text style={s.coords}>Nenhuma rua registada nesta quadra.</Text>}
         {quadra.neighborhoods_nearby.length ? <Text style={s.coords}>Bairros próximos: {quadra.neighborhoods_nearby.join(', ')}</Text> : null}
       </View> : null}
+    </View>
     {!registos.length ? <Caixa tipo="sucesso">Não há levantamentos pendentes de validação.</Caixa> : null}
     {registos.map(r => {
       const dup = !!r.duplicate_of_address_id || !!r.duplicate_override_reason;
