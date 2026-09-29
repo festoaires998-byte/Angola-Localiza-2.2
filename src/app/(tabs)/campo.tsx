@@ -133,6 +133,17 @@ export default function Campo() {
   }, [online, posicaoSegura?.latitude, posicaoSegura?.longitude]);
 
   useEffect(() => {
+    if (online !== false || !zonaOffline || !posicaoSegura) return;
+    const perto = zonaOffline.moradas.filter((m) => Math.abs(m.latitude - posicaoSegura.latitude) < 0.01 && Math.abs(m.longitude - posicaoSegura.longitude) < 0.01);
+    const nomes = Array.from(new Set(perto.map((m) => m.street_name).filter((x): x is string => !!x)));
+    setContexto({ quadra_code: 'OFFLINE', area_m2: 0, kind: 'zona offline', streets: nomes.map((name, i) => ({ id: 'offline-' + i, name, next_seq: 0, numbering_mode: 'offline' })), neighborhoods_nearby: [] });
+    const dist = (a: { latitude:number; longitude:number }, b: { latitude:number; longitude:number }) => Math.hypot((a.latitude-b.latitude)*111000, (a.longitude-b.longitude)*111000*Math.cos(b.latitude*Math.PI/180));
+    const mais = zonaOffline.moradas.reduce<{m: typeof zonaOffline.moradas[number] | null; d:number}>((acc, m) => { const d=dist(m,posicaoSegura); return d<acc.d ? {m,d} : acc; }, {m:null,d:Infinity});
+    if (mais.m && mais.d <= 15) setDuplicado({ found:true, distance_meters:mais.d, postal_code:mais.m.postal_code });
+    else setDuplicado(null);
+  }, [online, zonaOffline, posicaoSegura?.latitude, posicaoSegura?.longitude]);
+
+  useEffect(() => {
     if (!contexto || !rua || rua.startsWith('__')) return;
     const s = contexto.streets.find((x) => x.id === rua);
     if (!s || !portaIntercalada) { setNumerosRua([]); return; }
@@ -286,8 +297,8 @@ export default function Campo() {
       ) : null}
 
       {online === false || pendentesOffline > 0 ? <Caixa tipo="aviso">📴 {online === false ? 'Sem internet' : 'Ligado'} · {pendentesOffline} recolha(s) de Campo por sincronizar.</Caixa> : null}
-      <Botao titulo={mapaADescarregar ? 'A preparar mapa…' : '📥 Preparar esta zona para trabalhar offline'} onPress={() => void prepararMapaOffline()} desativado={mapaADescarregar} aCarregar={mapaADescarregar} />
-      {mapaMsg ? <Caixa tipo="info">{mapaMsg}</Caixa> : null}
+      {online !== false ? <Botao titulo={mapaADescarregar ? 'A preparar mapa…' : '📥 Preparar esta zona para trabalhar offline'} onPress={() => void prepararMapaOffline()} desativado={mapaADescarregar} aCarregar={mapaADescarregar} /> : null}
+      {online !== false && mapaMsg ? <Caixa tipo="info">{mapaMsg}</Caixa> : null}
       <Texto suave>As moradas e o mapa regional podem ser preparados no telemóvel para utilização offline.</Texto>
 
       <Botao titulo={capturaGps.aMedir ? `📍 Capturar GPS (${capturaGps.leiturasBoas} de ${capturaGps.necessarias})` : '📍 GPS capturado · Medir novamente'} onPress={() => capturaGps.medirDeNovo()} desativado={capturaGps.aMedir && !capturaGps.captura} />
