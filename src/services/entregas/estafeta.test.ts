@@ -42,7 +42,14 @@ async function montar() {
     crypto_algorithm: 'ECDSA-SHA256',
     crypto_device_id: 'aparelho-1',
   }));
-  const servidor = { listarAtribuidas: jest.fn(async (_u: string) => [entrega('e1'), entrega('e2', { estado: 'DELIVERED' })]) };
+  const servidor = {
+    listarAtribuidas: jest.fn(async (_u: string) => [entrega('e1'), entrega('e2', { estado: 'DELIVERED' })]),
+    listarDisponiveis: jest.fn(async () => ({
+      pedidos: [],
+      estafeta: { online: true, status: 'APPROVED', vehicle_type: 'MOTO', vehicle_capacity_kg: 20 },
+    })),
+    aceitar: jest.fn(async (_deliveryId: string) => undefined),
+  };
   const servico = criarServicoEstafeta({
     servidor,
     entregas,
