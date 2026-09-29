@@ -8,17 +8,17 @@ import {
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'offline-test-id' }));
 
-const files = new Map<string, { content: string }>();
+const mockFiles = new Map<string, { content: string }>();
 jest.mock('expo-file-system', () => {
   class File {
     uri: string;
     constructor(...parts: any[]) { this.uri = parts.map((p: any) => typeof p === 'string' ? p : p?.uri || '').filter(Boolean).join('/'); }
-    get exists() { return files.has(this.uri); }
-    create() { files.set(this.uri, { content: '' }); }
-    delete() { files.delete(this.uri); }
-    async text() { return files.get(this.uri)?.content || ''; }
-    async write(v: string) { if (!files.has(this.uri)) this.create(); files.get(this.uri)!.content = v; }
-    async copy(dest: File) { files.set(dest.uri, { content: files.get(this.uri)?.content || 'photo' }); }
+    get exists() { return mockFiles.has(this.uri); }
+    create() { mockFiles.set(this.uri, { content: '' }); }
+    delete() { mockFiles.delete(this.uri); }
+    async text() { return mockFiles.get(this.uri)?.content || ''; }
+    async write(v: string) { if (!mockFiles.has(this.uri)) this.create(); mockFiles.get(this.uri)!.content = v; }
+    async copy(dest: File) { mockFiles.set(dest.uri, { content: mockFiles.get(this.uri)?.content || 'photo' }); }
   }
   class Directory {
     uri: string;
