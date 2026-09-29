@@ -33,7 +33,9 @@ function permitido(tab: AdminTab, cargos: string[]) {
   if (tab === 'financeiro') return superAdmin || nacional;
   if (tab === 'programadores') return dev;
   if (tab === 'auditoria') return true;
-  if (cargos.includes('auditor') && !superAdmin && !nacional) return tab === 'auditoria' || tab === 'programadores';
+  // Auditores ficam limitados à área de auditoria; as exceções acima já trataram
+  // de auditoria e das restantes áreas administrativas autorizadas.
+  if (cargos.includes('auditor') && !superAdmin && !nacional) return false;
   return true;
 }
 
