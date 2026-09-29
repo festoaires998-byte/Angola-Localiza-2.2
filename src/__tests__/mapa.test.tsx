@@ -218,7 +218,7 @@ describe('separador Mapa', () => {
     // Já mostra o mapa pela rede, com a atribuição do OpenStreetMap.
     expect(screen.getByTestId('mapa-nativo')).toBeTruthy();
     expect(screen.getByText('© OpenStreetMap')).toBeTruthy();
-    fireEvent.press(screen.getByRole('button', { name: 'Descarregar mapa' }));
+    fireEvent.press(screen.getAllByRole('button', { name: 'Descarregar mapa' })[0]);
     expect(mockDescarregar).toHaveBeenCalledTimes(1);
   });
 
