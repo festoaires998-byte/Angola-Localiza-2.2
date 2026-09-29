@@ -38,7 +38,19 @@ export async function chamarAdmin<T = any>(action: string, body?: unknown): Prom
   return data as T;
 }
 
-export async function chamarEndpoint<T = any>(nome: string, body?: unknown): Promise<T> {\n  const token = await accessToken();\n  const r = await fetch(`${url}/functions/v1/${nome}`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', apikey: chaveAnon, Authorization: `Bearer ${token}` },\n    body: JSON.stringify(body ?? {}),\n  });\n  const data = await r.json().catch(() => ({}));\n  if (!r.ok || data?.error) throw new Error(data?.error || `Operação falhou (HTTP ${r.status}).`);\n  return data as T;\n}\n\nexport async function chamarFuncao<T = any>(nome: string, action: string, body?: unknown): Promise<T> {
+export async function chamarEndpoint<T = any>(nome: string, body?: unknown): Promise<T> {
+  const token = await accessToken();
+  const r = await fetch(`${url}/functions/v1/${nome}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: chaveAnon, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body ?? {}),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data?.error) throw new Error(data?.error || `Operação falhou (HTTP ${r.status}).`);
+  return data as T;
+}
+
+export async function chamarFuncao<T = any>(nome: string, action: string, body?: unknown): Promise<T> {
   const token = await accessToken();
   const r = await fetch(`${url}/functions/v1/${nome}?action=${encodeURIComponent(action)}`, {
     method: 'POST',
