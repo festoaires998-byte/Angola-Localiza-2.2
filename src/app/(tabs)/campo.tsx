@@ -23,6 +23,7 @@ import {
   type ReverificacaoCampo,
 } from '@/services/campo/campoApp';
 import { mapaHuambo } from '@/services/mapas/mapaOffline';
+import { contarCampoOffline, enfileirarCampoOffline, lerZonaCampoOffline, prepararZonaCampoOffline, sincronizarCampoOffline } from '@/services/campo/campoOffline';
 
 type Opcao = { value: string; label: string };
 
@@ -88,11 +89,24 @@ export default function Campo() {
   const [reverificacoes, setReverificacoes] = useState<ReverificacaoCampo[]>([]);
   const [mapaMsg, setMapaMsg] = useState('');
   const [mapaADescarregar, setMapaADescarregar] = useState(false);
+  const [pendentesOffline, setPendentesOffline] = useState(0);
+  const [zonaOffline, setZonaOffline] = useState<Awaited<ReturnType<typeof lerZonaCampoOffline>>>(null);
+  const [sugestaoRuaExterna, setSugestaoRuaExterna] = useState('');
+  const [sugestaoBairroExterna, setSugestaoBairroExterna] = useState('');
 
   const posicaoAtual = posicao;
   const posicaoSegura = capturaGps.captura;
   const nomePais = sessao.utilizador?.countryCode ?? 'AO';
   const referenciaAutomatica = info?.codigoPostal?.codigo ?? info?.plusCode ?? '';
+
+  useEffect(() => {
+    void lerZonaCampoOffline().then(setZonaOffline).catch(() => undefined);
+    void contarCampoOffline().then(setPendentesOffline).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (online === true && posicaoAtual) void sincronizarCampoOffline().then((r) => { setPendentesOffline(r.pending); }).catch(() => undefined);
+  }, [online, posicaoAtual?.latitude, posicaoAtual?.longitude]);
 
   useEffect(() => {
     if (!online || !posicaoAtual) return;
@@ -102,6 +116,9 @@ export default function Campo() {
       if (!ativo) return;
       setProvincia(v.provincia ?? '');
       setMunicipio(v.municipio ?? '');
+      const endereco = (v.resposta as any)?.address ?? {};
+      setSugestaoRuaExterna(typeof endereco.road === 'string' ? endereco.road : '');
+      setSugestaoBairroExterna(typeof (endereco.suburb || endereco.neighbourhood || endereco.quarter || endereco.residential) === 'string' ? (endereco.suburb || endereco.neighbourhood || endereco.quarter || endereco.residential) : '');
       void confirmarCodigoPostal(posicaoAtual.latitude, posicaoAtual.longitude, v.provincia ?? null).then((c) => ativo && setCodigoPrevisto(c.codigo)).catch(() => undefined);
     }).catch(() => undefined);
     return () => { ativo = false; };
@@ -134,7 +151,6 @@ export default function Campo() {
 
   if (!sessao.carregado || gps.estado === 'a_procurar') return <EcraCarregamento texto="A preparar o Campo…" />;
   if (!sessao.utilizador) return <Ecra><Caixa tipo="aviso">Inicia sessão para utilizar o modo Campo.</Caixa></Ecra>;
-  if (online === false) return <Ecra><Caixa tipo="aviso">O modo Campo precisa de ligação à internet para sincronizar a recolha com segurança.</Caixa></Ecra>;
   if (!posicaoAtual) return <Ecra><Caixa tipo="aviso">Autoriza a localização e fica ao ar livre alguns segundos para obter uma posição.</Caixa></Ecra>;
 
   async function tirarFoto() {
@@ -150,7 +166,8 @@ export default function Campo() {
     try {
       await mapaHuambo.verificarRemoto();
       await mapaHuambo.descarregar();
-      setMapaMsg('✅ Mapa offline preparado neste telemóvel.');
+      if (posicaoAtual) setZonaOffline(await prepararZonaCampoOffline(posicaoAtual.latitude, posicaoAtual.longitude));
+      setMapaMsg('✅ Mapa + moradas próximas preparados neste telemóvel.');
     } catch (e) { setMapaMsg(e instanceof Error ? e.message : 'Não foi possível descarregar o mapa.'); }
     finally { setMapaADescarregar(false); }
   }
@@ -178,6 +195,25 @@ export default function Campo() {
         '📮 ' + (info?.codigoPostal?.codigo ?? info?.plusCode ?? 'sem código'),
       ], 'campo');
       const nome = sessao.utilizador.id + '/' + marca.sha256 + '.jpg';
+      if (online === false) {
+        const payloadOffline: Record<string, unknown> = {
+          latitude: posicaoSegura.latitude, longitude: posicaoSegura.longitude, accuracy_meters: posicaoSegura.precisao,
+          accuracy_justification: precisaoJustificacao || undefined, reference: referencia, watermark_match: true,
+          override_duplicate: duplicadoOverride, duplicate_justification: duplicadoJustificacao.trim() || undefined,
+          infill_base_house_number: portaIntercalada ? Number(numeroBase) : null,
+        };
+        if (rua === '__new_named__') payloadOffline.street_name = ruaNomeNova;
+        else if (rua === '__new_unnamed__') payloadOffline.new_unnamed_street = true;
+        else if (rua === '__sugestao_externa__') payloadOffline.street_name = sugestaoRuaExterna;
+        else if (!rua.startsWith('offline-')) payloadOffline.street_id = rua;
+        if (bairro === '__new_named__') payloadOffline.neighborhood_name = bairroNomeNovo;
+        else if (bairro === '__sugestao_externa__') payloadOffline.neighborhood_name = sugestaoBairroExterna;
+        else if (bairro !== '__new_unnamed__') payloadOffline.neighborhood_name = bairro;
+        const op = await enfileirarCampoOffline(payloadOffline, marca.uri);
+        setPendentesOffline((v) => v + 1);
+        setResultado('📴 Recolha guardada offline. Será sincronizada quando houver internet. Operação ' + op.slice(0, 8));
+        return;
+      }
       const url = await enviarFotoCampo(marca.uri, nome);
 
       const streetChoice = rua === '__new_named__' ? { streetName: ruaNomeNova } : rua === '__new_unnamed__' ? { newUnnamedStreet: true } : { streetId: rua };
@@ -218,11 +254,13 @@ export default function Campo() {
 
   const streetOptions: Opcao[] = [
     ...(contexto?.streets ?? []).map((s) => ({ value: s.id, label: s.name + ' (próx. nº ' + s.next_seq + ')' })),
+    ...(sugestaoRuaExterna && (contexto?.streets.length ?? 0) === 0 ? [{ value: '__sugestao_externa__', label: '🌐 "' + sugestaoRuaExterna + '" (sugestão externa, confirma o nome)' }] : []),
     { value: '__new_named__', label: '+ Nova rua (com nome)' },
     { value: '__new_unnamed__', label: '+ Nova rua sem nome (Rua S/Nº)' },
   ];
   const bairroOptions: Opcao[] = [
     ...(contexto?.neighborhoods_nearby ?? []).map((n) => ({ value: n, label: n })),
+    ...(sugestaoBairroExterna && (contexto?.neighborhoods_nearby.length ?? 0) === 0 ? [{ value: '__sugestao_externa__', label: '🌐 "' + sugestaoBairroExterna + '" (sugestão externa, confirma o nome)' }] : []),
     { value: '__new_named__', label: '+ Novo bairro (com nome)' },
     { value: '__new_unnamed__', label: '+ Novo bairro (sem nome)' },
   ];
@@ -247,6 +285,7 @@ export default function Campo() {
         </Caixa>
       ) : null}
 
+      {online === false || pendentesOffline > 0 ? <Caixa tipo="aviso">📴 {online === false ? 'Sem internet' : 'Ligado'} · {pendentesOffline} recolha(s) de Campo por sincronizar.</Caixa> : null}
       <Botao titulo={mapaADescarregar ? 'A preparar mapa…' : '📥 Preparar esta zona para trabalhar offline'} onPress={() => void prepararMapaOffline()} desativado={mapaADescarregar} aCarregar={mapaADescarregar} />
       {mapaMsg ? <Caixa tipo="info">{mapaMsg}</Caixa> : null}
       <Texto suave>As moradas e o mapa regional podem ser preparados no telemóvel para utilização offline.</Texto>
