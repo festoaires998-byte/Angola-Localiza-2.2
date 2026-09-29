@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { dataHora } from '@/components/nomes';
@@ -10,7 +11,7 @@ import { CORES } from '@/components/tema';
 import { entregaTerminada, nomeEstadoEntrega } from '@/domain/entregas/envio';
 import { estadoEfetivo, mensagemErroEstafeta, podeFechar, proximoPasso, type FicheiroProva } from '@/domain/entregas/estafeta';
 import { recarregarEntregasOrganizacao, recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
-import { atribuirEstafeta, listarEstafetasDisponiveis, reagendarTentativa, type EstafetaDisponivel } from '@/api/entregas';
+import { atribuirEstafeta, atualizarTrackingEntrega, listarEstafetasDisponiveis, reagendarTentativa, type EstafetaDisponivel } from '@/api/entregas';
 import { useLocalProva } from '@/hooks/useLocalProva';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
@@ -35,6 +36,39 @@ export default function DetalheEntrega() {
   const [erro, setErro] = useState<string | null>(null);
   const [aAtribuir, setAAtribuir] = useState(false);
   const [estafetasDisponiveis, setEstafetasDisponiveis] = useState<EstafetaDisponivel[] | null>(null);
+  const [aPartilharLocalizacao, setAPartilharLocalizacao] = useState(false);
+  const [trackingErro, setTrackingErro] = useState<string | null>(null);
+  const trackingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const trackingBusy = useRef(false);
+
+  useEffect(() => () => { if (trackingTimer.current) clearInterval(trackingTimer.current); }, []);
+
+  const pararPartilhaLocalizacao = () => {
+    if (trackingTimer.current) clearInterval(trackingTimer.current);
+    trackingTimer.current = null;
+    setAPartilharLocalizacao(false);
+  };
+
+  const alternarPartilhaLocalizacao = async () => {
+    if (aPartilharLocalizacao) { pararPartilhaLocalizacao(); return; }
+    if (!['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(efetivo)) return;
+    setTrackingErro(null);
+    const permissao = await Location.requestForegroundPermissionsAsync();
+    if (permissao.status !== Location.PermissionStatus.GRANTED) { setTrackingErro('É necessária permissão de localização para partilhar o trajeto.'); return; }
+    const enviar = async () => {
+      if (trackingBusy.current) return;
+      trackingBusy.current = true;
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        await atualizarTrackingEntrega(entrega.id, { latitude: pos.coords.latitude, longitude: pos.coords.longitude, precisao: pos.coords.accuracy, hora: pos.timestamp });
+        setTrackingErro(null);
+      } catch (e) { setTrackingErro(e instanceof Error ? e.message : 'Não foi possível atualizar a localização.'); }
+      finally { trackingBusy.current = false; }
+    };
+    await enviar();
+    trackingTimer.current = setInterval(() => void enviar(), 5000);
+    setAPartilharLocalizacao(true);
+  };
 
   const entrega = estado.entregas?.find((e) => e.id === id) ?? null;
   if (!entrega || !userId) {
@@ -156,6 +190,13 @@ export default function DetalheEntrega() {
       </Cartao>
       {entrega.telefone ? (
         <Botao titulo={`Ligar a ${entrega.destinatario}`} variante="secundario" onPress={() => void Linking.openURL(`tel:${entrega.telefone!.replace(/\s/g, '')}`)} />
+      ) : null}
+      {['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(efetivo) && entrega.assignedDriver === userId ? (
+        <>
+          <Botao titulo={aPartilharLocalizacao ? '⏹️ Parar partilha de localização' : '📡 Partilhar localização'} variante={aPartilharLocalizacao ? 'perigo' : 'secundario'} onPress={() => void alternarPartilhaLocalizacao()} />
+          {aPartilharLocalizacao ? <Texto suave>Localização enviada a cada 5 segundos enquanto esta entrega estiver em curso.</Texto> : null}
+          {trackingErro ? <Caixa tipo="erro">{trackingErro}</Caixa> : null}
+        </>
       ) : null}
       {typeof m?.latitude === 'number' && typeof m?.longitude === 'number' ? (
         <Botao
