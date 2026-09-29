@@ -114,6 +114,12 @@ Deno.serve(async (req: Request) => {
     if (action === "consume") {
       if (!callerId) return new Response(JSON.stringify({ error: "sessao invalida - inicia sessao/regista-te primeiro" }), { status: 401, headers: cors });
       const { token: linkToken } = body;
+      const { data: atomicResult, error: atomicError } = await supabase.rpc("consume_join_link", { p_token: linkToken, p_user_id: callerId });
+      if (atomicError) return new Response(JSON.stringify({ error: atomicError.message }), { status: atomicError.message.includes("LINK_DEAD") ? 410 : 400, headers: cors });
+      const consumed = Array.isArray(atomicResult) ? atomicResult[0] : atomicResult;
+      if (!consumed?.ok) return new Response(JSON.stringify({ error: "nao foi possivel consumir o link" }), { status: 409, headers: cors });
+      return new Response(JSON.stringify({ ok: true, role: consumed.role, requires_mfa: true }), { headers: cors });
+      /*
       const { data: link } = await supabase.from("join_links").select("*").eq("token", linkToken).maybeSingle();
       if (!link) return new Response(JSON.stringify({ error: "link nao encontrado" }), { status: 404, headers: cors });
       if (link.revoked) return new Response(JSON.stringify({ error: "LINK_DEAD: link revogado" }), { status: 410, headers: cors });
