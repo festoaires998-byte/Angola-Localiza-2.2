@@ -137,11 +137,6 @@ export async function listarPedidosDisponiveisEstafeta(): Promise<{
   };
 }
 
-export async function limparHistoricoEntregas(): Promise<number> {
-  const r = await chamarFuncao<{ deleted?: number }>('deliveries', 'clear_all', { body: { confirm: 'ELIMINAR TUDO' } });
-  return typeof r?.deleted === 'number' ? r.deleted : 0;
-}
-
 export async function aceitarEntrega(deliveryId: string): Promise<void> {
   await chamarFuncao('deliveries', 'accept_delivery', { body: { delivery_id: deliveryId } });
 }
