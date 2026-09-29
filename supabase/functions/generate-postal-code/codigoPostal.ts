@@ -152,6 +152,8 @@ export function codigoBase(latitude: number, longitude: number, provinceName?: s
 }
 export function validatePostalCode(code: string, countryCode?: string): { valid: boolean; reason?: string } {
   const match = code.trim().match(/^([A-Z]{2})-([A-ZÁÀÂÃÉÊÍÓÔÕÚÜÇ]{3})-([2-9A-HJ-NP-ZL]{8})(?:-(\d+))?-(\d{2})$/);
-  if (!match) return { valid: false, reason: 'Formato inválido.' }; const [, , provinceCode, gridCode, , chk] = match;
+  if (!match) return { valid: false, reason: 'Formato inválido.' };
+  const [, prefix, provinceCode, gridCode, , chk] = match;
+  if (countryCode && prefix !== countryCode.trim().toUpperCase()) return { valid: false, reason: 'País não corresponde.' };
   const expected = digitosControlo(provinceCode + '-' + gridCode); return expected === chk ? { valid: true } : { valid: false, reason: 'Dígito de controlo inválido.' };
 }
