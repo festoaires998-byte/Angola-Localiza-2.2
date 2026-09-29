@@ -8,8 +8,10 @@ import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import { enviarMensagemChat, listarCanaisOrganizacao, listarMensagensChat, type CanalOrganizacao, type MensagemChat } from '@/services/chat/organizacao';
 
 export default function ChatOrganizacao() {
-  const params = useLocalSearchParams<{ tipo?: string }>();
+  const params = useLocalSearchParams<{ tipo?: string; chave?: string; titulo?: string }>();
   const tipo = String(params.tipo || 'ORG_ESTAFETA');
+  const chave = params.chave ? String(params.chave) : null;
+  const tituloParam = params.titulo ? String(params.titulo) : null;
   const [canais, setCanais] = useState<CanalOrganizacao[] | null>(null);
   const [canal, setCanal] = useState<CanalOrganizacao | null>(null);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
@@ -18,6 +20,11 @@ export default function ChatOrganizacao() {
   const [aAtualizar, setAAtualizar] = useState(false);
 
   async function carregarCanais() {
+    if (chave) {
+      setCanais([{ conversation_type: tipo, conversation_key: chave, titulo: tituloParam || 'Chat da entrega' }]);
+      setCanal({ conversation_type: tipo, conversation_key: chave, titulo: tituloParam || 'Chat da entrega' });
+      return;
+    }
     setErro(null);
     try {
       const todos = await listarCanaisOrganizacao();
