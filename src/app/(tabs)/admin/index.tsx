@@ -330,6 +330,8 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
   </>;
 }
 function Dados({ onError }: { onError: (v: string | null) => void }) {
+  const { perfil } = useSessao();
+  const podeImportar = (perfil?.cargos ?? []).some((c) => ['super_admin', 'admin_nacional'].includes(c));
   const [resumo, setResumo] = useState<any>(null);
   const [codigo, setCodigo] = useState('');
   const [historico, setHistorico] = useState<any>(null);
@@ -389,13 +391,13 @@ function Dados({ onError }: { onError: (v: string | null) => void }) {
       <Botao titulo="Consultar" variante="secundario" onPress={() => void consultar()} />
       {historico ? <Texto suave>{JSON.stringify(historico, null, 2)}</Texto> : null}
     </Cartao>
-    <Cartao>
+    {podeImportar ? <Cartao>
       <Text style={estilos.cabecalhoCard}>📥 Importar moradas (CSV)</Text>
-      <Texto suave>O CSV deve conter latitude,longitude,house_number,reference. No Android, esta versão permite colar o conteúdo para evitar depender de um seletor de ficheiros.</Texto>
+      <Texto suave>O CSV deve conter latitude,longitude,house_number,reference. A importação em massa é exclusiva do administrador nacional/super_admin.</Texto>
       <Campo rotulo="Conteúdo CSV" value={csv} onChangeText={setCsv} multiline numberOfLines={7} textAlignVertical="top" />
       <Botao titulo="📥 Processar CSV" variante="secundario" onPress={() => void importar()} />
       {msg ? <Texto suave>{msg}</Texto> : null}
-    </Cartao>
+    </Cartao> : null}
     <Cartao>
       <Text style={estilos.cabecalhoCard}>📤 Exportar moradas</Text>
       <Botao titulo="Exportar CSV" variante="secundario" onPress={() => void exportar('csv')} />
