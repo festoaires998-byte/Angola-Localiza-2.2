@@ -6,6 +6,7 @@ import {
   AUDIT_LABELS,
   ROLE_LABELS,
   chamarAdmin,
+  chamarAdminGet,
   chamarFuncao,
   restGet,
   restPatch,
@@ -95,7 +96,7 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
     setLoading(true); onError(null);
     try {
       const [s, p, d, e] = await Promise.all([
-        chamarAdmin('statistics'),
+        chamarAdminGet('statistics'),
         restGet<any[]>('addresses?status=eq.PROPOSED&select=id,postal_code,plus_code,latitude,longitude,reference,created_at,source&order=created_at.desc&limit=20'),
         chamarAdmin('list_unassigned_deliveries'),
         chamarAdmin('list_estafetas'),
