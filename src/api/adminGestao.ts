@@ -12,6 +12,16 @@ async function accessToken(): Promise<string> {
   return token;
 }
 
+export async function chamarAdminGet<T = any>(action: string): Promise<T> {
+  const token = await accessToken();
+  const r = await fetch(`${url}/functions/v1/admin?action=${encodeURIComponent(action)}`, {
+    headers: { apikey: chaveAnon, Authorization: `Bearer ${token}` },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data?.error) throw new Error(data?.error || `Operação admin falhou (HTTP ${r.status}).`);
+  return data as T;
+}
+
 export async function chamarAdmin<T = any>(action: string, body?: unknown): Promise<T> {
   const token = await accessToken();
   const r = await fetch(`${url}/functions/v1/admin?action=${encodeURIComponent(action)}`, {
