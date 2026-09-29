@@ -245,7 +245,7 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
 
   const load = useCallback(async () => {
     try {
-      const [s, l, p, k] = await Promise.all([
+      const [s, l, p] = await Promise.all([
         chamarAdmin('list_staff'),
         chamarFuncao('join-link', 'list'),
         restGet<any[]>('provinces?select=id,name&order=name.asc'),
