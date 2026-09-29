@@ -106,6 +106,7 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
   const [territory, setTerritory] = useState<any[]>([]);
   const [territoryOpen, setTerritoryOpen] = useState(false);
   const [kyc, setKyc] = useState<any[]>([]);
+  const { pedidos: pedidosKycPartilhados } = useRevisaoKyc();
   const router = useRouter();
 
   const load = useCallback(async () => {
@@ -176,7 +177,7 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
     <Text style={estilos.secao}>Verificações por rever</Text>
     {!podeRever ? <Caixa tipo="info">Só os administradores podem aprovar ou recusar verificações de identidade.</Caixa> :
       online === false ? <Caixa tipo="aviso">Sem rede. A revisão das verificações precisa de rede (as fotos não ficam neste telemóvel).</Caixa> :
-      kyc.length === 0 ? <Texto suave>Não há verificações por rever.</Texto> : kyc.map((p: any) => {
+      (pedidosKycPartilhados ?? kyc).length === 0 ? <Texto suave>Não há verificações por rever.</Texto> : (pedidosKycPartilhados ?? kyc).map((p: any) => {
       const title = p.nome || p.email || `Cidadão ${String(p.userId || '').slice(0, 8)}`;
       return <Cartao key={p.userId}>
         <Texto>{title}</Texto>
