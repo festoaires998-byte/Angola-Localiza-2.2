@@ -59,6 +59,7 @@ export default function DetalheEntrega() {
       if (trackingBusy.current) return;
       trackingBusy.current = true;
       try {
+        if (!entrega) return;
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         await atualizarTrackingEntrega(entrega.id, { latitude: pos.coords.latitude, longitude: pos.coords.longitude, precisao: pos.coords.accuracy, hora: pos.timestamp });
         setTrackingErro(null);
