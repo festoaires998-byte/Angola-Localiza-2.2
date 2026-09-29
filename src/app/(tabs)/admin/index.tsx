@@ -15,7 +15,7 @@ import {
   type AdminTab,
 } from '@/api/adminGestao';
 import { listarPedidosKyc } from '@/api/revisaoKyc';
-import { lojaRevisaoKyc } from '@/state/revisaoKyc';
+import { lojaRevisaoKyc, useRevisaoKyc } from '@/state/revisaoKyc';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { useSessao } from '@/hooks/useSessao';
@@ -55,6 +55,7 @@ export default function GestaoAdmin() {
   const tabs = useMemo(() => TABS.filter((t) => permitido(t.id, cargos)), [cargos]);
   const [tab, setTab] = useState<AdminTab>(tabs[0]?.id ?? 'operacao');
   const [erro, setErro] = useState<string | null>(null);
+  const { aviso } = useRevisaoKyc();
 
   useEffect(() => {
     if (!tabs.some((x) => x.id === tab)) setTab(tabs[0]?.id ?? 'operacao');
@@ -80,6 +81,7 @@ export default function GestaoAdmin() {
       </View>
 
       {erro ? <Caixa tipo="erro">{erro}</Caixa> : null}
+      {aviso ? <Caixa tipo={aviso.tipo}>{aviso.texto}</Caixa> : null}
 
       {tab === 'operacao' ? <Operacao onError={setErro} /> : null}
       {tab === 'pessoas' ? <Pessoas onError={setErro} /> : null}
@@ -530,6 +532,7 @@ function Auditoria({ cargos, onError }: { cargos: string[]; onError: (v: string 
   ]);
 
   return <>
+    {cargos.includes('auditor') ? <Caixa tipo="info">Só os administradores podem aprovar ou recusar verificações de identidade.</Caixa> : null}
     {cargos.includes('super_admin') ? <Botao titulo="🗑️ Eliminar toda a auditoria" variante="perigo" onPress={clearAll} /> : null}
     <Cartao>
       <Text style={estilos.cabecalhoCard}>Filtrar ação</Text>
