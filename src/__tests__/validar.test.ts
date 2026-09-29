@@ -15,15 +15,15 @@ describe('módulo Validar na APP',()=>{
   expect(s).toContain('Rejeitar');
   expect(s).toContain('Ver a quadra onde estou agora');
   expect(s).toContain('Gestão de quadra/ruas');
-   test('o backend mantém duplicados automáticos em revisão até decisão final',()=>{
+ });
+ test('o backend mantém duplicados automáticos em revisão até decisão final',()=>{
    const s=ler('supabase/functions/field-service/index.ts');
    expect(s).toContain('status.eq.PENDING_REVIEW');
    expect(s).toContain('status.eq.DUPLICATE');
    expect(s).toContain('validated_at.is.null');
    expect(s).toContain('["PENDING_REVIEW", "DUPLICATE"]');
-   expect(s).toContain('VALIDATION_IN_PROGRESS');
-  });
-});
+  expect(s).toContain('VALIDATION_IN_PROGRESS');
+ });
  test('o serviço usa as ações protegidas do field-service',()=>{
   const s=ler('services/validacao/validacao.ts');
   expect(s).toContain("'field-service', 'list_pending'");
