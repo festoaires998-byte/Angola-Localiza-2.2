@@ -191,7 +191,7 @@ export default function DetalheEntrega() {
       {entrega.telefone ? (
         <Botao titulo={`Ligar a ${entrega.destinatario}`} variante="secundario" onPress={() => void Linking.openURL(`tel:${entrega.telefone!.replace(/\s/g, '')}`)} />
       ) : null}
-      {['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(efetivo) && entrega.assignedDriver === userId ? (
+      {['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(efetivo) && entrega.estafeta === userId ? (
         <>
           <Botao titulo={aPartilharLocalizacao ? '⏹️ Parar partilha de localização' : '📡 Partilhar localização'} variante={aPartilharLocalizacao ? 'perigo' : 'secundario'} onPress={() => void alternarPartilhaLocalizacao()} />
           {aPartilharLocalizacao ? <Texto suave>Localização enviada a cada 5 segundos enquanto esta entrega estiver em curso.</Texto> : null}
