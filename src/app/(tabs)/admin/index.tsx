@@ -189,7 +189,7 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
     if (!email.trim()) { setMsg('Introduz o email.'); return; }
     setMsg('A processar…');
     try {
-      const r = await chamarFuncao('invite-user', 'invite', { email: email.trim(), role });
+      const r = await chamarEndpoint('invite-user', { email: email.trim(), role, confirm: false });
       setMsg(r.promoted ? 'Conta promovida.' : r.assigned_to_existing_account ? 'Cargo atribuído à conta existente.' : 'Convite enviado.');
       setEmail(''); await load();
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
@@ -268,7 +268,7 @@ function Dados({ onError }: { onError: (v: string | null) => void }) {
 
   const exportar = async (format: 'csv' | 'geojson') => {
     try {
-      const r = await chamarFuncao('exports', 'export', { format });
+      const r = await chamarEndpoint('exports', { format });
       setMsg(`${r.row_count ?? 0} moradas exportadas. A resposta está pronta para partilha.`);
       // Mantemos o conteúdo na app para não criar um ficheiro sem autorização explícita.
       Alert.alert(`Exportação ${format.toUpperCase()}`, String(r.content ?? '').slice(0, 4000));
