@@ -120,7 +120,7 @@ export async function sincronizarCampoOffline(): Promise<{ synced: number; pendi
       if (upload.error && !upload.error.message.toLowerCase().includes('already exists')) throw new Error(upload.error.message);
       const publicUrl = supabase.storage.from('field-photos').getPublicUrl(caminho).data.publicUrl;
 
-      const payload = { ...op.payload, photo_facade_url: publicUrl, sync_operation_id: op.operation_id };
+      const payload = { ...op.payload, device_id: deviceId, photo_facade_url: publicUrl, sync_operation_id: op.operation_id };
       const resposta = await fetch(`${url}/functions/v1/sync`, {
         method: 'POST',
         headers: {
