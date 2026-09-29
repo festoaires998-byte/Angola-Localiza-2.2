@@ -73,9 +73,10 @@ Deno.serve(async (req: Request) => {
 
     if (action === "list") {
       if (!callerId) return new Response(JSON.stringify({ error: "sessao invalida" }), { status: 401, headers: cors });
-      const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
+      const { data: memberships } = await supabase.from("organization_members").select("organization_id,role").eq("user_id", callerId);
+      const orgIds = (memberships ?? []).map(m=>m.organization_id).filter(Boolean);
       let query = supabase.from("join_links").select("*").order("created_at", { ascending: false });
-      if (!isAdminRes) query = query.eq("created_by", callerId);
+      if (!memberships?.some(m=>m.role==="super_admin")) query = orgIds.length ? query.in("organization_id", orgIds) : query.eq("created_by", callerId);
       const { data, error } = await query;
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
       return new Response(JSON.stringify({ links: data }), { headers: cors });
@@ -84,9 +85,10 @@ Deno.serve(async (req: Request) => {
     if (action === "revoke") {
       if (!callerId) return new Response(JSON.stringify({ error: "sessao invalida" }), { status: 401, headers: cors });
       const { link_id } = body;
-      const { data: link } = await supabase.from("join_links").select("created_by").eq("id", link_id).single();
-      const { data: isAdminRes } = await supabase.rpc("is_admin", { check_user_id: callerId });
-      if (!link || (link.created_by !== callerId && !isAdminRes)) {
+      const { data: link } = await supabase.from("join_links").select("created_by,organization_id").eq("id", link_id).single();
+      const { data: membership } = await supabase.from("organization_members").select("role").eq("user_id", callerId).eq("organization_id", link?.organization_id).maybeSingle();
+      const canRevoke = !!membership && ["super_admin","admin_nacional","admin_provincial","admin_municipal","supervisor"].includes(membership.role);
+      if (!link || (link.created_by !== callerId && !canRevoke)) {
         return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       }
       await supabase.from("join_links").update({ revoked: true }).eq("id", link_id);
