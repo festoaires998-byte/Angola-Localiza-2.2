@@ -277,7 +277,7 @@ describe('deliveries: criar', () => {
     expect(r.json).toMatchObject({ created_by: REMETENTE, status: 'CREATED', recipient_phone: '+244 923 456 789', confirmation_pin: '1234' });
     expect(linhas(s, 'delivery_status_history')).toEqual([expect.objectContaining({ delivery_id: r.json.id, status: 'CREATED' })]);
     expect(linhas(s, 'usage_events')).toEqual([
-      expect.objectContaining({ event_type: 'DELIVERY_ROUTED', amount_total: 1300, amount_driver: 1000, is_free_pilot: true }),
+      expect.objectContaining({ event_type: 'DELIVERY_ROUTED', amount_total: 1560, amount_driver: 1000, amount_platform: 560, is_free_pilot: true, breakdown: { frete: 1000, roteamento: 200, prova: 100, noturno_fim_de_semana: 260 } }),
     ]);
     expect(linhas(s, 'audit_logs')).toEqual([expect.objectContaining({ action: 'delivery_routed', actor_id: REMETENTE })]);
   });
