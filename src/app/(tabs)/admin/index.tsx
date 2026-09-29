@@ -168,71 +168,104 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
 }
 
 function Pessoas({ onError }: { onError: (v: string | null) => void }) {
+  const { perfil } = useSessao();
+  const cargos = perfil?.cargos ?? [];
+  const best = cargos.includes('super_admin') ? 'super_admin' : cargos.includes('admin_nacional') ? 'admin_nacional' : cargos.includes('admin_provincial') ? 'admin_provincial' : cargos.includes('admin_municipal') ? 'admin_municipal' : cargos.includes('supervisor') ? 'supervisor' : null;
+  const allowedByRole: Record<string, string[]> = {
+    super_admin: ['super_admin','admin_nacional','admin_provincial','admin_municipal','auditor','operador_postal','supervisor','tecnico_campo','estafeta'],
+    admin_nacional: ['admin_provincial','admin_municipal','auditor','operador_postal','supervisor','tecnico_campo','estafeta'],
+    admin_provincial: ['admin_municipal','auditor','operador_postal','supervisor','tecnico_campo','estafeta'],
+    admin_municipal: ['auditor','operador_postal','supervisor','tecnico_campo','estafeta'],
+    supervisor: ['tecnico_campo','estafeta'],
+  };
+  const inviteRoles = allowedByRole[best ?? ''] ?? [];
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('tecnico_campo');
+  const [role, setRole] = useState(inviteRoles[0] ?? 'tecnico_campo');
+  const [orgs, setOrgs] = useState<any[]>([]);
+  const [provinces, setProvinces] = useState<any[]>([]);
+  const [municipalities, setMunicipalities] = useState<any[]>([]);
+  const [organizationId, setOrganizationId] = useState('');
+  const [provinceId, setProvinceId] = useState('');
+  const [municipalityId, setMunicipalityId] = useState('');
   const [staff, setStaff] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
+  const [linkRole, setLinkRole] = useState('tecnico_campo');
   const [maxUses, setMaxUses] = useState('10');
   const [msg, setMsg] = useState('');
-  const [rolesOpen, setRolesOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [s, l] = await Promise.all([chamarAdmin('list_staff'), chamarFuncao('join-link', 'list')]);
-      setStaff(s.staff ?? []); setLinks(l.links ?? []);
+      const [s, l, p] = await Promise.all([
+        chamarAdmin('list_staff'),
+        chamarFuncao('join-link', 'list'),
+        restGet<any[]>('provinces?select=id,name&order=name.asc'),
+      ]);
+      setStaff(s.staff ?? []); setLinks(l.links ?? []); setProvinces(p ?? []);
+      if (best === 'super_admin') setOrgs(await restGet<any[]>('organizations?select=id,name,type&order=name.asc'));
+      if (role === 'admin_municipal') setMunicipalities(await restGet<any[]>('municipalities?select=id,name,province_id&order=name.asc'));
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-  }, [onError]);
+  }, [best, onError, role]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!inviteRoles.includes(role)) setRole(inviteRoles[0] ?? 'tecnico_campo');
+  }, [inviteRoles.join('|')]);
 
   const invite = async () => {
     if (!email.trim()) { setMsg('Introduz o email.'); return; }
+    if (role === 'admin_provincial' && !provinceId) { setMsg('Seleciona a província do âmbito.'); return; }
+    if (role === 'admin_municipal' && !municipalityId) { setMsg('Seleciona o município do âmbito.'); return; }
+    if (best === 'super_admin' && !organizationId) { setMsg('Seleciona o setor/instituição.'); return; }
     setMsg('A processar…');
     try {
-      const r = await chamarEndpoint('invite-user', { email: email.trim(), role, confirm: false });
-      setMsg(r.promoted ? 'Conta promovida.' : r.assigned_to_existing_account ? 'Cargo atribuído à conta existente.' : 'Convite enviado.');
+      const r = await chamarEndpoint('invite-user', {
+        email: email.trim(), role, organization_id: organizationId || null,
+        province_id: provinceId || null, municipality_id: municipalityId || null, confirm: false,
+      });
+      setMsg(r.needs_confirmation ? 'O servidor pediu confirmação adicional para este convite. Faz a confirmação pelo fluxo web.' : (r.promoted ? 'Conta promovida.' : r.assigned_to_existing_account ? 'Cargo atribuído à conta existente.' : 'Convite enviado.'));
       setEmail(''); await load();
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
   };
 
   const createLink = async () => {
     try {
-      const r = await chamarFuncao('join-link', 'create', { role, max_uses: Math.max(1, Number(maxUses) || 10), expires_at: new Date(Date.now() + 7 * 86400000).toISOString() });
-      setMsg(`Link criado: ?join=${r.token}`);
-      await load();
+      const r = await chamarFuncao('join-link', 'create', { role: linkRole, max_uses: Math.max(1, Number(maxUses) || 10), expires_at: new Date(Date.now() + 7 * 86400000).toISOString() });
+      setMsg(`Link criado: ?join=${r.token}`); await load();
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); }
   };
-
-  const roleOptions = ['super_admin','admin_nacional','admin_provincial','admin_municipal','supervisor','auditor','operador_postal','tecnico_campo','estafeta'];
 
   return <>
     <Cartao>
       <Text style={estilos.cabecalhoCard}>✉️ Convidar por email</Text>
       <Campo rotulo="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholder="nome@exemplo.com" />
       <Text style={estilos.rotulo}>Cargo</Text>
-      <View style={estilos.opcoes}>
-        {roleOptions.map((r) => <Pressable key={r} onPress={() => setRole(r)} style={[estilos.opcao, role === r && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{ROLE_LABELS[r]}</Text></Pressable>)}
-      </View>
+      <View style={estilos.opcoes}>{inviteRoles.map((r) => <Pressable key={r} onPress={() => setRole(r)} style={[estilos.opcao, role === r && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{ROLE_LABELS[r]}</Text></Pressable>)}</View>
+      {best === 'super_admin' ? <>
+        <Text style={estilos.rotulo}>Setor / instituição</Text>
+        <View style={estilos.opcoes}>{orgs.map((o) => <Pressable key={o.id} onPress={() => setOrganizationId(o.id)} style={[estilos.opcao, organizationId === o.id && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{o.name}</Text></Pressable>)}</View>
+      </> : null}
+      {role === 'admin_provincial' ? <>
+        <Text style={estilos.rotulo}>Província (âmbito)</Text>
+        <View style={estilos.opcoes}>{provinces.map((p) => <Pressable key={p.id} onPress={() => setProvinceId(p.id)} style={[estilos.opcao, provinceId === p.id && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{p.name}</Text></Pressable>)}</View>
+      </> : null}
+      {role === 'admin_municipal' ? <>
+        <Text style={estilos.rotulo}>Município (âmbito)</Text>
+        <View style={estilos.opcoes}>{municipalities.map((m) => <Pressable key={m.id} onPress={() => setMunicipalityId(m.id)} style={[estilos.opcao, municipalityId === m.id && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{m.name}</Text></Pressable>)}</View>
+      </> : null}
       <Botao titulo="✉️ Convidar" onPress={() => void invite()} />
       {msg ? <Texto suave>{msg}</Texto> : null}
     </Cartao>
-
     <Cartao>
       <Text style={estilos.cabecalhoCard}>🔗 Link de convite · operação em massa</Text>
+      <Text style={estilos.rotulo}>Cargo</Text>
+      <View style={estilos.opcoes}>{['tecnico_campo','estafeta'].map((r) => <Pressable key={r} onPress={() => setLinkRole(r)} style={[estilos.opcao, linkRole === r && estilos.opcaoAtiva]}><Text style={estilos.opcaoTexto}>{ROLE_LABELS[r]}</Text></Pressable>)}</View>
       <Campo rotulo="Máximo de usos" value={maxUses} onChangeText={setMaxUses} keyboardType="number-pad" />
       <Botao titulo="🔗 Gerar link" variante="secundario" onPress={() => void createLink()} />
       {links.slice(0, 10).map((l, i) => <Texto key={String(l.id ?? i)} suave>{l.role || '—'} · {l.used_count ?? 0}/{l.max_uses ?? '—'} · {l.expires_at ? new Date(l.expires_at).toLocaleDateString('pt-PT') : '—'}</Texto>)}
     </Cartao>
-
     <Cartao>
-      <Text style={estilos.cabecalhoCard}>🪪 Identidades / utilizadores</Text>
-      {staff.length === 0 ? <Texto suave>Sem utilizadores.</Texto> : staff.map((s, i) => (
-        <View key={String(s.id ?? i)} style={estilos.item}>
-          <Texto>{s.email || '—'}</Texto>
-          <Texto suave>{ROLE_LABELS[s.role] || s.role || '—'} · {s.sector || '—'}</Texto>
-          <Texto suave>{s.identity_status || '—'} · {s.onboarded_via || '—'}</Texto>
-        </View>
-      ))}
+      <Text style={estilos.cabecalhoCard}>👥 Utilizadores e cargos</Text>
+      {staff.length === 0 ? <Texto suave>Sem utilizadores.</Texto> : staff.map((s, i) => <View key={String(s.id ?? i)} style={estilos.item}><Texto>{s.email || '—'}</Texto><Texto suave>{ROLE_LABELS[s.role] || s.role || '—'} · {s.sector || '—'}</Texto><Texto suave>{s.identity_status || '—'} · entrou via {s.onboarded_via || '—'}</Texto></View>)}
       <Botao titulo="Atualizar pessoas" variante="secundario" onPress={() => void load()} />
     </Cartao>
   </>;
