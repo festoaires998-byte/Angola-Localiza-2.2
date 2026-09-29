@@ -73,6 +73,7 @@ export default function NovoEnvio() {
     setCotacao(null);
     setCotacaoErro(null);
     void cotarEntrega({
+      countryCode,
       originLatitude: dados.origem.latitude,
       originLongitude: dados.origem.longitude,
       destinationLatitude: destinoSelecionado.latitude,
