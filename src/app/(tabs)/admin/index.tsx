@@ -93,6 +93,8 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [territory, setTerritory] = useState<any[]>([]);
   const [territoryOpen, setTerritoryOpen] = useState(false);
+  const [kyc, setKyc] = useState<any[]>([]);
+  const router = useRouter();
 
   const load = useCallback(async () => {
     setLoading(true); onError(null);
@@ -102,8 +104,9 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
         restGet<any[]>('addresses?status=eq.PROPOSED&select=id,postal_code,plus_code,latitude,longitude,reference,created_at,source&order=created_at.desc&limit=20'),
         chamarAdmin('list_unassigned_deliveries'),
         chamarAdmin('list_estafetas'),
+        listarPedidosKyc(),
       ]);
-      setStats(s); setPending(Array.isArray(p) ? p : []); setDeliveries(d.deliveries ?? []); setDrivers(e.estafetas ?? []);
+      setStats(s); setPending(Array.isArray(p) ? p : []); setDeliveries(d.deliveries ?? []); setDrivers(e.estafetas ?? []); setKyc(k ?? []);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
   }, [onError]);
@@ -145,6 +148,17 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
       <Cartao><Text style={estilos.statLabel}>Por aprovar</Text><Text style={estilos.stat}>{numero(stats?.addresses_by_status?.PROPOSED ?? pending.length)}</Text></Cartao>
       <Cartao><Text style={estilos.statLabel}>Capturas</Text><Text style={estilos.stat}>{numero(stats?.field_records_pending ?? stats?.field_pending ?? stats?.field_pending_count ?? '—')}</Text></Cartao>
     </View>
+
+    <Text style={estilos.secao}>Verificações por rever</Text>
+    {kyc.length === 0 ? <Texto suave>Não há verificações por rever.</Texto> : kyc.map((p: any) => {
+      const title = p.nome || p.email || `Cidadão ${String(p.userId || '').slice(0, 8)}`;
+      return <Cartao key={p.userId}>
+        <Texto>{title}</Texto>
+        {p.email ? <Texto suave>{`Email: ${p.email}`}</Texto> : null}
+        {p.telefone ? <Texto suave>{`Telefone: ${p.telefone}`}</Texto> : null}
+        <Botao titulo={`Rever ${title}`} variante="secundario" onPress={() => router.push({ pathname: '/admin/[id]', params: { id: p.userId } })} />
+      </Cartao>;
+    })}
 
     <Text style={estilos.secao}>Moradas por aprovar</Text>
     {pending.length === 0 ? <Texto suave>Nada por aprovar de momento.</Texto> : pending.map((a) => (
