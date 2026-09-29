@@ -106,25 +106,6 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ logs: data }), { headers: cors });
     }
 
-    if (action === "delete_audit_log") {
-      if (!(await requireSuperAdmin(callerId))) return new Response(JSON.stringify({ error: "apenas o super admin pode eliminar registos de auditoria" }), { status: 403, headers: cors });
-      const { log_id } = body;
-      if (!log_id) return new Response(JSON.stringify({ error: "log_id e obrigatorio" }), { status: 400, headers: cors });
-      const { error } = await supabase.from("audit_logs").delete().eq("id", log_id);
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
-      return new Response(JSON.stringify({ ok: true }), { headers: cors });
-    }
-
-    if (action === "clear_audit_logs") {
-      if (!(await requireSuperAdmin(callerId))) return new Response(JSON.stringify({ error: "apenas o super admin pode limpar a auditoria" }), { status: 403, headers: cors });
-      const { confirm } = body;
-      if (confirm !== "ELIMINAR TUDO") return new Response(JSON.stringify({ error: "confirmacao em falta" }), { status: 400, headers: cors });
-      const { count } = await supabase.from("audit_logs").select("*", { count: "exact", head: true });
-      const { error } = await supabase.from("audit_logs").delete().not("id", "is", null);
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
-      return new Response(JSON.stringify({ ok: true, deleted: count ?? 0 }), { headers: cors });
-    }
-
     if (action === "list_estafetas") {
       if (!(await requireAdmin(callerId))) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       const scope = await getAdminScope(callerId);
