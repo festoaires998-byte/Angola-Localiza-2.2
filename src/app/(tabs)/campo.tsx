@@ -98,6 +98,7 @@ export default function Campo() {
     if (!online || !posicaoAtual) return;
     let ativo = true;
     listarContextoCampo(posicaoAtual.latitude, posicaoAtual.longitude).then((v) => ativo && setContexto(v)).catch(() => ativo && setContexto(null));
+    confirmarCodigoPostal(posicaoAtual.latitude, posicaoAtual.longitude, null).then((v) => ativo && setCodigoPrevisto(v.codigo)).catch(() => undefined);
     geocodificarInverso(posicaoAtual.latitude, posicaoAtual.longitude).then((v) => {
       if (!ativo) return;
       setProvincia(v.provincia ?? '');
