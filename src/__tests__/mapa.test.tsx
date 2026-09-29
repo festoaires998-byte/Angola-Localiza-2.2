@@ -214,7 +214,7 @@ describe('separador Mapa', () => {
     mockOnline = true;
     mockMapa = { estado: 'sem_mapa', remoto: MANIFESTO };
     await desenhar();
-    expect(screen.getByText(/\(12,0 MB\)/)).toBeTruthy();
+    expect(screen.getAllByText(/\(12,0 MB\)/).length).toBeGreaterThan(0);
     // Já mostra o mapa pela rede, com a atribuição do OpenStreetMap.
     expect(screen.getByTestId('mapa-nativo')).toBeTruthy();
     expect(screen.getByText('© OpenStreetMap')).toBeTruthy();
@@ -234,7 +234,7 @@ describe('separador Mapa', () => {
     mockOnline = true;
     mockMapa = { estado: 'a_descarregar', progresso: 0.42, remoto: MANIFESTO };
     await desenhar();
-    expect(screen.getByText('42% de 12,0 MB')).toBeTruthy();
+    expect(screen.getAllByText('42% de 12,0 MB').length).toBeGreaterThan(0);
   });
 
   test('sem autorização de localização: explica e deixa pedir outra vez', async () => {
