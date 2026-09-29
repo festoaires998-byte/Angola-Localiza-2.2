@@ -16,3 +16,8 @@ export type DecisaoValidacao = 'approve' | 'duplicate' | 'merge' | 'reject';
 export function validarLevantamento(id: string, decision: DecisaoValidacao) {
   return chamarFuncao('field-service', 'validate', { body: { field_record_id: id, decision }, tempoMaximo: 30_000 });
 }
+
+export interface ContextoQuadraValidacao { quadra_code: string; quadra_id?: string; area_m2: number; kind: string; streets: Array<{ id:string; name:string; next_seq:number; numbering_mode:string }>; neighborhoods_nearby: string[]; }
+export function listarQuadraAtual(latitude: number, longitude: number) {
+  return chamarFuncao<ContextoQuadraValidacao>('field-service', 'list_streets_in_quadra', { body: { latitude, longitude } });
+}
