@@ -1,9 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// Angola Localiza - Address Card Service (agora respeita visibility_level)
+// Angola Localiza - Address Card Service (v9)
 // PUBLIC: tudo visivel. LIMITED: esconde contacto. PRIVATE/RESTRICTED: so
 // dono/admin conseguem ver o cartao.
+// v9: "get" devolve tambem o id da morada (address.id), para o cartao servir de
+// destino de uma entrega (a deliveries exige address_id); "create" exige sessao.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -29,6 +31,7 @@ Deno.serve(async (req: Request) => {
     const callerId = authData?.user?.id ?? null;
 
     if (action === "create") {
+      if (!callerId) return new Response(JSON.stringify({ error: "sessao invalida" }), { status: 401, headers: cors });
       const { address_id, recipient_name, recipient_phone, note } = body;
       if (!address_id) {
         return new Response(JSON.stringify({ error: "address_id e obrigatorio" }), { status: 400, headers: cors });
@@ -84,7 +87,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         found: true,
         card: cardOut,
-        address: addressOut,
+        address: { id: card.address_id, ...addressOut },
         share_url: `https://codigopostal.ao/a/${card.id}`,
       }), { headers: cors });
     }
