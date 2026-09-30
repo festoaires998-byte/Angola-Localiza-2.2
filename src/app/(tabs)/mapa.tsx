@@ -346,7 +346,12 @@ export default function Mapa() {
   const origem = origemDoMapa(gestorMapa, estadoMapa, online);
   const chaveOrigem = origem ? `${origem.tiles}|${origem.fontes}` : null;
   // O estilo só muda quando a origem muda (evita recarregar o mapa a cada posição).
-  const estiloBase = useMemo(() => origem ? criarEstilo(origem) : (online ? criarEstiloOnlineOSM() : null), [codigoPais, online, chaveOrigem]);
+  // Online: usa os mesmos tiles OSM do site, para manter o nível de detalhe visual.
+  // Offline: usa o PMTiles nacional descarregado no telemóvel.
+  const estiloBase = useMemo(
+    () => online ? criarEstiloOnlineOSM() : (origem ? criarEstilo(origem) : null),
+    [codigoPais, online, chaveOrigem],
+  );
   const estiloSatelite = useMemo(() => criarEstiloSatelite(), []);
   const semPermissao = gps.estado === 'sem_permissao' || gps.estado === 'gps_desligado';
 
