@@ -42,9 +42,14 @@ export default function Motorista() {
     if(r.canceled||!r.assets[0]?.uri)return;
     setBusy(true);
     try{
-      const res=await fetch(r.assets[0].uri); const blob=await res.blob();
+      // No Android, fetch(uri).blob() pode produzir um Blob com MIME text/plain para ficheiros locais.
+      // Enviar os bytes evita que o Storage herde esse MIME incorreto.
+      const res=await fetch(r.assets[0].uri);
+      if(!res.ok) throw new Error(`Não foi possível ler a fotografia (${res.status}).`);
+      const bytes=await res.arrayBuffer();
+      if(bytes.byteLength===0) throw new Error('A fotografia capturada está vazia.');
       const path=`${userId}/driver/${chave}-${Date.now()}.jpg`;
-      const up=await supabase.storage.from('kyc-artifacts').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+      const up=await supabase.storage.from('kyc-artifacts').upload(path,bytes,{contentType:'image/jpeg',upsert:false});
       if(up.error)throw new Error(up.error.message);
       setDocs(d=>({...d,[chave]:path})); setOk(`${label} enviado.`);
     }catch(e){setErro(e instanceof Error?e.message:'Não foi possível enviar o documento.');}
