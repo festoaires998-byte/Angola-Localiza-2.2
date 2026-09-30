@@ -1,8 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { REENCAMINHADAS, eUuid, limparEdicaoFavorito, limparEdicaoMorada, limparFavorito, limparMoradaNova, limparRemocaoFavorito, podeEditarMorada } from "./regras.ts";
+import { REENCAMINHADAS, converterOperacaoAntiga, eUuid, limparEdicaoFavorito, limparEdicaoMorada, limparFavorito, limparMoradaNova, limparRemocaoFavorito, podeEditarMorada } from "./regras.ts";
 
-// Angola Localiza - Sync Service (v9)\n// Claim de operation_id protegido contra concorrência.
+// Angola Localiza - Sync Service (v10)
+// v10: aceita as operações "save_favorite" que o site antigo punha na fila
+// (convertidas em create_favorite; a morada fica com o id da operação).
+// v9: claim de operation_id protegido contra concorrência.
 // Recebe a fila feita sem rede (app e site) e aplica cada operação uma vez.
 // v8 (segurança): a sync grava com a service role, por isso já não copia o
 // payload tal como vem:
@@ -61,7 +64,8 @@ Deno.serve(async (req: Request) => {
     const allowedDeviceIds = new Set((callerDevices ?? []).map((row) => row.device_id));
     const allowedOperationTypes = new Set(["create_address", "update_address", "create_favorite", "update_favorite", "remove_favorite", ...Object.keys(REENCAMINHADAS)]);
 
-    for (const op of operations) {
+    for (const original of operations) {
+      const op = original && typeof original === "object" ? converterOperacaoAntiga(original) : original;
       if (!op || !eUuid(op.operation_id)) {
         results.push({ operation_id: op?.operation_id ?? null, status: "FAILED", error: "operation_id invalido" });
         continue;

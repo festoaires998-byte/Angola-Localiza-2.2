@@ -3,8 +3,11 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 import { codigoBase } from "./codigoPostal.ts";
 import { encode as plusCode } from "./plusCode.ts";
+import { BUCKET_FOTOS, fotoParaGuardar, nomeNoBucketFotos } from "./fotos.ts";
 
-// Angola Localiza - Field Service (v21, PRONPET v5.22)
+// Angola Localiza - Field Service (v22, PRONPET v5.22)
+// v22: o bucket field-photos é privado. As fotos têm de estar na pasta de quem
+// submete (field-photos/<id>/…) e list_pending devolve links temporários (1 h).
 // v21: a aprovação e a fusão passam a gravar o plus_code da morada (10 dígitos,
 // como os já existentes), com plusCode.ts = cópia exata do módulo da app.
 // v20: o código postal da aprovação passa a usar o esquema 2 (codigoPostal.ts,
@@ -302,6 +305,11 @@ Deno.serve(async (req: Request) => {
       if (!reference) return new Response(JSON.stringify({ error: "a referencia e obrigatoria" }), { status: 400, headers: cors });
       if (!chosenStreetId && !street_name && !new_unnamed_street) return new Response(JSON.stringify({ error: "STREET_MISSING" }), { status: 422, headers: cors });
       if (!photo_facade_url) return new Response(JSON.stringify({ error: "a foto da fachada e obrigatoria" }), { status: 400, headers: cors });
+      const fotoFachada = fotoParaGuardar(photo_facade_url, supabaseUrl, callerId);
+      const fotoQr = photo_qr_url ? fotoParaGuardar(photo_qr_url, supabaseUrl, callerId) : null;
+      if (!fotoFachada || (photo_qr_url && !fotoQr)) {
+        return new Response(JSON.stringify({ error: "FOTO_FORA_DA_PASTA: a foto tem de ser enviada para a tua pasta (field-photos/<o teu id>/...)" }), { status: 422, headers: cors });
+      }
       if (typeof accuracy_meters === "number" && accuracy_meters > 15 && (!accuracy_justification || accuracy_justification.trim().length < 10)) return new Response(JSON.stringify({ error: "ACCURACY_BLOCK" }), { status: 422, headers: cors });
 
       const quadraId = await getOrCreateQuadra(supabase, latitude, longitude);
@@ -321,7 +329,7 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await supabase.from("field_records").insert({
         device_id, collected_by: callerId, latitude, longitude, location: `SRID=4326;POINT(${longitude} ${latitude})`,
         sync_operation_id: sync_operation_id ?? null,
-        photo_url: photo_facade_url, photo_qr_url: photo_qr_url || null, quadra_id: quadraId, street_id: streetId, neighborhood_name,
+        photo_url: fotoFachada, photo_qr_url: fotoQr, quadra_id: quadraId, street_id: streetId, neighborhood_name,
         reference: (place_kind ? "[" + place_kind + "] " : "") + reference,
         infill_base_house_number: infill_base_house_number || null,
         accuracy_meters: accuracy_meters ?? null, accuracy_justification: accuracy_justification ?? null,
@@ -357,7 +365,16 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await supabase.from("field_records").select("id, latitude, longitude, reference, collected_at, photo_url, photo_qr_url, status, duplicate_of_address_id, duplicate_override_reason, infill_base_house_number, street_id, watermark_match, streets(name), quadras(code)").or("status.eq.PENDING_REVIEW,and(status.eq.DUPLICATE,validated_at.is.null)").order("collected_at", { ascending: false }).limit(30);
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
       const withPreview = [];
-      for (const rec of data ?? []) { const preview = await previewHouseNumber(supabase, rec.street_id, rec.latitude, rec.longitude, rec.infill_base_house_number); withPreview.push({ ...rec, preview_house_number: preview }); }
+      const linkTemporario = async (valor: string | null) => {
+        const nome = nomeNoBucketFotos(valor, supabaseUrl);
+        if (!nome) return null;
+        const { data: link } = await supabase.storage.from(BUCKET_FOTOS).createSignedUrl(nome, 3600);
+        return link?.signedUrl ?? null;
+      };
+      for (const rec of data ?? []) {
+        const preview = await previewHouseNumber(supabase, rec.street_id, rec.latitude, rec.longitude, rec.infill_base_house_number);
+        withPreview.push({ ...rec, photo_url: await linkTemporario(rec.photo_url), photo_qr_url: await linkTemporario(rec.photo_qr_url), preview_house_number: preview });
+      }
       return new Response(JSON.stringify({ records: withPreview }), { headers: cors });
     }
 

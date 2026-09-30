@@ -1,7 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { BUCKET_CHAT, anexoParaGuardar, nomeNoBucketChat } from "./regras.ts";
 
-// Angola Localiza - Chat Service (v4)
+// Angola Localiza - Chat Service (v5)
+// v5: o bucket chat-media é privado. Os anexos têm de estar na pasta de quem
+// envia (chat-media/<id>/…) e quem lê recebe links temporários (1 hora);
+// um media_url de fora do Storage do projeto deixa de ser aceite ou mostrado.
 // Super admin agora ve os canais de TODAS as organizacoes que existem,
 // mesmo que ainda nao tenham ninguem atribuido (acesso total para gestao/
 // teste), em vez de so as que ja tem estafetas/tecnicos reais.
@@ -76,7 +80,16 @@ Deno.serve(async (req: Request) => {
       const senderIds = [...new Set((data ?? []).map((m) => m.sender_id))];
       const emailMap: Record<string, string> = {};
       for (const id of senderIds) { const { data: u } = await supabase.auth.admin.getUserById(id); if (u?.user?.email) emailMap[id] = u.user.email; }
-      const messages = (data ?? []).map((m) => ({ ...m, sender_email: emailMap[m.sender_id], sou_eu: m.sender_id === callerId }));
+      const messages = [];
+      for (const m of data ?? []) {
+        let mediaUrl: string | null = null;
+        const nome = m.media_url ? nomeNoBucketChat(m.media_url, supabaseUrl) : null;
+        if (nome) {
+          const { data: link } = await supabase.storage.from(BUCKET_CHAT).createSignedUrl(nome, 3600);
+          mediaUrl = link?.signedUrl ?? null;
+        }
+        messages.push({ ...m, media_url: mediaUrl, media_type: mediaUrl ? m.media_type : null, sender_email: emailMap[m.sender_id], sou_eu: m.sender_id === callerId });
+      }
       return new Response(JSON.stringify({ messages, pode_escrever: acesso.podeEscrever, pode_comunicado: acesso.podeComunicado }), { headers: cors });
     }
 
@@ -90,6 +103,12 @@ Deno.serve(async (req: Request) => {
       if (temMedia && !["image", "video"].includes(media_type)) {
         return new Response(JSON.stringify({ error: "media_type invalido" }), { status: 400, headers: cors });
       }
+      let mediaGuardada: string | null = null;
+      if (temMedia) {
+        const anexo = anexoParaGuardar(media_url, supabaseUrl, callerId);
+        if (!anexo.ok) return new Response(JSON.stringify({ error: anexo.erro }), { status: 422, headers: cors });
+        mediaGuardada = anexo.texto;
+      }
       const acesso = await verificarAcesso(conversation_type, conversation_key);
       if (!acesso.podeEscrever) return new Response(JSON.stringify({ error: "nao autorizado a escrever nesta conversa" }), { status: 403, headers: cors });
       if (is_announcement && !acesso.podeComunicado) return new Response(JSON.stringify({ error: "apenas quem gere o setor pode enviar um comunicado" }), { status: 403, headers: cors });
@@ -97,7 +116,7 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await supabase.from("chat_messages").insert({
         conversation_type, conversation_key, sender_id: callerId,
         body: temTexto ? message_body.trim().slice(0, 2000) : null, is_announcement: !!is_announcement,
-        media_url: temMedia ? media_url : null, media_type: temMedia ? media_type : null,
+        media_url: mediaGuardada, media_type: temMedia ? media_type : null,
       }).select("id, created_at").single();
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
 

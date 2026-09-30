@@ -169,3 +169,32 @@ export const REENCAMINHADAS: Record<string, string> = {
   field_submit: "field-service?action=submit",
   delivery_proof: "deliveries?action=update_status",
 };
+
+/**
+ * O site antigo punha na fila "save_favorite" ({ address: {...}, favorite: { category } }),
+ * que a sync nunca conheceu: essas operações ficavam por sincronizar para sempre.
+ * Passa a ser um "create_favorite" com a morada nova; o id da morada é o próprio
+ * operation_id, para que repetir o envio não crie outra morada.
+ */
+export function converterOperacaoAntiga<T extends { operation_id: string; operation_type: string; payload: Record<string, unknown> }>(op: T): T {
+  if (op?.operation_type !== "save_favorite") return op;
+  const p = objeto(op.payload) ?? {};
+  const address = objeto(p.address) ?? {};
+  const favorite = objeto(p.favorite) ?? {};
+  return {
+    ...op,
+    operation_type: "create_favorite",
+    payload: {
+      address_id: op.operation_id,
+      ...(favorite.category !== undefined ? { category: favorite.category } : {}),
+      address: {
+        latitude: address.latitude,
+        longitude: address.longitude,
+        plus_code: address.plus_code,
+        postal_code: address.postal_code,
+        visibility_level: address.visibility_level,
+        ...(typeof address.country_code === "string" ? { country_code: address.country_code } : {}),
+      },
+    },
+  };
+}

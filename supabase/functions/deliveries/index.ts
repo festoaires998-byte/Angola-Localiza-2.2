@@ -1,12 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
-  BUCKET_PROVAS, FAILURE_REASONS, MAX_TENTATIVAS_PIN, TRANSITIONS, VALIDADE_PIN_HORAS,
-  contactoValido, diferencaNaMensagem, gerarPin, podeUsarComoDestino, respostaPin, textoDoFicheiro, validarFicheirosProva,
+  FAILURE_REASONS, MAX_TENTATIVAS_PIN, TRANSITIONS, VALIDADE_PIN_HORAS,
+  codigoRastreio, contactoValido, diferencaNaMensagem, ficheiroDaProva, gerarPin, podeUsarComoDestino, respostaPin, respostaRastreio, textoDoFicheiro, validarFicheirosProva,
   type FicheiroProva, type ResultadoPin,
 } from "./regras.ts";
+import { aplicarDesconto, aplicarSobretaxaHorario, codigoPais, escolherZona, tarifasDaLinha, zonaValida, type Tarifas } from "./precos.ts";
 
-// Angola Localiza - Deliveries Service (v20)
+// Angola Localiza - Deliveries Service (v21)
+// v21: rastreio público (action=track, sem sessão, só estado e datas); a zona
+// de cobrança é calculada no servidor (zone_code, zone_code_hint ou pelos
+// municípios/províncias) e as tarifas vêm de country_pricing_zones, com a hora
+// do país na sobretaxa e os extras (volumoso, espera longa) da tabela.
 // v20 (privacidade das moradas): o destino tem de ser uma morada que quem
 // cria a entrega já pode ver (aprovada e não privada, própria, nos favoritos,
 // ou administrador). Sem isto, criar uma entrega devolvia as coordenadas de
@@ -26,40 +31,25 @@ import {
 //   porque quem cria vê o PIN).
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Content-Type": "application/json" };
 
-async function getZoneRates(supabase: ReturnType<typeof createClient>, zoneCode: string, organizationId?: string | null) {
-  const { data: zone } = await supabase.from("pricing_zones").select("*").eq("zone_code", zoneCode).maybeSingle();
+// Tarifas da zona no país (country_pricing_zones), com a tabela negociada da organização.
+async function getZoneRates(supabase: ReturnType<typeof createClient>, countryCode: string, zoneCode: string, organizationId?: string | null): Promise<Tarifas | null> {
+  const { data: zone } = await supabase.from("country_pricing_zones").select("*").eq("country_code", countryCode).eq("zone_code", zoneCode).maybeSingle();
   if (!zone) return null;
-  let rates = { base_fee: zone.base_fee, routing_fee: zone.routing_fee, proof_fee: zone.proof_fee };
-  if (organizationId) {
-    const { data: override } = await supabase.from("organization_pricing_overrides").select("*").eq("organization_id", organizationId).eq("zone_code", zoneCode).maybeSingle();
-    if (override) {
-      if (override.base_fee != null) rates.base_fee = override.base_fee;
-      if (override.routing_fee != null && !override.volume_discount_threshold) rates.routing_fee = override.routing_fee;
-      if (override.proof_fee != null) rates.proof_fee = override.proof_fee;
-      if (override.volume_discount_threshold && override.volume_discount_routing_fee != null) {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        monthStart.setHours(0, 0, 0, 0);
-        const { count } = await supabase.from("deliveries")
-          .select("id", { count: "exact", head: true })
-          .eq("payer_organization_id", organizationId)
-          .gte("created_at", monthStart.toISOString());
-        if ((count ?? 0) >= override.volume_discount_threshold) {
-          rates.routing_fee = override.volume_discount_routing_fee;
-        }
-      }
-    }
+  const rates = tarifasDaLinha(zone);
+  if (!organizationId) return rates;
+  const { data: override } = await supabase.from("organization_pricing_overrides").select("*").eq("organization_id", organizationId).eq("zone_code", zoneCode).maybeSingle();
+  let entregasNoMes = 0;
+  if (override?.volume_discount_threshold) {
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const { count } = await supabase.from("deliveries")
+      .select("id", { count: "exact", head: true })
+      .eq("payer_organization_id", organizationId)
+      .gte("created_at", monthStart.toISOString());
+    entregasNoMes = count ?? 0;
   }
-  return rates;
-}
-
-function aplicarSobretaxaHorario(total: number, at: Date): { total: number; surcharge: number } {
-  const hour = at.getHours();
-  const day = at.getDay();
-  const isNightOrWeekend = hour >= 20 || hour < 6 || day === 0 || day === 6;
-  if (!isNightOrWeekend) return { total, surcharge: 0 };
-  const surcharge = Math.round(total * 0.2);
-  return { total: total + surcharge, surcharge };
+  return aplicarDesconto(rates, override ?? null, entregasNoMes);
 }
 
 /** O destino pedido é uma morada que quem cria a entrega pode ver? */
@@ -150,6 +140,21 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
+
+  // Rastreio público (?rastreio= no site, QR partilhado com quem recebe): sem sessão.
+  // Só o estado e as datas; nunca contactos, nomes, coordenadas nem o código postal.
+  if (new URL(req.url).searchParams.get("action") === "track") {
+    const corpo = await req.json().catch(() => ({}));
+    const codigo = codigoRastreio(corpo?.tracking_code);
+    if (!codigo) return new Response(JSON.stringify({ error: "codigo de rastreio invalido" }), { status: 400, headers: cors });
+    const { data: entrega } = await supabase.from("deliveries").select("id, tracking_code, status, created_at, updated_at, address_id").eq("tracking_code", codigo).maybeSingle();
+    if (!entrega) return new Response(JSON.stringify({ error: "Nao encontrei nenhuma entrega com este codigo." }), { status: 404, headers: cors });
+    const [{ data: historico }, { data: morada }] = await Promise.all([
+      supabase.from("delivery_status_history").select("status, created_at").eq("delivery_id", entrega.id).order("created_at"),
+      entrega.address_id ? supabase.from("addresses").select("provinces(name), municipalities(name)").eq("id", entrega.address_id).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
+    return new Response(JSON.stringify(respostaRastreio(entrega, historico ?? [], morada)), { headers: cors });
+  }
 
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
@@ -406,10 +411,14 @@ Deno.serve(async (req: Request) => {
           .select("organization_id").eq("organization_id", payer_organization_id).eq("user_id", callerId).maybeSingle();
         if (!membership) return new Response(JSON.stringify({ error: "PAYER_ORGANIZATION_NOT_ALLOWED" }), { status: 403, headers: cors });
       }
-      if (zone_code) {
-        const { data: zone } = await supabase.from("pricing_zones").select("zone_code").eq("zone_code", zone_code).maybeSingle();
-        if (!zone) return new Response(JSON.stringify({ error: "ZONE_NOT_FOUND" }), { status: 422, headers: cors });
-      }
+      // Zona e país da cobrança: a zona pedida (zone_code / zone_code_hint) ou a
+      // calculada pelos municípios/províncias da recolha e do destino.
+      const { data: territorioDestino } = await supabase.from("addresses").select("country_code, province_id, municipality_id").eq("id", address_id).maybeSingle();
+      const pais = codigoPais(territorioDestino?.country_code);
+      const zona = escolherZona(body, { municipality_id: origin_municipality_id ?? null, province_id: origin_province_id ?? null }, territorioDestino ?? null).zona;
+      const { data: zonaExiste } = await supabase.from("country_pricing_zones").select("zone_code").eq("country_code", pais).eq("zone_code", zona).maybeSingle();
+      if ((zone_code && !zonaValida(zone_code)) || (zone_code && !zonaExiste)) return new Response(JSON.stringify({ error: "ZONE_NOT_FOUND" }), { status: 422, headers: cors });
+      const zonaFinal = zonaExiste ? zona : null;
 
       if (sync_operation_id) {
         const { data: already } = await supabase.from("deliveries")
@@ -429,8 +438,9 @@ Deno.serve(async (req: Request) => {
         cargo_height_cm: cargo_height_cm ?? null, cargo_declared_value: cargo_declared_value ?? null,
         requested_vehicle_type: requested_vehicle_type ?? null,
         requested_vehicle_capacity_kg: requested_vehicle_capacity_kg ?? null,
-        zone_code: zone_code ?? null, payer_organization_id: payer_organization_id ?? null,
+        zone_code: zonaFinal, payer_organization_id: payer_organization_id ?? null,
         is_urgent: !!is_urgent,
+        country_code: pais,
         created_by: callerId,
         sync_operation_id: sync_operation_id ?? null,
       }).select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)").single();
@@ -438,14 +448,14 @@ Deno.serve(async (req: Request) => {
 
       await supabase.from("delivery_status_history").insert({ delivery_id: delivery.id, status: "CREATED" });
 
-      if (zone_code) {
-        const rates = await getZoneRates(supabase, zone_code, payer_organization_id);
+      if (zonaFinal) {
+        const rates = await getZoneRates(supabase, pais, zonaFinal, payer_organization_id);
         if (rates) {
           const baseTotal = rates.base_fee + rates.routing_fee + rates.proof_fee;
-          const pricing = aplicarSobretaxaHorario(baseTotal, new Date());
+          const pricing = aplicarSobretaxaHorario(baseTotal, new Date(), pais);
           const total = pricing.total;
           await supabase.from("usage_events").insert({
-            delivery_id: delivery.id, organization_id: payer_organization_id ?? null, event_type: "DELIVERY_ROUTED", zone_code,
+            delivery_id: delivery.id, organization_id: payer_organization_id ?? null, event_type: "DELIVERY_ROUTED", zone_code: zonaFinal,
             sync_operation_id: sync_operation_id ?? null,
             amount_total: total, amount_driver: rates.base_fee, amount_platform: total - rates.base_fee,
             is_free_pilot: !payer_organization_id,
@@ -459,7 +469,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_routed", entity_type: "delivery", entity_id: delivery.id, before: null, after: { address_id, zone_code } });
+      await supabase.from("audit_logs").insert({ actor_id: callerId, action: "delivery_routed", entity_type: "delivery", entity_id: delivery.id, before: null, after: { address_id, zone_code: zonaFinal } });
       return new Response(JSON.stringify(delivery), { headers: cors });
     }
 
@@ -510,9 +520,11 @@ Deno.serve(async (req: Request) => {
       const scopedAdmin = await adminCanManageDelivery(delivery_id);
       if (delivery.created_by !== callerId && delivery.assigned_driver !== callerId && !scopedAdmin) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
       const { data: provas } = await supabase.from("delivery_proofs").select("id, proof_type, occurred_at, observation, photo_url, signature_url, crypto_verified, crypto_failure_reason").eq("delivery_id", delivery_id);
+      // Os dois buckets (delivery-proofs e o antigo field-photos) são privados: sempre links temporários.
       const link = async (valor: string | null) => {
-        if (!valor || !valor.startsWith(BUCKET_PROVAS + "/")) return valor;
-        const { data } = await supabase.storage.from(BUCKET_PROVAS).createSignedUrl(valor.slice(BUCKET_PROVAS.length + 1), 600);
+        const f = valor ? ficheiroDaProva(valor, supabaseUrl) : null;
+        if (!f) return null;
+        const { data } = await supabase.storage.from(f.bucket).createSignedUrl(f.nome, 600);
         return data?.signedUrl ?? null;
       };
       const resultado = [];
@@ -647,7 +659,7 @@ Deno.serve(async (req: Request) => {
       const { delivery_id, new_status, proof, pin, reason, is_volumoso, is_espera_longa, sync_operation_id } = body;
       if (!delivery_id || !new_status) return new Response(JSON.stringify({ error: "delivery_id e new_status sao obrigatorios" }), { status: 400, headers: cors });
 
-      const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, zone_code, payer_organization_id").eq("id", delivery_id).single();
+      const { data: delivery } = await supabase.from("deliveries").select("status, assigned_driver, created_by, address_id, tracking_code, zone_code, payer_organization_id, country_code").eq("id", delivery_id).single();
       if (!delivery) return new Response(JSON.stringify({ error: "entrega nao encontrada" }), { status: 404, headers: cors });
 
       const scopedAdmin = await adminCanManageDelivery(delivery_id);
@@ -720,11 +732,13 @@ Deno.serve(async (req: Request) => {
       } : null;
       let usageRow: Record<string, unknown> | null = null;
       if (delivery.zone_code && (new_status === "DELIVERED" || new_status === "FAILED")) {
-        const rates = await getZoneRates(supabase, delivery.zone_code, delivery.payer_organization_id);
+        const paisEntrega = codigoPais(delivery.country_code);
+        const rates = await getZoneRates(supabase, paisEntrega, delivery.zone_code, delivery.payer_organization_id);
         if (rates) {
-          const extras = (is_volumoso ? 500 : 0) + (is_espera_longa ? 300 : 0);
-          const baseTotal = rates.base_fee + rates.routing_fee + rates.proof_fee + extras;
-          const { total, surcharge } = aplicarSobretaxaHorario(baseTotal, new Date());
+          const volumoso = is_volumoso ? (rates.bulky_fee ?? 0) : 0;
+          const esperaLonga = is_espera_longa ? (rates.long_wait_fee ?? 0) : 0;
+          const baseTotal = rates.base_fee + rates.routing_fee + rates.proof_fee + volumoso + esperaLonga;
+          const { total, surcharge } = aplicarSobretaxaHorario(baseTotal, new Date(), paisEntrega);
           const attempt = Math.round(rates.base_fee * 0.3);
           usageRow = {
             organization_id: delivery.payer_organization_id,
@@ -735,7 +749,7 @@ Deno.serve(async (req: Request) => {
             amount_platform: new_status === "DELIVERED" ? total - rates.base_fee : rates.routing_fee + rates.proof_fee,
             is_free_pilot: !delivery.payer_organization_id,
             breakdown: new_status === "DELIVERED"
-              ? { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee, volumoso: is_volumoso ? 500 : 0, espera_longa: is_espera_longa ? 300 : 0, noturno_fim_de_semana: surcharge }
+              ? { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee, volumoso, espera_longa: esperaLonga, noturno_fim_de_semana: surcharge }
               : { taxa_tentativa_estafeta: attempt, roteamento_creditado: rates.routing_fee, prova_creditado: rates.proof_fee, motivo: reason },
           };
         }

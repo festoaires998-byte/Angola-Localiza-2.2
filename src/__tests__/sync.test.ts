@@ -351,6 +351,30 @@ describe('sync v9: favoritos na fila unificada', () => {
   });
 });
 
+describe('sync v10: operações antigas do site (save_favorite)', () => {
+  test('passam a create_favorite: a morada fica PROPOSED com o id da operação; repetir não duplica', async () => {
+    const s = cenario();
+    const id = opId();
+    const op = { operation_id: id, operation_type: 'save_favorite', payload: { address: MORADA_DO_SITE, favorite: { category: 'casa' } } };
+    const [r] = await sincronizar('cidadao', op);
+    expect(r).toMatchObject({ operation_id: id, status: 'SYNCED' });
+    const nova = morada(s, id);
+    expect(nova).toMatchObject({ status: 'PROPOSED', created_by: CIDADAO, latitude: -12.7761, plus_code: '6GXV+2C', country_code: 'AO' });
+    expect(linhas(s, 'favorites')).toEqual([expect.objectContaining({ address_id: id, user_id: CIDADAO, category: 'casa' })]);
+    expect(linhas(s, 'sync_operations')[0]).toMatchObject({ operation_type: 'create_favorite' });
+    const [outraVez] = await sincronizar('cidadao', op);
+    expect(outraVez.status).toBe('SYNCED');
+    expect(linhas(s, 'addresses').filter((a) => a.id === id)).toHaveLength(1);
+  });
+
+  test('um estado vindo do site não passa (a morada fica sempre por validar)', async () => {
+    const s = cenario();
+    const id = opId();
+    await sincronizar('cidadao', { operation_id: id, operation_type: 'save_favorite', payload: { address: { ...MORADA_DO_SITE, status: 'APPROVED' } } });
+    expect(morada(s, id).status).toBe('PROPOSED');
+  });
+});
+
 describe('sync v8: regras puras', () => {
   test('limparMoradaNova força PROPOSED e o dono', () => {
     const r = limparMoradaNova(MORADA_DO_SITE, CIDADAO);

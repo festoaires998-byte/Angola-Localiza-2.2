@@ -1,16 +1,30 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  aplicarDesconto, calcularPreco, codigoPais, escolherZona, tarifasDaLinha, valorTarifa, zonaValida,
+  type Territorio,
+} from "./precos.ts";
 
-// Angola Localiza - Pricing Service (Fase 1 do modelo de negocio)
-// quote: calcula o preco (frete da zona + roteamento + prova + extras),
-// respeitando a tabela negociada da organizacao pagadora se existir.
-// admin_update_zone: so super_admin pode alterar as bandas por país (fica auditado).
+// Angola Localiza - Pricing Service (v5)
+// quote: preço de uma entrega (frete da zona + roteamento + prova + extras +
+//   sobretaxa noturna/fim de semana na hora do país). A zona vem de zone_code
+//   ou zone_code_hint; se não vier, calcula-se pelos municípios/províncias da
+//   recolha e do destino (address_id ou *_municipality_id/*_province_id).
+//   A tabela negociada de uma organização só se aplica a quem é membro dela.
+// admin_update_zone: só super_admin altera as tarifas de um país (fica auditado).
+// list_zones: tarifas de todos os países.
+// v5 corrige a v4: "zone" fora de alcance (erro 500 em todas as cotações),
+// extras sempre recusados, e zone_code obrigatório (a app e o site mandavam
+// zone_code_hint). As tarifas vêm só de country_pricing_zones.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Content-Type": "application/json",
 };
+const responder = (x: unknown, status = 200) => new Response(JSON.stringify(x), { status, headers: cors });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const uuidOuNull = (v: unknown) => (typeof v === "string" && UUID.test(v) ? v : null);
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -22,92 +36,122 @@ Deno.serve(async (req: Request) => {
   const authHeader = req.headers.get("authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const { data: authData } = await supabase.auth.getUser(token);
-  const callerId = authData?.user?.id;
+  const callerId = authData?.user?.id ?? null;
 
   try {
     const url = new URL(req.url);
     const action = url.searchParams.get("action") || "quote";
-    const body = await req.json();
-
-    async function getRates(countryCode: string, zoneCode: string, organizationId?: string | null) {
-      const { data: zone } = await supabase.from("country_pricing_zones").select("*").eq("country_code", countryCode).eq("zone_code", zoneCode).single();
-      if (!zone) return null;
-      let rates = { base_fee: zone.base_fee, routing_fee: zone.routing_fee, proof_fee: zone.proof_fee };
-      if (organizationId) {
-        const { data: override } = await supabase.from("organization_pricing_overrides").select("*")
-          .eq("organization_id", organizationId).eq("zone_code", zoneCode).maybeSingle();
-        if (override) {
-          if (override.volume_discount_threshold && override.volume_discount_routing_fee) {
-            const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-            const { count } = await supabase.from("deliveries").select("*", { count: "exact", head: true })
-              .eq("payer_organization_id", organizationId).gte("created_at", monthStart.toISOString());
-            if ((count ?? 0) >= override.volume_discount_threshold) rates.routing_fee = override.volume_discount_routing_fee;
-          }
-          if (override.base_fee != null) rates.base_fee = override.base_fee;
-          if (override.routing_fee != null && !(override.volume_discount_threshold)) rates.routing_fee = override.routing_fee;
-          if (override.proof_fee != null) rates.proof_fee = override.proof_fee;
-        }
-      }
-      return rates;
-    }
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
 
     if (action === "quote") {
-      const { country_code, zone_code, organization_id, is_volumoso, is_espera_longa, at_time } = body;
-      if (!country_code || !zone_code) return new Response(JSON.stringify({ error: "zone_code e obrigatorio" }), { status: 400, headers: cors });
+      const pais = codigoPais(body.country_code);
 
-      const rates = await getRates(country_code, zone_code, organization_id);
-      if (!rates) return new Response(JSON.stringify({ error: "pricing_not_configured", country_code, zone_code }), { status: 409, headers: cors });
+      let destino: Territorio | null = {
+        municipality_id: uuidOuNull(body.destination_municipality_id),
+        province_id: uuidOuNull(body.destination_province_id),
+      };
+      const addressId = uuidOuNull(body.address_id);
+      if (addressId && !destino.municipality_id && !destino.province_id) {
+        const { data: morada } = await supabase.from("addresses").select("municipality_id, province_id").eq("id", addressId).maybeSingle();
+        destino = morada ?? null;
+      }
+      const origem: Territorio = {
+        municipality_id: uuidOuNull(body.origin_municipality_id),
+        province_id: uuidOuNull(body.origin_province_id),
+      };
+      const { zona, estimada } = escolherZona(body, origem, destino);
 
-      let extras = 0;
-      const extrasBreakdown: Record<string, number> = {};
-      if (is_volumoso) { if (rates.bulky_fee == null) return new Response(JSON.stringify({ error: "bulky_fee_not_configured", country_code }), { status: 409, headers: cors }); extras += rates.bulky_fee; extrasBreakdown.volumoso = rates.bulky_fee; }
-      if (is_espera_longa) { if (rates.long_wait_fee == null) return new Response(JSON.stringify({ error: "long_wait_fee_not_configured", country_code }), { status: 409, headers: cors }); extras += rates.long_wait_fee; extrasBreakdown.espera_longa = rates.long_wait_fee; }
+      const { data: linha } = await supabase.from("country_pricing_zones").select("*").eq("country_code", pais).eq("zone_code", zona).maybeSingle();
+      if (!linha) return responder({ error: "pricing_not_configured", country_code: pais, zone_code: zona }, 409);
 
-      let subtotal = rates.base_fee + rates.routing_fee + rates.proof_fee + extras;
-      const checkTime = at_time ? new Date(at_time) : new Date();
-      const hour = checkTime.getHours();
-      const day = checkTime.getDay();
-      const isNightOrWeekend = hour >= 20 || hour < 6 || day === 0 || day === 6;
-      let nightWeekendSurcharge = 0;
-      if (isNightOrWeekend) { nightWeekendSurcharge = Math.round(subtotal * 0.2); subtotal += nightWeekendSurcharge; }
+      // A tabela negociada só vale para quem pertence à organização.
+      let organizacao: string | null = null;
+      const pedida = uuidOuNull(body.organization_id);
+      if (pedida && callerId) {
+        const { data: membro } = await supabase.from("organization_members").select("organization_id").eq("organization_id", pedida).eq("user_id", callerId).limit(1);
+        if ((membro ?? []).length > 0) organizacao = pedida;
+      }
+      let tarifas = tarifasDaLinha(linha);
+      if (organizacao) {
+        const { data: desconto } = await supabase.from("organization_pricing_overrides").select("*").eq("organization_id", organizacao).eq("zone_code", zona).maybeSingle();
+        let entregasNoMes = 0;
+        if (desconto?.volume_discount_threshold) {
+          const inicio = new Date();
+          inicio.setUTCDate(1);
+          inicio.setUTCHours(0, 0, 0, 0);
+          const { count } = await supabase.from("deliveries").select("id", { count: "exact", head: true })
+            .eq("payer_organization_id", organizacao).gte("created_at", inicio.toISOString());
+          entregasNoMes = count ?? 0;
+        }
+        tarifas = aplicarDesconto(tarifas, desconto ?? null, entregasNoMes);
+      }
 
-      const amountDriver = rates.base_fee;
-      const amountPlatform = subtotal - amountDriver;
+      const agora = typeof body.at_time === "string" && !Number.isNaN(Date.parse(body.at_time)) ? new Date(body.at_time) : new Date();
+      const preco = calcularPreco(tarifas, { volumoso: !!body.is_volumoso, esperaLonga: !!body.is_espera_longa }, agora, pais);
+      if (!preco.ok) return responder({ error: preco.erro, country_code: pais }, 409);
 
-      return new Response(JSON.stringify({
-        country_code, currency_code: zone.currency_code, zone_code, is_free_pilot: !organization_id,
-        breakdown: { frete: rates.base_fee, roteamento: rates.routing_fee, prova: rates.proof_fee, ...extrasBreakdown, noturno_fim_de_semana: nightWeekendSurcharge || undefined },
-        amount_total: subtotal, amount_driver: amountDriver, amount_platform: amountPlatform,
-      }), { headers: cors });
-    }
-
-    if (action === "admin_update_zone") {
-      if (!callerId) return new Response(JSON.stringify({ error: "sessao invalida" }), { status: 401, headers: cors });
-      const { data: memberships } = await supabase.from("organization_members").select("role").eq("user_id", callerId);
-      const isSuperAdmin = (memberships ?? []).some((m) => m.role === "super_admin");
-      if (!isSuperAdmin) return new Response(JSON.stringify({ error: "apenas super_admin pode alterar bandas de preco" }), { status: 403, headers: cors });
-
-      const { country_code, zone_code, base_fee, routing_fee, proof_fee, bulky_fee, long_wait_fee } = body;
-      const { data: before } = await supabase.from("country_pricing_zones").select("*").eq("country_code", country_code).eq("zone_code", zone_code).single();
-      const { error } = await supabase.from("country_pricing_zones").update({
-        base_fee, routing_fee, proof_fee, bulky_fee, long_wait_fee, updated_by: callerId, updated_at: new Date().toISOString(),
-      }).eq("country_code", country_code).eq("zone_code", zone_code);
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
-
-      await supabase.from("audit_logs").insert({
-        actor_id: callerId, action: "pricing_zone_updated", entity_type: "pricing_zone", entity_id: null,
-        before, after: { country_code, zone_code, base_fee, routing_fee, proof_fee, bulky_fee, long_wait_fee },
+      return responder({
+        country_code: pais,
+        zone_code: zona,
+        zone_estimated: estimada,
+        is_free_pilot: !organizacao,
+        currency_code: preco.currency_code,
+        breakdown: preco.breakdown,
+        amount_total: preco.amount_total,
+        amount_driver: preco.amount_driver,
+        amount_platform: preco.amount_platform,
       });
-      return new Response(JSON.stringify({ ok: true }), { headers: cors });
     }
 
     if (action === "list_zones") {
       const { data } = await supabase.from("country_pricing_zones").select("*").order("country_code").order("zone_code");
-      return new Response(JSON.stringify({ zones: data }), { headers: cors });
+      return responder({ zones: data ?? [] });
     }
 
-    return new Response(JSON.stringify({ error: "acao desconhecida" }), { status: 400, headers: cors });
+    if (action === "admin_update_zone") {
+      if (!callerId) return responder({ error: "sessao invalida" }, 401);
+      const { data: memberships } = await supabase.from("organization_members").select("role").eq("user_id", callerId);
+      if (!(memberships ?? []).some((m: { role: string }) => m.role === "super_admin")) {
+        return responder({ error: "apenas super_admin pode alterar bandas de preco" }, 403);
+      }
+      const pais = codigoPais(body.country_code);
+      const zona = zonaValida(body.zone_code);
+      if (!zona) return responder({ error: "zone_code invalido (A, B ou C)" }, 400);
+
+      const campos: Record<string, number> = {};
+      for (const c of ["base_fee", "routing_fee", "proof_fee", "bulky_fee", "long_wait_fee"]) {
+        const v = valorTarifa(body[c]);
+        if (v === null) return responder({ error: `${c} invalido (numero >= 0)` }, 400);
+        if (v !== undefined) campos[c] = v;
+      }
+      if (Object.keys(campos).length === 0) return responder({ error: "nada para alterar" }, 400);
+
+      const { data: antes } = await supabase.from("country_pricing_zones").select("*").eq("country_code", pais).eq("zone_code", zona).maybeSingle();
+      if (!antes) return responder({ error: "pricing_not_configured", country_code: pais, zone_code: zona }, 404);
+      const agora = new Date().toISOString();
+      const { error } = await supabase.from("country_pricing_zones")
+        .update({ ...campos, updated_by: callerId, updated_at: agora })
+        .eq("country_code", pais).eq("zone_code", zona);
+      if (error) return responder({ error: error.message }, 400);
+
+      // Tabela antiga (só Angola), mantida igual enquanto houver quem a leia.
+      if (pais === "AO") {
+        const antigos: Record<string, number> = {};
+        for (const c of ["base_fee", "routing_fee", "proof_fee"]) if (c in campos) antigos[c] = campos[c];
+        if (Object.keys(antigos).length) {
+          await supabase.from("pricing_zones").update({ ...antigos, updated_by: callerId, updated_at: agora }).eq("zone_code", zona);
+        }
+      }
+
+      await supabase.from("audit_logs").insert({
+        actor_id: callerId, action: "pricing_zone_updated", entity_type: "pricing_zone", entity_id: null,
+        before: antes, after: { country_code: pais, zone_code: zona, ...campos },
+      });
+      return responder({ ok: true });
+    }
+
+    return responder({ error: "acao desconhecida" }, 400);
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: cors });
+    return responder({ error: String(e instanceof Error ? e.message : e) }, 500);
   }
 });
