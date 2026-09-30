@@ -211,3 +211,30 @@ export function podeUsarComoDestino(
   const publica = ESTADOS_MORADA_APROVADA.includes(morada.status ?? "") && morada.visibility_level !== "PRIVATE";
   return publica || morada.created_by === quemPede || nosFavoritos || eAdmin;
 }
+
+/** Código de rastreio normalizado (maiúsculas, 6–40 letras, números ou "-"), ou null. */
+export function codigoRastreio(valor: unknown): string | null {
+  if (typeof valor !== "string") return null;
+  const c = valor.trim().toUpperCase();
+  return /^[A-Z0-9-]{6,40}$/.test(c) ? c : null;
+}
+
+/**
+ * Resposta do rastreio público: estado, datas e só a província/município do
+ * destino. Nada que identifique pessoas ou a porta (sem nomes, contactos,
+ * coordenadas, código postal nem Plus Code).
+ */
+export function respostaRastreio(
+  entrega: { tracking_code: string; status: string; created_at?: string | null; updated_at?: string | null },
+  historico: { status: string; created_at: string }[],
+  morada: { provinces?: { name?: string } | null; municipalities?: { name?: string } | null } | null,
+) {
+  return {
+    tracking_code: entrega.tracking_code,
+    status: entrega.status,
+    created_at: entrega.created_at ?? null,
+    updated_at: entrega.updated_at ?? null,
+    destination_area: [morada?.municipalities?.name, morada?.provinces?.name].filter(Boolean).join(", ") || null,
+    history: historico.map((h) => ({ status: h.status, created_at: h.created_at })),
+  };
+}

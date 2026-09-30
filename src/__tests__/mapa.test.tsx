@@ -153,6 +153,11 @@ beforeEach(() => {
   mockMedirDeNovo.mockClear();
 });
 
+// O primeiro teste desenha o ecrã do Mapa pela primeira vez (carrega o mapa, o GPS
+// e os serviços). Com todos os testes a correr ao mesmo tempo, isso pode passar dos
+// 5 s por omissão do Jest e o teste falhava sem haver erro nenhum.
+jest.setTimeout(20_000);
+
 describe('separador Mapa', () => {
   test('sem rede: Plus Code, precisão, código provisório e província guardada', async () => {
     mockInfo = {

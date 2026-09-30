@@ -14,6 +14,8 @@ export default function LayoutAdmin() {
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="[id]" options={{ title: 'Verificação' }} />
+      <Stack.Screen name="motoristas" options={{ title: 'Motoristas' }} />
+      <Stack.Screen name="identidade" options={{ title: 'Identidade do pessoal' }} />
     </Stack>
   );
 }

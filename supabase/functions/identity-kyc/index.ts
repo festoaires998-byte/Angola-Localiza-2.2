@@ -1,7 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { nomeNaPastaKyc } from "./regras.ts";
 
-// Angola Localiza - Identity KYC Service (v2, PRONPET v5.18)
+// Angola Localiza - Identity KYC Service (v3, PRONPET v5.18)
+// v3: as fotos do BI e o vídeo têm de estar na pasta de quem envia
+// (kyc-artifacts/<id>/…) e existir no Storage, enviados por essa pessoa;
+// na revisão, ninguém decide a própria verificação e só se decide um pedido
+// ainda por rever (SUBMITTED).
 // - BI frente+verso obrigatorios.
 // - Validacao de formato do numero do BI angolano.
 // - Notificacoes reais no resultado da revisao.
@@ -70,6 +75,15 @@ Deno.serve(async (req: Request) => {
       if (!id_number || !id_photo_url || !id_photo_back_url || !video_url) {
         return new Response(JSON.stringify({ error: "id_number, foto da frente, foto do verso e video sao obrigatorios" }), { status: 400, headers: cors });
       }
+      const nomes = [id_photo_url, id_photo_back_url, video_url].map((v) => nomeNaPastaKyc(v, callerId));
+      if (nomes.some((n) => !n)) {
+        return new Response(JSON.stringify({ error: "as fotos e o video tem de estar na tua pasta (kyc-artifacts/<o teu id>/...)" }), { status: 403, headers: cors });
+      }
+      const { data: encontrados, error: erroFicheiros } = await supabase.rpc("kyc_artefactos_do_utilizador", { nomes, utilizador: callerId });
+      if (erroFicheiros) return new Response(JSON.stringify({ error: "nao foi possivel confirmar os ficheiros: " + erroFicheiros.message }), { status: 500, headers: cors });
+      if (encontrados !== 3) {
+        return new Response(JSON.stringify({ error: "ARTIFACTS_MISSING: envia as 2 fotos do BI e o video antes de pedir a revisao" }), { status: 422, headers: cors });
+      }
       const idNumberNormalized = id_number.trim().toUpperCase();
       if (!BI_REGEX.test(idNumberNormalized)) {
         return new Response(JSON.stringify({ error: "numero do BI invalido - formato esperado: 9 digitos + 2 letras + 2 digitos (ex.: 008807453HO45)" }), { status: 422, headers: cors });
@@ -93,7 +107,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: verification, error } = await supabase.from("identity_verifications").insert({
         user_id: callerId, method: "LIVENESS_VIDEO", id_hash: idHash, id_last4: idNumberNormalized.slice(-4),
-        id_photo_url, id_photo_back_url, video_url, video_duration_seconds, challenge_sequence,
+        id_photo_url: nomes[0], id_photo_back_url: nomes[1], video_url: nomes[2], video_duration_seconds, challenge_sequence,
       }).select("id").single();
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
 
@@ -188,8 +202,12 @@ Deno.serve(async (req: Request) => {
       const canReview = (memberships ?? []).some((m) => ["super_admin", "admin_nacional", "auditor"].includes(m.role));
       if (!canReview) return new Response(JSON.stringify({ error: "nao autorizado" }), { status: 403, headers: cors });
 
-      const { data: v } = await supabase.from("identity_verifications").select("user_id").eq("id", verification_id).single();
+      if (!["approve", "reject"].includes(decision)) return new Response(JSON.stringify({ error: "decisao invalida" }), { status: 400, headers: cors });
+      if (decision === "reject" && (typeof reason !== "string" || reason.trim().length < 3)) return new Response(JSON.stringify({ error: "motivo da rejeicao e obrigatorio" }), { status: 422, headers: cors });
+      const { data: v } = await supabase.from("identity_verifications").select("user_id, status").eq("id", verification_id).maybeSingle();
       if (!v) return new Response(JSON.stringify({ error: "nao encontrado" }), { status: 404, headers: cors });
+      if (v.user_id === callerId) return new Response(JSON.stringify({ error: "ninguem decide a propria verificacao" }), { status: 403, headers: cors });
+      if (v.status !== "SUBMITTED") return new Response(JSON.stringify({ error: "este pedido ja foi decidido" }), { status: 409, headers: cors });
 
       if (decision === "approve") {
         await supabase.from("identity_verifications").update({ status: "APPROVED", reviewed_by: callerId, reviewed_at: new Date().toISOString() }).eq("id", verification_id);

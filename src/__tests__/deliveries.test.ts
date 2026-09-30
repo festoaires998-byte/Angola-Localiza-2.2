@@ -115,7 +115,11 @@ function cenario(entrega: Record<string, unknown> = {}) {
           ...entrega,
         },
       ],
-      pricing_zones: [{ zone_code: 'Z1', base_fee: 1000, routing_fee: 200, proof_fee: 100 }],
+      country_pricing_zones: [
+        { country_code: 'AO', zone_code: 'A', currency_code: 'AOA', base_fee: 1000, routing_fee: 200, proof_fee: 100, bulky_fee: 500, long_wait_fee: 300 },
+        { country_code: 'AO', zone_code: 'B', currency_code: 'AOA', base_fee: 2000, routing_fee: 200, proof_fee: 100, bulky_fee: 500, long_wait_fee: 300 },
+        { country_code: 'AO', zone_code: 'C', currency_code: 'AOA', base_fee: 3000, routing_fee: 200, proof_fee: 100, bulky_fee: 500, long_wait_fee: 300 },
+      ],
     },
     predefinicoes: {
       deliveries: () => ({
@@ -272,7 +276,7 @@ describe('deliveries: criar', () => {
     const r = await pedir(
       handler,
       'create',
-      { address_id: MORADA, recipient_name: 'Ana', recipient_phone: '+244 923 456 789', zone_code: 'Z1', created_by: OUTRO, status: 'DELIVERED' },
+      { address_id: MORADA, recipient_name: 'Ana', recipient_phone: '+244 923 456 789', zone_code: 'A', created_by: OUTRO, status: 'DELIVERED' },
       'remetente',
     );
     expect(r.status).toBe(200);
@@ -283,6 +287,50 @@ describe('deliveries: criar', () => {
     ]);
     expect(linhas(s, 'audit_logs')).toEqual([expect.objectContaining({ action: 'delivery_routed', actor_id: REMETENTE })]);
     jest.useRealTimers();
+  });
+
+  test('v21: sem zone_code, a zona é calculada (mesmo município → A; zone_code_hint aceite); zona desconhecida → 422', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-29T10:00:00Z')); // terça, 11h em Angola: sem sobretaxa
+    const s = cenario();
+    const m = linhas(s, 'addresses').find((a: any) => a.id === MORADA)!;
+    Object.assign(m, { country_code: 'AO', municipality_id: 'mun-1', province_id: 'prov-1' });
+    const base = { address_id: MORADA, recipient_name: 'Ana' };
+    const a = await pedir(handler, 'create', { ...base, origin_municipality_id: 'mun-1', origin_province_id: 'prov-1' }, 'remetente');
+    expect(a.status).toBe(200);
+    expect(a.json).toMatchObject({ zone_code: 'A', country_code: 'AO' });
+    const c = await pedir(handler, 'create', { ...base, origin_municipality_id: 'mun-2', origin_province_id: 'prov-1' }, 'remetente');
+    expect(c.json.zone_code).toBe('C');
+    const b = await pedir(handler, 'create', { ...base }, 'remetente');
+    expect(b.json.zone_code).toBe('B');
+    const dica = await pedir(handler, 'create', { ...base, zone_code_hint: 'c' }, 'remetente');
+    expect(dica.json.zone_code).toBe('C');
+    expect(linhas(s, 'usage_events').map((u: any) => [u.zone_code, u.amount_total])).toEqual([['A', 1300], ['C', 3300], ['B', 2300], ['C', 3300]]);
+    expect((await pedir(handler, 'create', { ...base, zone_code: 'Z1' }, 'remetente')).status).toBe(422);
+    jest.useRealTimers();
+  });
+});
+
+describe('deliveries v21: rastreio público', () => {
+  test('sem sessão: só estado, datas e a zona do destino; nunca nomes, contactos, coordenadas nem código postal', async () => {
+    const s = cenario({ tracking_code: 'ABC123DEF0', recipient_phone: '+244 923 456 789', recipient_name: 'Ana', created_at: '2026-09-29T10:00:00Z' });
+    const m = linhas(s, 'addresses').find((a: any) => a.id === MORADA)!;
+    Object.assign(m, { postal_code: 'AO-HUA-XXXXXXXX-11', latitude: -12.7, longitude: 15.7, provinces: { name: 'Huambo' }, municipalities: { name: 'Huambo' } });
+    s.tabelas().delivery_status_history = [{ delivery_id: ENTREGA, status: 'CREATED', created_at: '2026-09-29T10:00:00Z' }];
+    const r = await pedir(handler, 'track', { tracking_code: ' abc123def0 ' }, null);
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({
+      tracking_code: 'ABC123DEF0',
+      status: 'OUT_FOR_DELIVERY',
+      created_at: '2026-09-29T10:00:00Z',
+      updated_at: null,
+      destination_area: 'Huambo, Huambo',
+      history: [{ status: 'CREATED', created_at: '2026-09-29T10:00:00Z' }],
+    });
+    const texto = JSON.stringify(r.json);
+    for (const segredo of ['923', 'Ana', 'AO-HUA', '-12.7', '4821']) expect(texto).not.toContain(segredo);
+    expect((await pedir(handler, 'track', { tracking_code: 'NAOEXISTE1' }, null)).status).toBe(404);
+    expect((await pedir(handler, 'track', { tracking_code: "x'; drop" }, null)).status).toBe(400);
+    expect((await pedir(handler, 'get_pin', { delivery_id: ENTREGA }, null)).status).toBe(401);
   });
 });
 
@@ -474,6 +522,18 @@ describe('deliveries v19: ver as provas (links de 10 minutos)', () => {
     expect(s.linksPedidos.every((l) => l.segundos === 600)).toBe(true);
     expect((await pedir(handler, 'proof_files', { delivery_id: ENTREGA }, 'admin')).status).toBe(200);
     expect((await pedir(handler, 'proof_files', { delivery_id: ENTREGA }, 'estafeta')).status).toBe(200);
+  });
+
+  test('v21: provas antigas do site (field-photos, agora privado) também vêm com link assinado; valores estranhos não passam', async () => {
+    const s = cenario();
+    s.tabelas().delivery_proofs = [
+      { id: 'p1', delivery_id: ENTREGA, proof_type: 'POD', photo_url: FOTO_SITE, signature_url: 'https://mau.exemplo/x.png' },
+    ];
+    const r = await pedir(handler, 'proof_files', { delivery_id: ENTREGA }, 'remetente');
+    expect(r.json.proofs[0]).toMatchObject({
+      photo_url: `https://assinado/${BUCKET_LEGADO}/pod-1790000000000.jpg?s=600`,
+      signature_url: null,
+    });
   });
 });
 

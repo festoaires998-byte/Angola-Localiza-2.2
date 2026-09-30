@@ -6,7 +6,7 @@ import { Caixa, Botao, Cartao, Campo, EcraCarregamento, Subtitulo, Texto, Titulo
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import { supabase } from '@/api/supabase';
-import { driverKyc, type DriverStatus } from '@/services/motorista/driverKyc';
+import { driverKyc, mensagemMotorista, type DriverStatus } from '@/services/motorista/driverKyc';
 
 type DocKey = 'id'|'licenseFront'|'licenseBack'|'vehicle'|'selfie';
 type Docs = Partial<Record<DocKey,string>>;
@@ -20,11 +20,12 @@ export default function Motorista() {
   const [plate,setPlate]=useState('');
   const [license,setLicense]=useState('');
   const [expiry,setExpiry]=useState('');
+  const [capacidade,setCapacidade]=useState('');
   const [erro,setErro]=useState<string|null>(null);
   const [ok,setOk]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);
 
-  async function ler(){ if(!online) return; try{setEstado(await driverKyc.status());}catch(e){setErro(e instanceof Error?e.message:'Não foi possível ler o estado.');} }
+  async function ler(){ if(!online) return; try{setEstado(await driverKyc.status());}catch(e){setErro(mensagemMotorista(e instanceof Error?e.message:'Não foi possível ler o estado.'));} }
   useEffect(()=>{void ler();},[online]);
 
   if(!utilizador) return <EcraCarregamento texto="A abrir…" />;
@@ -52,7 +53,7 @@ export default function Motorista() {
       const up=await supabase.storage.from('kyc-artifacts').upload(path,bytes,{contentType:'image/jpeg',upsert:false});
       if(up.error)throw new Error(up.error.message);
       setDocs(d=>({...d,[chave]:path})); setOk(`${label} enviado.`);
-    }catch(e){setErro(e instanceof Error?e.message:'Não foi possível enviar o documento.');}
+    }catch(e){setErro(mensagemMotorista(e instanceof Error?e.message:'Não foi possível enviar o documento.'));}
     finally{setBusy(false);}
   }
 
@@ -68,27 +69,47 @@ export default function Motorista() {
     setBusy(true);
     try{
       await driverKyc.submit({vehicle_type:vehicleType,vehicle_plate:plate,license_number:license,license_expiry:expiry||null,
+        vehicle_capacity_kg:capacidade.trim()?Number(capacidade.replace(',','.')):null,
         id_document_path:docs.id,license_front_path:docs.licenseFront,license_back_path:docs.licenseBack,
         vehicle_document_path:docs.vehicle,selfie_path:docs.selfie});
       setOk('Candidatura enviada. A equipa irá rever os documentos.');
       await ler();
-    }catch(e){setErro(e instanceof Error?e.message:'Não foi possível enviar a candidatura.');}
+    }catch(e){setErro(mensagemMotorista(e instanceof Error?e.message:'Não foi possível enviar a candidatura.'));}
+    finally{setBusy(false);}
+  }
+
+  async function mudarDisponivel(novo:boolean){
+    setErro(null);setOk(null);setBusy(true);
+    try{
+      await driverKyc.setOnline(novo);
+      setOk(novo?'Estás disponível: os pedidos compatíveis aparecem em Entregas.':'Deixaste de receber pedidos novos.');
+      await ler();
+    }catch(e){setErro(mensagemMotorista(e instanceof Error?e.message:'Não foi possível mudar a disponibilidade.'));}
     finally{setBusy(false);}
   }
 
   const app=estado?.application;
-  if(app?.status==='APPROVED') return <ScrollView contentContainerStyle={{padding:16,gap:12}}><Titulo>Motorista</Titulo><Caixa tipo="sucesso">Candidatura aprovada ✅</Caixa><Texto>País: {app.country_code}. O perfil operacional está aprovado, mas começa offline até ativares o modo motorista.</Texto></ScrollView>;
+  if(app?.status==='APPROVED'){
+    const disponivel=estado?.profile?.online===true;
+    return <ScrollView contentContainerStyle={{padding:16,gap:12}}><Titulo>Motorista</Titulo><Caixa tipo="sucesso">Candidatura aprovada ✅</Caixa>
+      <Texto>{`País: ${app.country_code}. ${disponivel?'Estás disponível para receber pedidos.':'Estás indisponível: não recebes pedidos novos.'}`}</Texto>
+      {erro?<Caixa tipo="erro">{erro}</Caixa>:null}{ok?<Caixa tipo="sucesso">{ok}</Caixa>:null}
+      <Botao titulo={disponivel?'Ficar indisponível':'Ficar disponível'} variante={disponivel?'secundario':'primario'} desativado={!online} aCarregar={busy} onPress={()=>void mudarDisponivel(!disponivel)} />
+      {!online?<Texto suave>Sem rede: a disponibilidade só muda com internet.</Texto>:null}
+    </ScrollView>;
+  }
   if(app?.status==='PENDING_REVIEW') return <ScrollView contentContainerStyle={{padding:16,gap:12}}><Titulo>Motorista</Titulo><Caixa tipo="info">Candidatura em revisão. Não precisas reenviar os documentos.</Caixa><Botao titulo="Atualizar estado" variante="secundario" onPress={()=>void ler()} /></ScrollView>;
-  if(app?.status==='REJECTED') return <ScrollView contentContainerStyle={{padding:16,gap:12}}><Titulo>Motorista</Titulo><Caixa tipo="erro">{`Candidatura recusada: ${app.rejection_reason||'sem motivo indicado'}`}</Caixa></ScrollView>;
 
   return <ScrollView contentContainerStyle={{padding:16,gap:12}}>
     <Titulo>Motorista / KYC</Titulo>
+    {app?.status==='REJECTED'?<Caixa tipo="erro">{`Candidatura recusada: ${app.rejection_reason||'sem motivo indicado'}. Podes corrigir e enviar de novo.`}</Caixa>:null}
     <Texto>O país da candidatura é o país associado à tua conta: {estado?.profile?.country_code ?? 'será definido pelo servidor'}.</Texto>
     <Cartao><Subtitulo>Dados do veículo</Subtitulo>
       <Campo rotulo="Tipo de veículo" value={vehicleType} onChangeText={setVehicleType} placeholder="Moto, carro, carrinha…" />
       <Campo rotulo="Matrícula" value={plate} onChangeText={setPlate} placeholder="Matrícula" />
       <Campo rotulo="Número da carta" value={license} onChangeText={setLicense} placeholder="Número da carta de condução" />
       <Campo rotulo="Validade da carta (AAAA-MM-DD)" value={expiry} onChangeText={setExpiry} placeholder="AAAA-MM-DD" />
+      <Campo rotulo="Capacidade de carga (kg)" value={capacidade} onChangeText={setCapacidade} placeholder="Ex.: 40" keyboardType="decimal-pad" />
     </Cartao>
     <Cartao><Subtitulo>Documentos</Subtitulo>
       {([['id','BI/identificação'],['licenseFront','Carta — frente'],['licenseBack','Carta — verso'],['vehicle','Documento do veículo'],['selfie','Selfie do candidato']] as [DocKey,string][]).map(([k,l])=><Botao key={k} titulo={docs[k]?`✓ ${l}`:`Fotografar: ${l}`} variante={docs[k]?'secundario':'primario'} onPress={()=>void foto(k,l)} aCarregar={busy}/>)}

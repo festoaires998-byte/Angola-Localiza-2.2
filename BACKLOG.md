@@ -95,21 +95,29 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   PostGIS está no esquema `public` (e com ela `spatial_ref_sys` sem RLS e as
   funções `st_estimatedextent`); a tabela `identity_artifact_views` tem RLS sem
   regras (ninguém lê pela API: está bem assim, mas documentar).
+  **30/09:** o `REVOKE` na `spatial_ref_sys` não tem efeito (a tabela é do
+  `supabase_admin`; `anon`/`authenticated` continuam com INSERT/UPDATE/DELETE).
+  Só se resolve com o suporte do Supabase ou mudando a PostGIS de esquema
+  (ver a migração `20260929122000_restrict_postgis_metadata_rest.sql`).
 - **`public-api` (`/v1/address/search`):** lê `addresses` e `streets` para as
   organizações (com a chave da API). Confirmar que respeita a privacidade.
 - **Segredos no código (encontrados na auditoria):** a `identity-kyc` tem o
   "pepper" do KYC escrito no código; a `phone-verify` tem a chave pública
   escrita no código (devia vir do ambiente, como na `sync`). Passar para os
   segredos das Edge Functions.
+  **30/09 — continua por fazer:** o pepper da `identity-kyc` (v6) ainda está no
+  código porque os segredos só se criam no painel do Supabase (Edge Functions →
+  Secrets → `KYC_PEPPER`); depois basta ler `Deno.env.get("KYC_PEPPER")` com o
+  valor atual como alternativa, para não invalidar os pedidos já feitos.
 - **Favorito do Mapa sem província/município:** o "Guardar como favorito" cria
   a morada sem `province_id`/`municipality_id` (o site procurava pelo nome). O
   validador completa na validação.
 
 ### Enviar: a seguir
 
-- **Destino fora das moradas guardadas:** hoje o destino é uma das moradas
-  guardadas do remetente. Falta escolher o destino pelo Código Postal Digital
-  ou pelo Plus Code de quem recebe (pesquisa no servidor).
+- **Destino fora das moradas guardadas (app):** o site já aceita Plus Code,
+  GPS e link (cria uma morada própria por validar e usa o id dela); falta o
+  mesmo na app.
 - **Pedido repetido:** se a ligação cair depois de o servidor criar a entrega
   mas antes da resposta chegar, a app põe o pedido na fila e ele pode ficar
   criado duas vezes. Solução: uma chave de pedido (idempotência) na `deliveries`.
