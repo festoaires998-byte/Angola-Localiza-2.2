@@ -592,7 +592,7 @@ describe('Mapa / Satélite', () => {
   test('por omissão é o mapa do telemóvel', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     await desenhar();
-    expect(estiloMostrado()).toBe('Angola Localiza');
+    expect(estiloMostrado()).toBe('Localiza · Mapa online');
     expect(screen.getByRole('radio', { name: 'Vista: Mapa' }).props.accessibilityState).toMatchObject({ selected: true });
   });
 
