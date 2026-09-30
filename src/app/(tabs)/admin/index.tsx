@@ -15,6 +15,7 @@ import {
   type AdminTab,
 } from '@/api/adminGestao';
 import { listarPedidosKyc } from '@/api/revisaoKyc';
+import { cargoPodeReverKycPessoal } from '@/services/identidade/kycPessoal';
 import { lojaRevisaoKyc, useRevisaoKyc } from '@/state/revisaoKyc';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
@@ -187,6 +188,11 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
         <Botao titulo={`Rever ${title}`} variante="secundario" onPress={() => router.push({ pathname: '/admin/[id]', params: { id: p.userId } })} />
       </Cartao>;
     })}
+
+    <Text style={estilos.secao}>Identidade do pessoal</Text>
+    {cargoPodeReverKycPessoal(cargos)
+      ? <Botao titulo="🪪 Rever identidade do pessoal" variante="secundario" onPress={() => router.push('/admin/identidade')} />
+      : <Caixa tipo="info">Só o Super Admin, o Admin Nacional e os auditores revêem a identidade do pessoal.</Caixa>}
 
     <Text style={estilos.secao}>Candidaturas de motorista</Text>
     {podeRever

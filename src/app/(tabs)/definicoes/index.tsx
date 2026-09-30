@@ -111,6 +111,14 @@ export default function Definicoes() {
         <Botao titulo="Motorista / KYC" variante="secundario" onPress={() => router.push('/definicoes/motorista')} />
       </Cartao>
 
+      {cargos.length > 0 && !cargos.includes('super_admin') ? (
+        <Cartao>
+          <Subtitulo>Verificação de identidade</Subtitulo>
+          <Texto suave>Obrigatória para o pessoal (técnicos, estafetas, supervisores…): fotos do BI e um vídeo curto, revistos por uma pessoa.</Texto>
+          <Botao titulo="Verificação de identidade" variante="secundario" onPress={() => router.push('/definicoes/identidade')} />
+        </Cartao>
+      ) : null}
+
       {cargos.length === 0 ? (
         <Cartao>
           <Subtitulo>Verificação simples</Subtitulo>
