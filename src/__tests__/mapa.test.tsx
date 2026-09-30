@@ -592,7 +592,7 @@ describe('Mapa / Satélite', () => {
   test('por omissão é o mapa do telemóvel', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     await desenhar();
-    expect(estiloMostrado()).toBe('Localiza · Mapa online');
+    expect(estiloMostrado()).toBe('Angola Localiza');
     expect(screen.getByRole('radio', { name: 'Vista: Mapa' }).props.accessibilityState).toMatchObject({ selected: true });
   });
 
@@ -631,8 +631,7 @@ describe('Mapa / Satélite', () => {
     expect(alerta).toHaveBeenCalledWith('Vista de Satélite', expect.stringMatching(/gastam dados móveis/), expect.any(Array));
     expect(estiloMostrado()).toBe('Localiza · Mapa online');
 
-    const botoes = alerta.mock.calls[0][2] as { text: string; onPress?: () => void }[];
-    act(() => botoes.find((b) => b.text === 'Usar satélite')!.onPress!());
+    fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
     expect(estiloMostrado()).toBe('Angola Localiza · Satélite');
     expect(screen.getByText('Imagens: Esri, Maxar, Earthstar Geographics')).toBeTruthy();
 
