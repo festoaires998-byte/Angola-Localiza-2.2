@@ -266,6 +266,8 @@ describe('deliveries: criar', () => {
   });
 
   test('cria a entrega em nome de quem pede, com histórico, cobrança da zona e registo; devolve o PIN a quem criou', async () => {
+    // A sobretaxa é dependente da hora local; congelamos o relógio para tornar o teste determinístico.
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-27T21:00:00Z'));
     const s = cenario();
     const r = await pedir(
       handler,
@@ -280,6 +282,7 @@ describe('deliveries: criar', () => {
       expect.objectContaining({ event_type: 'DELIVERY_ROUTED', amount_total: 1560, amount_driver: 1000, amount_platform: 560, is_free_pilot: true, breakdown: { frete: 1000, roteamento: 200, prova: 100, noturno_fim_de_semana: 260 } }),
     ]);
     expect(linhas(s, 'audit_logs')).toEqual([expect.objectContaining({ action: 'delivery_routed', actor_id: REMETENTE })]);
+    jest.useRealTimers();
   });
 });
 
