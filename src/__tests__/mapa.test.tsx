@@ -658,7 +658,7 @@ describe('Mapa / Satélite', () => {
         <Mapa />
       </SafeAreaProvider>,
     );
-    expect(estiloMostrado()).toBe('Localiza · Mapa online');
+    expect(estiloMostrado()).toBe('Angola Localiza');
     alerta.mockRestore();
   });
 
