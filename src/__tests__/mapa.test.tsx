@@ -618,7 +618,7 @@ describe('Mapa / Satélite', () => {
     await desenhar();
     fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
     expect(alerta).toHaveBeenCalledWith('Sem rede', expect.stringMatching(/precisa de internet/));
-    expect(estiloMostrado()).toBe('Angola Localiza');
+    expect(estiloMostrado()).toBe('Localiza · Mapa online');
     alerta.mockRestore();
   });
 
