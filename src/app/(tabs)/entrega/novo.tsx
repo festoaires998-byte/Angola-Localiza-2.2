@@ -11,7 +11,7 @@ import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
 import { useSessao } from '@/hooks/useSessao';
-import { cotarEntrega, type CotacaoEntrega } from '@/api/pricing';
+import { cotarEntrega, textoCotacao, type CotacaoEntrega } from '@/api/pricing';
 import { servicoEnvios } from '@/services/entregas/enviosApp';
 import { tituloMorada } from '@/services/moradas/moradas';
 import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
@@ -74,6 +74,7 @@ export default function NovoEnvio() {
     setCotacaoErro(null);
     void cotarEntrega({
       countryCode,
+      addressId: destinoSelecionado.id,
       originLatitude: dados.origem.latitude,
       originLongitude: dados.origem.longitude,
       destinationLatitude: destinoSelecionado.latitude,
@@ -82,7 +83,7 @@ export default function NovoEnvio() {
       if (ativo) setCotacaoErro(e instanceof Error ? e.message : 'Não foi possível calcular o preço.');
     });
     return () => { ativo = false; };
-  }, [online, dados.origem?.latitude, dados.origem?.longitude, destinoSelecionado?.latitude, destinoSelecionado?.longitude]);
+  }, [online, dados.origem?.latitude, dados.origem?.longitude, destinoSelecionado?.id, destinoSelecionado?.latitude, destinoSelecionado?.longitude]);
 
 
   useEffect(() => {
@@ -367,11 +368,7 @@ export default function NovoEnvio() {
       <Subtitulo>Prioridade</Subtitulo>
       {online ? (
         <Caixa tipo="info">
-          {cotacao ? (() => {
-            const b = cotacao.breakdown ?? {};
-            const total = cotacao.amount_total ?? 0;
-            return `Preço estimado: Grátis durante o piloto — fora do piloto: Frete ${b.frete ?? 0} + Roteamento ${b.roteamento ?? 0} + Prova ${b.prova ?? 0} = ${total} Kz.`;
-          })() : cotacaoErro ? 'Preço: não disponível neste momento; podes continuar e o servidor recalcula ao criar.' : 'Preço: a calcular…'}
+          {cotacao ? textoCotacao(cotacao) : cotacaoErro ? 'Preço: não disponível neste momento; podes continuar e o servidor recalcula ao criar.' : 'Preço: a calcular…'}
         </Caixa>
       ) : null}
       <Opcoes grupo="Prioridade" opcoes={PRIORIDADES} valor={dados.urgente ? 'urgente' : 'normal'} aoEscolher={(v) => mudar({ urgente: v === 'urgente' })} />

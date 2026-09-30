@@ -53,12 +53,15 @@ export function trocarMarcadores(payload: unknown, urls: ReadonlyMap<string, str
   return novo;
 }
 
-/** Buckets privados em que cada pessoa só pode enviar para a sua pasta ("<id>/…"). */
-export const BUCKETS_COM_PASTA: readonly string[] = ['delivery-proofs'];
+/**
+ * Buckets privados em que cada pessoa só pode enviar para a sua pasta ("<id>/…").
+ * field-photos passou a privado e com pasta na migração 20260928064000.
+ */
+export const BUCKETS_COM_PASTA: readonly string[] = ['delivery-proofs', 'field-photos'];
 
 /**
  * Nome do ficheiro no Storage: "offline-<id>.jpg", ou ".png" se for image/png.
- * Nos buckets privados (provas de entrega) vai para a pasta de quem envia:
+ * Nos buckets privados (provas de entrega e fotos do Campo/registo) vai para a pasta de quem envia:
  * "<userId>/offline-<id>.jpg" (a deliveries v19 só aceita ficheiros na pasta de quem envia).
  */
 export function nomeNoStorage(ficheiro: Pick<FicheiroPendente, 'id' | 'content_type'> & { bucket?: string }, userId?: string): string {

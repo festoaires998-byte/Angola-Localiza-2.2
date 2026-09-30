@@ -106,15 +106,27 @@ export async function enviarCampo(input: {
   });
 }
 
+/**
+ * Envia a foto da fachada para o bucket privado field-photos. `nome` é
+ * "<id da pessoa>/<ficheiro>": a regra do Storage só aceita a pasta de quem
+ * envia (migração 20260928064000) e a field-service v22 também o exige.
+ */
 export async function enviarFotoCampo(uri: string, nome: string): Promise<string> {
   const resposta = await fetch(uri);
   if (!resposta.ok) throw new Error('Não foi possível ler a fotografia preparada.');
   const blob = await resposta.blob();
-  const caminho = `users/${nome}`;
+  const caminho = caminhoFotoCampo(nome);
   const { error } = await supabase.storage.from('field-photos').upload(caminho, blob, {
     contentType: 'image/jpeg',
     upsert: false,
   });
   if (error) throw new Error(error.message);
   return supabase.storage.from('field-photos').getPublicUrl(caminho).data.publicUrl;
+}
+
+/** Caminho da foto no bucket: a pasta da pessoa, sem prefixos (antes ia para "users/…" e o Storage recusava). */
+export function caminhoFotoCampo(nome: string): string {
+  const limpo = nome.replace(/^\/+/, '').replace(/^users\//, '');
+  if (!/^[0-9a-f-]{36}\/[^/]+$/i.test(limpo)) throw new Error('A foto tem de ficar na pasta da pessoa (<id>/<ficheiro>).');
+  return limpo;
 }

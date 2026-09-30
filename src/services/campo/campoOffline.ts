@@ -112,7 +112,8 @@ export async function sincronizarCampoOffline(): Promise<{ synced: number; pendi
       const foto = new File(op.photo_local_uri);
       if (!foto.exists) throw new Error('Fotografia offline não encontrada.');
       const blob = await (await fetch(foto.uri)).blob();
-      const caminho = `users/${data.session!.user.id}/${op.operation_id}.jpg`;
+      // A pasta da pessoa (o Storage só aceita "<id>/…" no bucket privado field-photos).
+      const caminho = `${data.session!.user.id}/${op.operation_id}.jpg`;
       const upload = await supabase.storage.from('field-photos').upload(caminho, blob, {
         contentType: 'image/jpeg',
         upsert: false,

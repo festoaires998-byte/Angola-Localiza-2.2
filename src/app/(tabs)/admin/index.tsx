@@ -188,6 +188,12 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
       </Cartao>;
     })}
 
+    <Text style={estilos.secao}>Candidaturas de motorista</Text>
+    {podeRever
+      ? <Botao titulo="🚚 Rever candidaturas de motorista" variante="secundario" onPress={() => router.push('/admin/motoristas')} />
+      : <Caixa tipo="info">Só os administradores podem aprovar motoristas.</Caixa>}
+    <Texto suave>Um estafeta só pode aceitar e avançar entregas depois de a candidatura de motorista ser aprovada.</Texto>
+
     <Text style={estilos.secao}>Moradas por aprovar</Text>
     {pending.length === 0 ? <Texto suave>Nada por aprovar de momento.</Texto> : pending.map((a) => (
       <Cartao key={a.id}>
@@ -411,18 +417,24 @@ function Financeiro({ onError }: { onError: (v: string | null) => void }) {
   const [ledger, setLedger] = useState<any[]>([]);
   const load = useCallback(async () => {
     try {
+      // As tarifas que o servidor usa (country_pricing_zones, por país), pela função pricing.
       const [z, l] = await Promise.all([
-        restGet<any[]>('pricing_zones?select=*&order=zone_code.asc'),
+        chamarFuncao<{ zones: any[] }>('pricing', 'list_zones'),
         restGet<any[]>('usage_events?select=amount_total,amount_driver,amount_platform,is_free_pilot,event_type'),
       ]);
-      setZones(z ?? []); setLedger(l ?? []);
+      setZones(z?.zones ?? []); setLedger(l ?? []);
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   }, [onError]);
   useEffect(() => { void load(); }, [load]);
 
   const guardar = async (z: any) => {
     try {
-      await chamarFuncao('pricing', 'admin_update_zone', { zone_code: z.zone_code, base_fee: Number(z.base_fee), routing_fee: Number(z.routing_fee), proof_fee: Number(z.proof_fee) });
+      await chamarFuncao('pricing', 'admin_update_zone', {
+        country_code: z.country_code, zone_code: z.zone_code,
+        base_fee: Number(z.base_fee), routing_fee: Number(z.routing_fee), proof_fee: Number(z.proof_fee),
+        bulky_fee: z.bulky_fee === '' || z.bulky_fee == null ? undefined : Number(z.bulky_fee),
+        long_wait_fee: z.long_wait_fee === '' || z.long_wait_fee == null ? undefined : Number(z.long_wait_fee),
+      });
       await load();
     } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   };
@@ -432,15 +444,22 @@ function Financeiro({ onError }: { onError: (v: string | null) => void }) {
   return <>
     <Cartao>
       <Text style={estilos.cabecalhoCard}>💰 Bandas de preço</Text>
-      {zones.length === 0 ? <Texto suave>Sem zonas.</Texto> : zones.map((z, i) => (
-        <View key={String(z.zone_code ?? i)} style={estilos.item}>
-          <Texto>Zona {z.zone_code} — {z.name}</Texto>
-          <Campo rotulo="Frete (Kz)" value={String(z.base_fee ?? '')} onChangeText={(v) => setZones((xs) => xs.map((x) => x.zone_code === z.zone_code ? { ...x, base_fee: v } : x))} keyboardType="decimal-pad" />
-          <Campo rotulo="Roteamento (Kz)" value={String(z.routing_fee ?? '')} onChangeText={(v) => setZones((xs) => xs.map((x) => x.zone_code === z.zone_code ? { ...x, routing_fee: v } : x))} keyboardType="decimal-pad" />
-          <Campo rotulo="Prova (Kz)" value={String(z.proof_fee ?? '')} onChangeText={(v) => setZones((xs) => xs.map((x) => x.zone_code === z.zone_code ? { ...x, proof_fee: v } : x))} keyboardType="decimal-pad" />
+      {zones.length === 0 ? <Texto suave>Sem zonas.</Texto> : zones.map((z, i) => {
+        const chave = `${z.country_code}-${z.zone_code}`;
+        const mudar = (campo: string, v: string) => setZones((xs) => xs.map((x) => `${x.country_code}-${x.zone_code}` === chave ? { ...x, [campo]: v } : x));
+        const moeda = z.currency_code === 'AOA' || !z.currency_code ? 'Kz' : z.currency_code;
+        return (
+        <View key={String(chave ?? i)} style={estilos.item}>
+          <Texto>{`${z.country_code} · Zona ${z.zone_code} — ${z.name}`}</Texto>
+          <Campo rotulo={`Frete (${moeda})`} value={String(z.base_fee ?? '')} onChangeText={(v) => mudar('base_fee', v)} keyboardType="decimal-pad" />
+          <Campo rotulo={`Roteamento (${moeda})`} value={String(z.routing_fee ?? '')} onChangeText={(v) => mudar('routing_fee', v)} keyboardType="decimal-pad" />
+          <Campo rotulo={`Prova (${moeda})`} value={String(z.proof_fee ?? '')} onChangeText={(v) => mudar('proof_fee', v)} keyboardType="decimal-pad" />
+          <Campo rotulo={`Volumoso (${moeda})`} value={String(z.bulky_fee ?? '')} onChangeText={(v) => mudar('bulky_fee', v)} keyboardType="decimal-pad" />
+          <Campo rotulo={`Espera longa (${moeda})`} value={String(z.long_wait_fee ?? '')} onChangeText={(v) => mudar('long_wait_fee', v)} keyboardType="decimal-pad" />
           <Botao titulo="Guardar zona" variante="secundario" onPress={() => void guardar(z)} />
         </View>
-      ))}
+        );
+      })}
     </Cartao>
     <Cartao>
       <Text style={estilos.cabecalhoCard}>📒 Livro-razão · usage_events</Text>
