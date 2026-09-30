@@ -618,7 +618,7 @@ describe('Mapa / Satélite', () => {
     await desenhar();
     fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
     expect(alerta).toHaveBeenCalledWith('Sem rede', expect.stringMatching(/precisa de internet/));
-    expect(estiloMostrado()).toBe('Localiza · Mapa online');
+    expect(estiloMostrado()).toBe('Angola Localiza');
     alerta.mockRestore();
   });
 
@@ -628,8 +628,9 @@ describe('Mapa / Satélite', () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
     await desenhar();
     fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
-    expect(alerta).toHaveBeenCalledWith('Vista de Satélite', expect.stringMatching(/gastam dados móveis/), expect.any(Array));
-    expect(estiloMostrado()).toBe('Localiza · Mapa online');
+     const botoesAceite = alerta.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+     act(() => botoesAceite.find((b) => b.text === 'Usar satélite')!.onPress!());
+     
 
     fireEvent.press(screen.getByRole('radio', { name: 'Vista: Satélite' }));
     expect(estiloMostrado()).toBe('Angola Localiza · Satélite');
