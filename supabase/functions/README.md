@@ -30,3 +30,19 @@ função que precisa delas (e só com o pedido do dono).
 - `20260924090100_moradas_ligadas_fora_da_api.sql`: a função
   `moradas_ligadas_a_mim()` (usada pela regra acima) passa para o esquema
   `privado`, que a API não expõe.
+
+## Alterações de 30/09/2026 (sintonia app ↔ site)
+
+- `pricing` v5 (`verify_jwt` ligado): cotação e cobrança com `country_pricing_zones`
+  (por país, com hora local do país); `list_zones`; `admin_update_zone` com
+  `country_code` (Angola também atualiza `pricing_zones`). Regras em `precos.ts`,
+  cópia exata em `deliveries/precos.ts` (o teste compara).
+- `deliveries` v38: `action=track` público (sem sessão: estado, datas, zona e
+  histórico); zona e país calculados no servidor (422 `ZONE_NOT_FOUND`).
+- `sync` v18: aceita o `save_favorite` antigo do site (convertido em `create_favorite`).
+- `driver-kyc` v4: `set_online`, `list_pending`, `view` (links de 10 min), `review`.
+- `chat` v8: anexos só em `chat-media/<id>/…`; a lista devolve links temporários.
+- `identity-kyc` v6: ficheiros na pasta de quem envia; revisão sem auto-revisão.
+- `field-service` v37: fotos só em `field-photos/<id>/…`; `list_pending` com links temporários.
+- `address-card` v9: `get` devolve `address.id`; `create` exige sessão.
+
