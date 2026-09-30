@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE, criarEstilo, criarEstiloSatelite, TILES_SATELITE } from '../estiloMapa';
+import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE, criarEstilo, criarEstiloOnlineOSM, criarEstiloSatelite, TILES_SATELITE } from '../estiloMapa';
 import { dentroDaRegiao, FONTES_MAPA, REGIAO_HUAMBO } from '../regioes';
 
 const ORIGEM = {
@@ -54,5 +54,18 @@ describe('estilo Satélite', () => {
     });
     expect(TILES_SATELITE).toBe('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
     expect(estilo.layers).toEqual([{ id: 'satelite', type: 'raster', source: 'satelite' }]);
+  });
+});
+
+describe('estilo online OSM', () => {
+  test('usa os mesmos tiles OSM online do site', () => {
+    const estilo = criarEstiloOnlineOSM();
+    expect(estilo.sources.osm).toEqual({
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: ATRIBUICAO_OSM,
+    });
+    expect(estilo.layers).toEqual([{ id: 'osm', type: 'raster', source: 'osm' }]);
   });
 });
