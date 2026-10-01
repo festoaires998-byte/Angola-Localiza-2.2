@@ -101,16 +101,23 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   `supabase_admin`; `anon`/`authenticated` continuam com INSERT/UPDATE/DELETE).
   Só se resolve com o suporte do Supabase ou mudando a PostGIS de esquema
   (ver a migração `20260929122000_restrict_postgis_metadata_rest.sql`).
-- **`public-api` (`/v1/address/search`):** lê `addresses` e `streets` para as
-  organizações (com a chave da API). Confirmar que respeita a privacidade.
+- ~~**`public-api`: privacidade.**~~ Revista (01/10), v9: nenhuma rota mostra
+  moradas privadas ou por validar (o `verify` por coordenadas devolvia
+  qualquer morada); `delivery/create` só para moradas públicas; `GET
+  /v1/delivery/<código>` só das entregas que a organização paga (antes
+  mostrava o nome de quem recebe das entregas dos cidadãos); o nome da rua
+  deixa de ser curinga do `ilike`.
 - **Segredos no código (encontrados na auditoria):** a `identity-kyc` tem o
   "pepper" do KYC escrito no código; a `phone-verify` tem a chave pública
   escrita no código (devia vir do ambiente, como na `sync`). Passar para os
   segredos das Edge Functions.
-  **30/09 — continua por fazer:** o pepper da `identity-kyc` (v6) ainda está no
-  código porque os segredos só se criam no painel do Supabase (Edge Functions →
-  Secrets → `KYC_PEPPER`); depois basta ler `Deno.env.get("KYC_PEPPER")` com o
-  valor atual como alternativa, para não invalidar os pedidos já feitos.
+  **01/10:** a `identity-kyc` v7 lê o segredo `KYC_PEPPER` (sem valor no
+  código) e a `phone-verify` v5 lê `SUPABASE_ANON_KEY` do ambiente. Antes de
+  publicar a v7, o dono cria o segredo `KYC_PEPPER` no painel com **o mesmo
+  valor de hoje** (senão os BI já registados deixam de ser reconhecidos como
+  repetidos). O valor antigo está no histórico do git: trocá-lo obriga a pedir
+  de novo o número do BI a quem já fez a verificação (decisão do dono).
+  Um teste (`semChavesNoCodigo.test.ts`) falha se aparecer uma chave no código.
 - **Favorito do Mapa sem província/município:** o "Guardar como favorito" cria
   a morada sem `province_id`/`municipality_id` (o site procurava pelo nome). O
   validador completa na validação.

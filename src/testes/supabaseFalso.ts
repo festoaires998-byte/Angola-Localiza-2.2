@@ -215,14 +215,19 @@ export const URL_SUPABASE_FALSO = 'https://projeto.supabase.co';
  * Deno.serve. Quem chama tem de ter feito jest.mock dos imports "jsr:" (virtual)
  * para usar globalThis.__supabaseFalso.
  */
-export function carregarFuncao(carregar: () => void): (req: Request) => Promise<Response> {
+export function carregarFuncao(
+  carregar: () => void,
+  /** Segredos extra (ex.: KYC_PEPPER). O teste pode mudar este objeto depois. */
+  ambiente: Record<string, string | undefined> = {},
+): (req: Request) => Promise<Response> {
   let handler: ((req: Request) => Promise<Response>) | undefined;
+  const base: Record<string, string | undefined> = { SUPABASE_URL: URL_SUPABASE_FALSO, SUPABASE_SERVICE_ROLE_KEY: 'chave-de-teste' };
   (globalThis as any).Deno = {
     serve: (h: (req: Request) => Promise<Response>) => {
       handler = h;
     },
     env: {
-      get: (k: string) => ({ SUPABASE_URL: URL_SUPABASE_FALSO, SUPABASE_SERVICE_ROLE_KEY: 'chave-de-teste' })[k],
+      get: (k: string) => (k in ambiente ? ambiente[k] : base[k]),
     },
   };
   carregar();

@@ -1,7 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { STATUS_PERMITIDOS, entregaDaOrganizacao, escaparIlike, moradaPublica } from "./regras.ts";
 
-// Angola Localiza - Public API Gateway (v6)
+// Angola Localiza - Public API Gateway (v9)
+// v9 (privacidade): nenhuma rota mostra moradas "Privadas" nem por validar
+// (verify por coordenadas devolvia qualquer morada); delivery/create so para
+// moradas publicas; GET delivery so das entregas que a organizacao paga; o
+// nome da rua no search ja nao e curinga do ilike.
 // address/search agora tambem aceita place_kind (categoria: Farmacia, Loja,
 // Hospital, etc.) - reaproveitando o prefixo "[Categoria] " ja guardado na
 // referencia de cada morada desde o registo, sem precisar de tabela nova.
@@ -40,7 +45,6 @@ function publicShape(a: any) {
   };
 }
 
-const STATUS_PERMITIDOS = ["PUBLISHED", "APPROVED", "OFFICIAL"];
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -85,13 +89,15 @@ Deno.serve(async (req: Request) => {
         const { data: nearby } = await supabase.rpc("nearby_for_duplicates", { in_lat: latitude, in_lng: longitude, radius_meters: 15 });
         const match = (nearby ?? []).find((n: any) => n.source === "address");
         if (!match) return new Response(JSON.stringify({ valid: false, address: null }), { headers: cors });
-        const { data: addr } = await supabase.from("addresses").select("*").eq("id", match.id).maybeSingle();
-        return new Response(JSON.stringify({ valid: !!addr, address: addr ? publicShape(addr) : null }), { headers: cors });
+        const { data: addr } = await supabase.from("addresses").select("*").eq("id", match.id).in("status", STATUS_PERMITIDOS).maybeSingle();
+        const ok = moradaPublica(addr);
+        return new Response(JSON.stringify({ valid: ok, address: ok ? publicShape(addr) : null }), { headers: cors });
       } else {
         return new Response(JSON.stringify({ error: "fornece postal_code, plus_code, ou latitude+longitude" }), { status: 400, headers: cors });
       }
       const { data: addr } = await query.maybeSingle();
-      return new Response(JSON.stringify({ valid: !!addr, address: addr ? publicShape(addr) : null }), { headers: cors });
+      const ok = moradaPublica(addr);
+      return new Response(JSON.stringify({ valid: ok, address: ok ? publicShape(addr) : null }), { headers: cors });
     }
 
     if (req.method === "POST" && pathname.endsWith("/v1/address/reverse")) {
@@ -101,7 +107,8 @@ Deno.serve(async (req: Request) => {
       const match = (nearby ?? []).find((n: any) => n.source === "address");
       if (!match) return new Response(JSON.stringify({ found: false, address: null }), { headers: cors });
       const { data: addr } = await supabase.from("addresses").select("*").eq("id", match.id).in("status", STATUS_PERMITIDOS).maybeSingle();
-      return new Response(JSON.stringify({ found: !!addr, address: addr ? publicShape(addr) : null }), { headers: cors });
+      const ok = moradaPublica(addr);
+      return new Response(JSON.stringify({ found: ok, address: ok ? publicShape(addr) : null }), { headers: cors });
     }
 
     // ---- address/search: por rua (parcial) e/ou por categoria de local ----
@@ -111,23 +118,24 @@ Deno.serve(async (req: Request) => {
       const lim = Math.min(Math.max(parseInt(limit) || 10, 1), 30);
 
       let query = supabase.from("addresses").select("*").in("status", STATUS_PERMITIDOS);
-      if (place_kind) query = query.ilike("reference", "[" + String(place_kind).trim() + "]%");
+      if (place_kind) query = query.ilike("reference", "[" + escaparIlike(String(place_kind).trim()) + "]%");
 
       if (street_name && String(street_name).trim().length >= 3) {
-        const { data: ruas } = await supabase.from("streets").select("id").ilike("nome_normalizado", "%" + String(street_name).trim().toLowerCase() + "%").limit(20);
+        const { data: ruas } = await supabase.from("streets").select("id").ilike("nome_normalizado", "%" + escaparIlike(String(street_name).trim().toLowerCase()) + "%").limit(20);
         if (!ruas || ruas.length === 0) return new Response(JSON.stringify({ results: [] }), { headers: cors });
         query = query.in("street_id", ruas.map((r) => r.id));
       }
 
-      const { data: addrs } = await query.limit(lim);
-      return new Response(JSON.stringify({ results: (addrs ?? []).map(publicShape) }), { headers: cors });
+      // Pede mais para compensar as privadas que se tiram.
+      const { data: addrs } = await query.limit(lim * 3);
+      return new Response(JSON.stringify({ results: (addrs ?? []).filter(moradaPublica).slice(0, lim).map(publicShape) }), { headers: cors });
     }
 
     if (req.method === "POST" && pathname.endsWith("/v1/delivery/create")) {
       const { postal_code, recipient_name, recipient_phone, instructions } = body;
       if (!postal_code || !recipient_name) return new Response(JSON.stringify({ error: "postal_code e recipient_name sao obrigatorios" }), { status: 400, headers: cors });
-      const { data: addr } = await supabase.from("addresses").select("id").eq("postal_code", String(postal_code).toUpperCase()).in("status", STATUS_PERMITIDOS).maybeSingle();
-      if (!addr) return new Response(JSON.stringify({ error: "morada nao encontrada ou nao validada" }), { status: 404, headers: cors });
+      const { data: addr } = await supabase.from("addresses").select("id, status, visibility_level").eq("postal_code", String(postal_code).toUpperCase()).in("status", STATUS_PERMITIDOS).maybeSingle();
+      if (!addr || !moradaPublica(addr)) return new Response(JSON.stringify({ error: "morada nao encontrada ou nao validada" }), { status: 404, headers: cors });
       const { data: delivery, error } = await supabase.from("deliveries").insert({
         address_id: addr.id, recipient_name, recipient_phone: recipient_phone ?? null, instructions: instructions ?? null,
         payer_organization_id: keyRow.organization_id, created_by: null,
@@ -143,7 +151,7 @@ Deno.serve(async (req: Request) => {
       const trackingCode = decodeURIComponent(deliveryMatch[1]);
       const { data: delivery } = await supabase.from("deliveries").select("tracking_code, status, recipient_name, updated_at, payer_organization_id").eq("tracking_code", trackingCode).maybeSingle();
       if (!delivery) return new Response(JSON.stringify({ found: false }), { headers: cors });
-      if (delivery.payer_organization_id && delivery.payer_organization_id !== keyRow.organization_id) {
+      if (!entregaDaOrganizacao(delivery, keyRow.organization_id ?? null)) {
         return new Response(JSON.stringify({ error: "esta entrega nao pertence a tua organizacao" }), { status: 403, headers: cors });
       }
       return new Response(JSON.stringify({ found: true, delivery: { tracking_code: delivery.tracking_code, status: delivery.status, recipient_name: delivery.recipient_name, updated_at: delivery.updated_at } }), { headers: cors });
@@ -153,7 +161,8 @@ Deno.serve(async (req: Request) => {
     if (req.method === "GET" && getMatch && getMatch[1] !== "verify" && getMatch[1] !== "reverse" && getMatch[1] !== "search") {
       const postalCode = decodeURIComponent(getMatch[1]);
       const { data: addr } = await supabase.from("addresses").select("*").eq("postal_code", postalCode.toUpperCase()).in("status", STATUS_PERMITIDOS).maybeSingle();
-      return new Response(JSON.stringify({ found: !!addr, address: addr ? publicShape(addr) : null }), { headers: cors });
+      const ok = moradaPublica(addr);
+      return new Response(JSON.stringify({ found: ok, address: ok ? publicShape(addr) : null }), { headers: cors });
     }
 
     const action = url.searchParams.get("action") || "get_address";
@@ -161,7 +170,8 @@ Deno.serve(async (req: Request) => {
       const postalCode = body.postal_code || url.searchParams.get("postal_code");
       if (!postalCode) return new Response(JSON.stringify({ error: "postal_code em falta" }), { status: 400, headers: cors });
       const { data } = await supabase.from("addresses").select("*").eq("postal_code", postalCode.toUpperCase()).in("status", STATUS_PERMITIDOS).maybeSingle();
-      return new Response(JSON.stringify({ found: !!data, address: data ? publicShape(data) : null }), { headers: cors });
+      const ok = moradaPublica(data);
+      return new Response(JSON.stringify({ found: ok, address: ok ? publicShape(data) : null }), { headers: cors });
     }
 
     return new Response(JSON.stringify({ error: "rota desconhecida" }), { status: 404, headers: cors });
