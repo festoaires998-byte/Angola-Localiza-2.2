@@ -6,24 +6,31 @@ import { LeitorQr } from '@/components/mapa/LeitorQr';
 import { Botao, Caixa, Campo, Ecra, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
 import { faltaNoEnvio, MAX_INSTRUCOES, mensagemErroEnvio, type DadosEnvio } from '@/domain/entregas/envio';
 import { interpretarEntrada } from '@/domain/enderecamento/pesquisa';
+import { encode } from '@/domain/enderecamento/plusCode';
+import { pesquisarNoServidor } from '@/api/pesquisa';
 import { useMoradas } from '@/hooks/useMoradas';
 import { useOnline } from '@/hooks/useOnline';
 import { usePosicao } from '@/hooks/usePosicao';
 import { useInfoLocal } from '@/hooks/useInfoLocal';
 import { useSessao } from '@/hooks/useSessao';
 import { cotarEntrega, textoCotacao, type CotacaoEntrega } from '@/api/pricing';
+import { resolverDestino } from '@/services/entregas/destino';
 import { servicoEnvios } from '@/services/entregas/enviosApp';
 import { tituloMorada } from '@/services/moradas/moradas';
+import { mudancasMoradas, servicoMoradas } from '@/services/moradas/moradasApp';
 import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
 import { servicoRegisto } from '@/services/moradas/registoApp';
-import { AVISO_NA_FILA, definirAvisoEnvios, guardarEnvio } from '@/state/envios';
+import { AVISO_DESTINO_NOVO, AVISO_NA_FILA, definirAvisoEnvios, guardarEnvio } from '@/state/envios';
 
 const PRIORIDADES: readonly Opcao<'normal' | 'urgente'>[] = [
   { valor: 'normal', nome: 'Normal' },
   { valor: 'urgente', nome: 'Urgente' },
 ];
 
-/** Novo pedido de entrega: morada de destino (das guardadas), quem recebe e instruções. */
+/**
+ * Novo pedido de entrega: morada de destino (das guardadas, ou por Plus Code,
+ * link, QR ou código postal), quem recebe e instruções.
+ */
 export default function NovoEnvio() {
   const online = useOnline();
   const sessao = useSessao();
@@ -56,6 +63,9 @@ export default function NovoEnvio() {
   const [aEnviar, setAEnviar] = useState(false);
   const [entradaDestino, setEntradaDestino] = useState('');
   const [lerQr, setLerQr] = useState(false);
+  /** Destino criado agora no telemóvel (ainda pode não estar no servidor). */
+  const [destinoNovo, setDestinoNovo] = useState<{ moradaId: string; texto: string } | null>(null);
+  const [aProcurarDestino, setAProcurarDestino] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmar, setConfirmar] = useState(false);
   const [cotacao, setCotacao] = useState<CotacaoEntrega | null>(null);
@@ -149,30 +159,34 @@ export default function NovoEnvio() {
     return true;
   };
 
-  const selecionarPorEntrada = (entrada: string) => {
+  const selecionarPorEntrada = async (entrada: string): Promise<void> => {
+    if (aProcurarDestino) return;
     const referencia = posicao ? { latitude: posicao.latitude, longitude: posicao.longitude } : undefined;
-    const r = interpretarEntrada(entrada, referencia);
-    if (r.tipo !== 'ponto') {
-      setErro(r.tipo === 'invalida' ? r.motivo : 'Este QR/link precisa de uma localização válida.');
-      return false;
+    setErro(null);
+    setAProcurarDestino(true);
+    const r = await resolverDestino(interpretarEntrada(entrada, referencia), {
+      guardadas: moradas.itens ?? [],
+      online,
+      pesquisar: pesquisarNoServidor,
+      async criarMorada(p) {
+        if (!userId) throw new Error('Sem sessão iniciada.');
+        const item = await servicoMoradas.guardarDoMapa(
+          userId,
+          { ...p, precisao: null, plusCode: encode(p.latitude, p.longitude), codigoPostal: null, provincia: null, municipio: null },
+          { visibilidade: 'PRIVATE', categoria: 'entrega', nome: 'Destino de envio' },
+        );
+        mudancasMoradas.avisar();
+        return item.morada!.id;
+      },
+    }).finally(() => setAProcurarDestino(false));
+    if (r.tipo === 'erro') {
+      setErro(r.mensagem);
+      return;
     }
-    const encontrado = (moradas.itens ?? []).find((i) => {
-      const m = i.morada;
-      if (!m || m.origem === 'local' || i.favorito.pendente === 'remover') return false;
-      if (r.tipo === 'ponto' && m.latitude !== null && m.longitude !== null) {
-        return Math.abs(m.latitude - r.latitude) < 0.00015 && Math.abs(m.longitude - r.longitude) < 0.00015;
-      }
-      return false;
-    });
-    if (!encontrado?.morada?.id) {
-      setErro('A localização foi lida, mas ainda não existe nas tuas Moradas. Guarda primeiro este ponto como morada de destino.');
-      return false;
-    }
-    mudar({ moradaId: encontrado.morada.id });
+    mudar({ moradaId: r.moradaId });
+    setDestinoNovo(r.tipo === 'nova' ? { moradaId: r.moradaId, texto: entrada.trim() } : null);
     setEntradaDestino('');
     setLerQr(false);
-    setErro(null);
-    return true;
   };
 
   const mudar = (m: Partial<DadosEnvio>) => setDados((d) => ({ ...d, ...m }));
@@ -189,12 +203,14 @@ export default function NovoEnvio() {
     setAEnviar(true);
     try {
       const dadosComCarga: DadosEnvio = { ...dados, carga: { tipo:carga.tipo, descricao:carga.descricao, quantidade:carga.quantidade?Number(carga.quantidade):null, pesoKg:carga.pesoKg?Number(carga.pesoKg):null, comprimentoCm:carga.comprimentoCm?Number(carga.comprimentoCm):null, larguraCm:carga.larguraCm?Number(carga.larguraCm):null, alturaCm:carga.alturaCm?Number(carga.alturaCm):null, valorDeclarado:carga.valorDeclarado?Number(carga.valorDeclarado):null, tipoVeiculo:carga.tipoVeiculo||null, capacidadeVeiculoKg:carga.capacidadeVeiculoKg?Number(carga.capacidadeVeiculoKg):null } };
-      const r = await servicoEnvios.enviar(userId, dadosComCarga, online === true);
+      // Destino novo: o pedido vai pela fila, logo a seguir à morada (senão o servidor ainda não a conhece).
+      const destinoEhNovo = destinoNovo !== null && destinoNovo.moradaId === dados.moradaId;
+      const r = await servicoEnvios.enviar(userId, dadosComCarga, online === true && !destinoEhNovo);
       if (r.tipo === 'enviado') {
         guardarEnvio(r.envio, r.pin, { tipo: 'sucesso', texto: 'Pedido enviado. Dá o PIN só a quem vai receber a encomenda.' });
         router.replace({ pathname: '/entrega/[id]', params: { id: r.envio.id } });
       } else {
-        definirAvisoEnvios({ tipo: 'info', texto: AVISO_NA_FILA });
+        definirAvisoEnvios({ tipo: 'info', texto: destinoEhNovo ? AVISO_DESTINO_NOVO : AVISO_NA_FILA });
         router.back();
       }
     } catch (e) {
@@ -279,7 +295,7 @@ export default function NovoEnvio() {
       )}
       <Subtitulo>Para onde?</Subtitulo>
       {destinos.length > 0 ? (
-        <Opcoes grupo="Morada de destino" empilhadas opcoes={destinos} valor={dados.moradaId} aoEscolher={(v) => mudar({ moradaId: v })} />
+        <Opcoes grupo="Morada de destino" empilhadas opcoes={destinos} valor={dados.moradaId} aoEscolher={(v) => { setDestinoNovo(null); mudar({ moradaId: v }); }} />
       ) : null}
 
       <Campo
@@ -292,25 +308,28 @@ export default function NovoEnvio() {
       <Botao
         titulo="Usar código/link"
         variante="secundario"
-        onPress={() => selecionarPorEntrada(entradaDestino)}
-        desativado={!entradaDestino.trim()}
+        onPress={() => void selecionarPorEntrada(entradaDestino)}
+        desativado={!entradaDestino.trim() || aProcurarDestino}
+        aCarregar={aProcurarDestino}
       />
       <Botao titulo="Ler QR do destino" variante="secundario" onPress={() => { setErro(null); setLerQr(true); }} />
 
       {lerQr ? (
         <LeitorQr
-          aoLer={(conteudo) => selecionarPorEntrada(conteudo)}
+          aoLer={(conteudo) => void selecionarPorEntrada(conteudo)}
           aoFechar={() => setLerQr(false)}
         />
       ) : null}
 
-      {destinos.length === 0 ? (
-        <>
-          <Caixa tipo="info">
-            Ainda não tens moradas guardadas. Guarda primeiro a morada de destino no separador Moradas.
-          </Caixa>
-          <Botao titulo="Abrir as Moradas" variante="secundario" onPress={() => router.push('/guardados')} />
-        </>
+      {destinoNovo && dados.moradaId === destinoNovo.moradaId ? (
+        <Caixa tipo="info">
+          {`Destino: ${destinoNovo.texto}\nÉ um sítio novo: fica nas tuas Moradas como privado e por validar. O pedido vai para o servidor logo a seguir a ele.`}
+        </Caixa>
+      ) : null}
+      {destinos.length === 0 && !destinoNovo ? (
+        <Caixa tipo="info">
+          Ainda não tens moradas guardadas. Escreve o Plus Code, cola o link do mapa ou lê o QR do destino.
+        </Caixa>
       ) : null}
 
       <Subtitulo>Carga</Subtitulo>
@@ -389,12 +408,12 @@ export default function NovoEnvio() {
             {[
               'Confirma os dados antes de enviar:',
               `Origem: ${dados.origem?.codigoPostal ?? dados.origem?.plusCode ?? 'posição atual'}`,
-              `Destino: ${destinos.find((d) => d.valor === dados.moradaId)?.nome ?? 'morada selecionada'}`,
+              `Destino: ${destinos.find((d) => d.valor === dados.moradaId)?.nome ?? (destinoNovo?.moradaId === dados.moradaId ? `${destinoNovo.texto} (sítio novo)` : 'morada selecionada')}`,
               `Destinatário: ${dados.destinatario}`,
               dados.telefone.trim() ? `Telefone: ${dados.telefone.trim()}` : 'Telefone: não indicado',
               dados.instrucoes.trim() ? `Instruções: ${dados.instrucoes.trim()}` : 'Instruções: não indicadas',
               `Prioridade: ${dados.urgente ? 'Urgente' : 'Normal'}`,
-            ].join('\\n')}
+            ].join('\n')}
           </Caixa>
           {online === false ? (
             <Caixa tipo="aviso">Sem rede: ao confirmar, o pedido será guardado neste telemóvel para envio posterior.</Caixa>

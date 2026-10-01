@@ -117,9 +117,12 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 
 ### Enviar: a seguir
 
-- **Destino fora das moradas guardadas (app):** o site já aceita Plus Code,
-  GPS e link (cria uma morada própria por validar e usa o id dela); falta o
-  mesmo na app.
+- ~~**Destino fora das moradas guardadas (app).**~~ Feito (01/10): Plus Code,
+  coordenadas, link do mapa ou QR de um sítio novo criam uma morada privada,
+  por validar (fica nas Moradas, categoria "entrega"); o pedido vai pela fila
+  logo a seguir à morada (a fila não envia a entrega antes da morada). Um
+  código postal completo é procurado no servidor (`pesquisa`) e usa a morada
+  que já existe.
 - ~~**Pedido repetido.**~~ Resolvido: a app manda o mesmo `sync_operation_id`
   com e sem rede, a deliveries devolve a entrega já criada e a base de dados
   tem um índice único (`deliveries_sync_operation_id_uidx`).

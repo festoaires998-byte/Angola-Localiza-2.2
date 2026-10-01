@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { lerDadosMorada, lerFavoritosDoServidor, type FavoritoDoServidor } from '@/api/moradasNucleo';
 import { aplicarMigracoes } from '@/database/migrations';
 import { criarRepositorioFavoritos } from '@/database/repositories/favoritos';
+import { criarRepositorioFilaSaida } from '@/database/repositories/filaSaida';
 import { criarRepositorioMoradas } from '@/database/repositories/moradas';
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 
@@ -267,5 +268,39 @@ describe('Guardar como favorito (Mapa)', () => {
     await t.servico.enviarPendentes(EU);
     expect(t.servidor.criarFavoritoComMorada).not.toHaveBeenCalled();
     expect(t.servidor.removerFavorito).not.toHaveBeenCalled();
+  });
+});
+
+describe('Guardar do Mapa com a fila verdadeira (base de dados do telemóvel)', () => {
+  test('a morada, o favorito e a operação create_favorite ficam guardados', async () => {
+    const { db } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(db);
+    const fila = criarRepositorioFilaSaida(db, { deviceId: 'app-teste', gerarId: () => 'op-1' });
+    let n = 0;
+    const servico = criarServicoMoradas({
+      favoritos: criarRepositorioFavoritos(db),
+      moradas: criarRepositorioMoradas(db),
+      servidor: {
+        lerFavoritos: async () => [],
+        atualizarFavorito: async () => undefined,
+        removerFavorito: async () => undefined,
+        criarFavoritoComMorada: async () => undefined,
+      },
+      gerarId: () => `id-${++n}`,
+      acrescentarOperacao: (userId, tipo, payload) => fila.adicionar(userId, tipo, payload),
+    });
+
+    const item = await servico.guardarDoMapa(
+      EU,
+      { latitude: -12.7761, longitude: 15.7392, precisao: 4, plusCode: '5FVQ5PWV+PH5', codigoPostal: null, provincia: null, municipio: null },
+      { visibilidade: 'PRIVATE', categoria: 'entrega' },
+    );
+
+    expect(await fila.listarPorEnviarDoTipo(EU, 'create_favorite')).toEqual([
+      expect.objectContaining({
+        operation_type: 'create_favorite',
+        payload: expect.objectContaining({ address_id: item.morada!.id, category: 'entrega' }),
+      }),
+    ]);
   });
 });

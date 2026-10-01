@@ -56,12 +56,20 @@ let mockOnline: boolean | null = true;
 jest.mock('@/hooks/useOnline', () => ({ useOnline: () => mockOnline }));
 jest.mock('@/hooks/useSessao', () => ({ useSessao: () => ({ utilizador: { id: EU } }) }));
 
+const mockGuardarDoMapa = jest.fn(async (..._a: unknown[]) => ({ favorito: { id: 'fav-nova' }, morada: { id: 'nova-1' } }));
+jest.mock('@/services/moradas/moradasApp', () => ({
+  servicoMoradas: { guardarDoMapa: (...a: unknown[]) => mockGuardarDoMapa(...a) },
+  mudancasMoradas: { avisar: () => undefined },
+}));
+const mockPesquisar = jest.fn(async (_q: string): Promise<unknown[]> => []);
+jest.mock('@/api/pesquisa', () => ({ pesquisarNoServidor: (q: string) => mockPesquisar(q) }));
+
 type Ecra = { default: () => React.JSX.Element };
 const Layout = (require('@/app/(tabs)/entrega/_layout') as Ecra).default;
 const Lista = (require('@/app/(tabs)/entrega/index') as Ecra).default;
 const Novo = (require('@/app/(tabs)/entrega/novo') as Ecra).default;
 const Detalhe = (require('@/app/(tabs)/entrega/[id]') as Ecra).default;
-const { lojaEnvios, ESTADO_INICIAL_ENVIOS, AVISO_NA_FILA } = require('@/state/envios') as typeof import('@/state/envios');
+const { lojaEnvios, ESTADO_INICIAL_ENVIOS, AVISO_NA_FILA, AVISO_DESTINO_NOVO } = require('@/state/envios') as typeof import('@/state/envios');
 const Vazio = () => null;
 
 let r: ReturnType<typeof renderRouter>;
@@ -100,7 +108,7 @@ beforeEach(() => {
   mockMoradas = [itemMorada(MORADA, 'Casa da Maria'), itemMorada('local-1', 'Ainda sem id', 'local')];
   mockOnline = true;
   lojaEnvios.definir(ESTADO_INICIAL_ENVIOS);
-  [mockEnviar, mockLerPin, mockGerarPin, mockCancelar].forEach((f) => f.mockClear());
+  [mockEnviar, mockLerPin, mockGerarPin, mockCancelar, mockGuardarDoMapa, mockPesquisar].forEach((f) => f.mockClear());
 });
 
 describe('Enviar: os meus envios', () => {
@@ -153,12 +161,6 @@ describe('Enviar: novo envio', () => {
     expect(screen.getByRole('button', { name: 'Rever e confirmar pedido' }).props.accessibilityState.disabled).toBe(true);
   });
 
-  test('sem moradas guardadas: manda guardar primeiro', async () => {
-    mockMoradas = [];
-    await desenhar('/entrega/novo');
-    expect(screen.getByText(/Ainda não tens moradas guardadas/)).toBeTruthy();
-  });
-
   test('com rede: envia e abre o detalhe com o PIN em grande', async () => {
     await desenhar('/entrega/novo');
     await preencherEEnviar();
@@ -189,6 +191,70 @@ describe('Enviar: novo envio', () => {
     await desenhar('/entrega/novo');
     await preencherEEnviar();
     expect(screen.getByText(/A tua identidade ainda não foi verificada/)).toBeTruthy();
+  });
+});
+
+describe('Enviar: destino que não está nas moradas guardadas', () => {
+  async function usarDestino(texto: string) {
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText('Código, Plus Code ou link do destino'), texto);
+    });
+    await carregar('Usar código/link');
+  }
+
+  test('coordenadas de um sítio novo: guarda a morada (privada, por validar) e o pedido vai pela fila logo a seguir', async () => {
+    mockEnviar.mockResolvedValueOnce({ tipo: 'na_fila', operationId: 'op-1' });
+    await desenhar('/entrega');
+    await carregar('Novo envio');
+    await usarDestino('-12.78, 15.74');
+
+    expect(mockGuardarDoMapa).toHaveBeenCalledWith(
+      EU,
+      expect.objectContaining({ latitude: -12.78, longitude: 15.74, codigoPostal: null }),
+      { visibilidade: 'PRIVATE', categoria: 'entrega', nome: 'Destino de envio' },
+    );
+    expect(screen.getByText(/Destino: -12.78, 15.74 É um sítio novo/)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText('Nome de quem recebe'), 'Maria João');
+    });
+    await carregar('Rever e confirmar pedido');
+    const resumo = screen.getByText(/Confirma os dados antes de enviar:/).props.children as string;
+    expect(resumo).toContain('Destino: -12.78, 15.74 (sítio novo)');
+    expect(resumo).not.toContain('\\n');
+    await carregar('Confirmar e enviar');
+
+    // Com rede na mesma vai pela fila: a morada tem de chegar primeiro ao servidor.
+    expect(mockEnviar).toHaveBeenCalledWith(EU, expect.objectContaining({ moradaId: 'nova-1' }), false);
+    expect(screen.getByText(AVISO_DESTINO_NOVO)).toBeTruthy();
+  });
+
+  test('código postal de uma morada aprovada: usa essa morada e envia logo (com rede)', async () => {
+    mockPesquisar.mockResolvedValueOnce([
+      { tipo: 'morada', id: 'm-aprovada', titulo: 'AO-HUA-23456789-42', subtitulo: null, latitude: -12.7, longitude: 15.7, codigoPostal: 'AO-HUA-23456789-42', plusCode: null },
+    ]);
+    await desenhar('/entrega/novo');
+    await usarDestino('AO-HUA-23456789-42');
+    expect(mockGuardarDoMapa).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText('Nome de quem recebe'), 'Maria João');
+    });
+    await carregar('Rever e confirmar pedido');
+    await carregar('Confirmar e enviar');
+    expect(mockEnviar).toHaveBeenCalledWith(EU, expect.objectContaining({ moradaId: 'm-aprovada' }), true);
+  });
+
+  test('código postal que não existe: explica e não escolhe nada', async () => {
+    await desenhar('/entrega/novo');
+    await usarDestino('AO-HUA-00000000-00');
+    expect(screen.getByText(/Não encontrei nenhuma morada com este código postal/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rever e confirmar pedido' }).props.accessibilityState.disabled).toBe(true);
+  });
+
+  test('sem moradas guardadas: explica que pode usar o Plus Code, o link ou o QR', async () => {
+    mockMoradas = [];
+    await desenhar('/entrega/novo');
+    expect(screen.getByText(/Escreve o Plus Code, cola o link do mapa ou lê o QR do destino/)).toBeTruthy();
   });
 });
 

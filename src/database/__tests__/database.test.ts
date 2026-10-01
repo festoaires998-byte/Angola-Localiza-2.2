@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, test } from '@jest/globals';
 
 import { aplicarMigracoes, lerVersao, MIGRACOES, type Migracao } from '../migrations';
+import { TIPOS_OPERACAO } from '../repositories/filaSaida';
 import {
   criarRepositorioChavesDispositivo,
   criarRepositorioCodigosConfirmados,
@@ -797,6 +798,84 @@ describe('favoritos do utilizador (migração 007)', () => {
   });
 });
 
+describe('fila aceita os favoritos (migração 011)', () => {
+  const agora = '2026-09-30T10:00:00.000Z';
+
+  test('a fila nova aceita todos os tipos que a app envia', async () => {
+    const db = await baseMigrada();
+    const fila = criarRepositorioFilaSaida(db, { deviceId: 'app-x', gerarId: geradorSequencial('op') });
+    for (const tipo of TIPOS_OPERACAO) {
+      await expect(fila.adicionar(U, tipo, { tipo })).resolves.toMatchObject({ operation_type: tipo });
+    }
+    await expect(
+      db.run(
+        `INSERT INTO fila_saida (operation_id, device_id, operation_type, payload_json, criado_em, atualizado_em)
+         VALUES ('op-mau', 'd1', 'apagar_tudo', '{}', ?, ?)`,
+        [agora, agora],
+      ),
+    ).rejects.toThrow(/CHECK/);
+  });
+
+  test('uma base na versão 10 migra sem perder operações nem as ligações das fotos e dos levantamentos', async () => {
+    const { db: antiga } = await criarBaseDadosSqlJs();
+    await aplicarMigracoes(antiga, MIGRACOES.slice(0, 10));
+    // Antes da 011 o favorito não entrava na fila (era esta a falha).
+    await expect(
+      antiga.run(
+        `INSERT INTO fila_saida (operation_id, device_id, operation_type, payload_json, criado_em, atualizado_em, user_id)
+         VALUES ('op-fav', 'd1', 'create_favorite', '{}', ?, ?, ?)`,
+        [agora, agora, U],
+      ),
+    ).rejects.toThrow(/CHECK/);
+    await antiga.run(
+      `INSERT INTO fila_saida (operation_id, device_id, operation_type, payload_json, estado, tentativas,
+         ultimo_erro, proxima_tentativa_em, criado_em, atualizado_em, user_id)
+       VALUES ('op-prova', 'd1', 'delivery_proof', '{"a":1}', 'pendente', 2, 'sem rede', ?, ?, ?, ?)`,
+      [agora, agora, agora, U],
+    );
+    await antiga.run(
+      `INSERT INTO fila_saida (operation_id, device_id, operation_type, payload_json, criado_em, atualizado_em, user_id)
+       VALUES ('op-campo', 'd1', 'field_submit', '{}', ?, ?, ?)`,
+      [agora, agora, U],
+    );
+    await antiga.run(
+      `INSERT INTO ficheiros_pendentes (id, caminho_local, bucket, content_type, operation_id, criado_em)
+       VALUES ('f1', 'fotos/f1.jpg', 'delivery-proofs', 'image/jpeg', 'op-prova', ?)`,
+      [agora],
+    );
+    await antiga.run(
+      `INSERT INTO levantamentos (id, estado, operation_id, criado_em, atualizado_em)
+       VALUES ('l1', 'na_fila', 'op-campo', ?, ?)`,
+      [agora, agora],
+    );
+
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(MIGRACOES.length);
+
+    const fila = criarRepositorioFilaSaida(antiga, { deviceId: 'd1', gerarId: geradorSequencial('nova') });
+    expect(await fila.obter('op-prova')).toMatchObject({
+      operation_type: 'delivery_proof', payload: { a: 1 }, estado: 'pendente', tentativas: 2,
+      ultimo_erro: 'sem rede', proxima_tentativa_em: agora, user_id: U,
+    });
+    expect(await antiga.getFirst(`SELECT operation_id FROM ficheiros_pendentes WHERE id = 'f1'`)).toEqual({ operation_id: 'op-prova' });
+    expect(await antiga.getFirst(`SELECT operation_id FROM levantamentos WHERE id = 'l1'`)).toEqual({ operation_id: 'op-campo' });
+    await expect(fila.adicionar(U, 'create_favorite', { address_id: 'm1' })).resolves.toMatchObject({ operation_type: 'create_favorite' });
+
+    const indices = await antiga.getAll<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'fila_saida' AND name LIKE 'idx_%' ORDER BY name`,
+    );
+    expect(indices.map((i) => i.name)).toEqual(['idx_fila_saida_prontas', 'idx_fila_saida_utilizador']);
+    expect(await nomesTabelas(antiga)).not.toContain('fila_saida_nova');
+    // As chaves estrangeiras continuam a apontar para a fila.
+    await expect(
+      antiga.run(
+        `INSERT INTO ficheiros_pendentes (id, caminho_local, bucket, content_type, operation_id, criado_em)
+         VALUES ('f2', 'x', 'b', 'image/jpeg', 'nao-existe', ?)`,
+        [agora],
+      ),
+    ).rejects.toThrow(/FOREIGN KEY/);
+  });
+});
+
 describe('fila por utilizador (migração 002)', () => {
   let db: BaseDados;
   let fila: ReturnType<typeof criarRepositorioFilaSaida>;
@@ -981,7 +1060,7 @@ describe('favoritos criados sem rede (migração 009)', () => {
       ),
     ).rejects.toThrow(/CHECK/);
 
-    await expect(aplicarMigracoes(antiga)).resolves.toBe(10);
+    await expect(aplicarMigracoes(antiga)).resolves.toBe(MIGRACOES.length);
     const favoritos = criarRepositorioFavoritos(antiga);
     expect(await favoritos.obter('fav-1')).toEqual({
       id: 'fav-1',
