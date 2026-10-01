@@ -22,6 +22,8 @@ export interface OpcoesSupabaseFalso {
    * devolve erro, como o PostgREST.
    */
   colunas?: Record<string, string[]>;
+  /** storage.remove() devolve erro (simula falha do Storage). */
+  falharRemover?: boolean;
 }
 
 /** Colunas simples de um select ("a, b, rel(x)" → ["a", "b"]); null se for "*". */
@@ -70,6 +72,7 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
   const ficheiros = opcoes.ficheiros ?? {};
   const rpcsChamadas: { nome: string; args: any }[] = [];
   const linksPedidos: { bucket: string; nome: string; segundos: number }[] = [];
+  const removidos: { bucket: string; nome: string }[] = [];
 
   const tabela = (nome: string) => (tabelas[nome] ??= []);
 
@@ -141,6 +144,7 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
         return b;
       },
       gte(c: string, v: any) { filtros.push((l) => l[c] >= v); return b; },
+      lt(c: string, v: any) { filtros.push((l) => l[c] != null && l[c] < v); return b; },
       ilike(c: string, padrao: string) {
         const re = new RegExp(`^${ilikeParaRegex(padrao)}$`, 'is');
         filtros.push((l) => typeof l[c] === 'string' && re.test(l[c]));
@@ -194,6 +198,11 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
             const f = ficheiros[bucket]?.[nome];
             return Promise.resolve(f ? { data: new Blob([new Uint8Array(f)]), error: null } : { data: null, error: { message: 'Object not found' } });
           },
+          remove(nomes: string[]) {
+            removidos.push(...nomes.map((nome) => ({ bucket, nome })));
+            for (const nome of nomes) delete ficheiros[bucket]?.[nome];
+            return Promise.resolve(opcoes.falharRemover ? { data: null, error: { message: 'falhou' } } : { data: [], error: null });
+          },
           createSignedUrl(nome: string, segundos: number) {
             linksPedidos.push({ bucket, nome, segundos });
             return Promise.resolve({ data: { signedUrl: `https://assinado/${bucket}/${nome}?s=${segundos}` }, error: null });
@@ -203,7 +212,7 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
     },
   };
 
-  return { cliente, tabelas: () => tabelas, rpcsChamadas, linksPedidos };
+  return { cliente, tabelas: () => tabelas, rpcsChamadas, linksPedidos, removidos };
 }
 
 export type SupabaseFalso = ReturnType<typeof criarSupabaseFalso>;

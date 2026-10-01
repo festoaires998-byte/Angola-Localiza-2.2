@@ -18,14 +18,17 @@
 
 ## Decidido, por fazer
 
-### Retenção das fotos da verificação simples: 90 dias
+### ~~Retenção das fotos da verificação simples: 90 dias~~ (feito)
 
 As fotos do BI (frente e verso) e as selfies no bucket `kyc-artifacts` são
 destruídas 90 dias depois da decisão (aprovação ou recusa). Fica só o
 registo da decisão (`user_identity`, `audit_logs`) e das consultas
 (`identity_artifact_views`).
-- **Proposta:** uma tarefa diária no servidor (pg_cron ou função agendada)
-  que apaga os ficheiros com `citizen_id_reviewed_at` com mais de 90 dias.
+- **Feito (01/10):** Edge Function `limpeza-kyc`, chamada todos os dias às
+  03:15 UTC pelo pg_cron (migração `20261001100000`), só com o token do Vault.
+  Marca `user_identity.citizen_id_artifacts_purged_at` e regista
+  `citizen_id_artifacts_purged` em `audit_logs`. Por decidir: o mesmo para o
+  KYC do pessoal (`identity_verifications`: fotos do BI e vídeo).
 
 ### Fechar a raiz do bucket kyc-artifacts (passo D)
 
