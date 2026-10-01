@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import { criarConta, eErroDeRede, ErroAuth } from '@/api/auth';
 import { Botao, Caixa, Campo, Ecra, Ligacao, Texto, Titulo } from '@/components/ui';
-import { PAISES_PALOP, type CodigoPais } from '@/config/pais';
+import { nomeDaMarcaPorCodigo, PAISES_PALOP, paisComBandeira, type CodigoPais } from '@/config/pais';
 import { erroNome } from '@/domain/identidade/nome';
 import { useSessao } from '@/hooks/useSessao';
 import { LINK_EMAIL_CONFIRMADO } from '@/services/links/linksProfundos';
@@ -65,12 +65,12 @@ export default function CriarConta() {
       {PAISES_PALOP.map((codigo) => (
         <Botao
           key={codigo}
-          titulo={codigo === 'AO' ? '🇦🇴 Angola — Angola Localiza' : codigo === 'MZ' ? '🇲🇿 Moçambique — Moçambique Localiza' : codigo === 'CV' ? '🇨🇻 Cabo Verde — Cabo Verde Localiza' : codigo === 'GW' ? '🇬🇼 Guiné-Bissau — Guiné-Bissau Localiza' : '🇸🇹 São Tomé e Príncipe — São Tomé e Príncipe Localiza'}
+          titulo={`${paisComBandeira(codigo)} — ${nomeDaMarcaPorCodigo(codigo)}`}
           variante={pais === codigo ? 'primario' : 'secundario'}
           onPress={() => setPais(codigo)}
         />
       ))}
-      <Texto suave>O país fica associado à tua conta desde o registo.</Texto>
+      <Texto suave>O país fica associado à tua conta. Podes mudá-lo depois em Conta.</Texto>
       <Campo
         rotulo="Email"
         value={email}
