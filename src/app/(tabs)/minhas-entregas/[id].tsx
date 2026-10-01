@@ -18,6 +18,7 @@ import { useSessao } from '@/hooks/useSessao';
 import { acoesDaEntrega } from '@/services/entregas/estafeta';
 import { servicoEstafeta } from '@/services/entregas/estafetaApp';
 import { fotoComMarcaDeAgua } from '@/services/imagem/fotoComMarca';
+import { parametrosDoPonto } from '@/services/mapas/pontoDaRota';
 import { avisoAcao, definirAvisoEstafeta, useEstafeta } from '@/state/estafeta';
 
 /** Detalhe de uma entrega do estafeta: destino, contacto, etapas e prova. */
@@ -200,11 +201,23 @@ export default function DetalheEntrega() {
         </>
       ) : null}
       {typeof m?.latitude === 'number' && typeof m?.longitude === 'number' ? (
-        <Botao
-          titulo="Abrir o destino no mapa"
-          variante="secundario"
-          onPress={() => void Linking.openURL(`geo:${m.latitude},${m.longitude}?q=${m.latitude},${m.longitude}`)}
-        />
+        <>
+          <Botao
+            titulo="🗺️ Ver o destino no mapa"
+            variante="secundario"
+            onPress={() =>
+              router.push({
+                pathname: '/mapa',
+                params: parametrosDoPonto({ latitude: m.latitude!, longitude: m.longitude!, titulo: `Destino: ${entrega.destinatario}` }),
+              })
+            }
+          />
+          <Botao
+            titulo="Abrir noutra app de mapas"
+            variante="secundario"
+            onPress={() => void Linking.openURL(`geo:${m.latitude},${m.longitude}?q=${m.latitude},${m.longitude}`)}
+          />
+        </>
       ) : null}
 
       {acoes.map((a, i) =>

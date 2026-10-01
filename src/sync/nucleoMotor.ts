@@ -45,6 +45,7 @@ export interface DependenciasMotor {
     RepositorioFilaSaida,
     | 'libertarPresasAEnviar'
     | 'listarProntas'
+    | 'listarPorEnviarDoTipo'
     | 'atualizarPayload'
     | 'registarFalhaOperacao'
     | 'marcarFalhouDefinitivo'
@@ -401,21 +402,45 @@ export function criarMotorSync(deps: DependenciasMotor): MotorSync {
       lote.forEach((o) => vistas.add(o.operation_id));
 
       const prontas: OperacaoFila[] = [];
+      /** Moradas novas (create_favorite) ainda por enviar: lidas só se houver entregas no lote. */
+      let moradasPorEnviar: OperacaoFila[] | null = null;
       for (const op of lote) {
         let aviso: string | null = null;
-        if (op.operation_type === 'field_submit') {
+        if (op.operation_type === 'create_delivery') {
+          // Uma entrega para uma morada criada no telemóvel só segue depois da
+          // morada (ou no mesmo lote, logo a seguir a ela): senão o servidor
+          // recusa o destino. Fica pendente sem somar tentativas.
+          const moradaId = (op.payload as { address_id?: unknown } | null)?.address_id;
+          if (typeof moradaId === 'string') {
+            moradasPorEnviar ??= await deps.fila.listarPorEnviarDoTipo(userId, 'create_favorite');
+            const espera = moradasPorEnviar.some(
+              (f) =>
+                (f.payload as { address_id?: unknown } | null)?.address_id === moradaId &&
+                !prontas.some((p) => p.operation_id === f.operation_id),
+            );
+            if (espera) {
+              resumo.adiadas++;
+              continue;
+            }
+          }
+        }
+        if (!(op.operation_type === 'delivery_proof' && provaEstaAssinada(op.payload))) {
+          // A sync só aceita operações de um aparelho registado (signing_keys) para
+          // quem pede: regista-o antes de enviar (uma vez por volta; sem rede se
+          // já estiver registado). "espera" quer dizer que o servidor já conhece
+          // o aparelho (com a chave antiga), por isso também serve.
           registo = registo ?? (await deps.chaveAssinatura.garantirRegistada(sessao));
           if (registo.tipo === 'sessao') {
             sessaoRecusada(sessao);
             return { ...resumo, motivo: 'precisa_entrar' };
           }
-          if (registo.tipo !== 'ok') {
+          if (registo.tipo !== 'ok' && registo.tipo !== 'espera') {
             resumo.adiadas++;
             resumo.aguardamChave++;
             mensagemAviso = mensagemAviso ?? MENSAGENS.chave;
             continue;
           }
-        } else if (op.operation_type === 'delivery_proof' && provaEstaAssinada(op.payload)) {
+        } else {
           if (!chaves) {
             try {
               chaves = await deps.chaveAssinatura.estado(userId);

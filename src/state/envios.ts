@@ -28,6 +28,9 @@ export interface EstadoEnvios {
 }
 
 /** Aviso na lista quando o pedido ficou na fila (sem rede). */
+export const AVISO_DESTINO_NOVO =
+  'Pedido guardado. O destino novo vai primeiro para o servidor e o pedido logo a seguir (sozinho, com ou sem rede). O código de rastreio e o PIN aparecem depois nesta lista.';
+
 export const AVISO_NA_FILA =
   'Sem rede: o pedido ficou guardado neste telemóvel e é enviado sozinho quando a rede voltar. O código de rastreio e o PIN aparecem depois nesta lista.';
 

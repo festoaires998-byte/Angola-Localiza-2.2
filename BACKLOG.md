@@ -18,14 +18,17 @@
 
 ## Decidido, por fazer
 
-### Retenção das fotos da verificação simples: 90 dias
+### ~~Retenção das fotos da verificação simples: 90 dias~~ (feito)
 
 As fotos do BI (frente e verso) e as selfies no bucket `kyc-artifacts` são
 destruídas 90 dias depois da decisão (aprovação ou recusa). Fica só o
 registo da decisão (`user_identity`, `audit_logs`) e das consultas
 (`identity_artifact_views`).
-- **Proposta:** uma tarefa diária no servidor (pg_cron ou função agendada)
-  que apaga os ficheiros com `citizen_id_reviewed_at` com mais de 90 dias.
+- **Feito (01/10):** Edge Function `limpeza-kyc`, chamada todos os dias às
+  03:15 UTC pelo pg_cron (migração `20261001100000`), só com o token do Vault.
+  Marca `user_identity.citizen_id_artifacts_purged_at` e regista
+  `citizen_id_artifacts_purged` em `audit_logs`. Por decidir: o mesmo para o
+  KYC do pessoal (`identity_verifications`: fotos do BI e vídeo).
 
 ### Fechar a raiz do bucket kyc-artifacts (passo D)
 
@@ -68,13 +71,15 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   bucket privado `delivery-proofs` (`<id>/…`), como a app. Até lá, a v19 ainda
   aceita `field-photos` (público). Depois do hotfix: deixar de aceitar
   `field-photos` nas provas e tirar as 2 fotos de provas antigas de lá.
-- **Site antigo: rastreio público quebrado.** O site chama
-  `deliveries?action=track` sem sessão, mas essa ação não existe (responde 401).
-  Decidir se o rastreio público volta (só código, estado e destino, sem sessão).
+- ~~**Rastreio público.**~~ Decidido (01/10): sim, mínimo. Já existe na
+  deliveries v38 (`action=track`: estado, datas, município/província e histórico).
 - ~~`sync`: `create_address` e `update_address` gravam o payload tal como vem.~~
   Corrigido na sync v8 e na migração `20260924070000_moradas_so_por_validar`.
-- **`signing-keys`:** a chave de um aparelho pode ser trocada sem registo
-  (upsert). Registar cada troca em `audit_logs` para a prova ter valor jurídico.
+- ~~**`signing-keys`:** a chave de um aparelho pode ser trocada sem registo.~~
+  Feito na signing-keys v5 (cada registo e troca em `audit_logs`). Na mesma
+  altura (01/10) criou-se a coluna `signing_keys.revoked_at`, que a deliveries
+  já lia desde 27/09 sem ela existir (as provas assinadas ficavam todas por
+  verificar).
 - **`public-api`:** as organizações criam entregas com a chave da API, sem a
   verificação de identidade (decisão A vale para cidadãos). Confirmar que é o
   que se quer.
@@ -99,37 +104,47 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   `supabase_admin`; `anon`/`authenticated` continuam com INSERT/UPDATE/DELETE).
   Só se resolve com o suporte do Supabase ou mudando a PostGIS de esquema
   (ver a migração `20260929122000_restrict_postgis_metadata_rest.sql`).
-- **`public-api` (`/v1/address/search`):** lê `addresses` e `streets` para as
-  organizações (com a chave da API). Confirmar que respeita a privacidade.
+- ~~**`public-api`: privacidade.**~~ Revista (01/10), v9: nenhuma rota mostra
+  moradas privadas ou por validar (o `verify` por coordenadas devolvia
+  qualquer morada); `delivery/create` só para moradas públicas; `GET
+  /v1/delivery/<código>` só das entregas que a organização paga (antes
+  mostrava o nome de quem recebe das entregas dos cidadãos); o nome da rua
+  deixa de ser curinga do `ilike`.
 - **Segredos no código (encontrados na auditoria):** a `identity-kyc` tem o
   "pepper" do KYC escrito no código; a `phone-verify` tem a chave pública
   escrita no código (devia vir do ambiente, como na `sync`). Passar para os
   segredos das Edge Functions.
-  **30/09 — continua por fazer:** o pepper da `identity-kyc` (v6) ainda está no
-  código porque os segredos só se criam no painel do Supabase (Edge Functions →
-  Secrets → `KYC_PEPPER`); depois basta ler `Deno.env.get("KYC_PEPPER")` com o
-  valor atual como alternativa, para não invalidar os pedidos já feitos.
+  **01/10:** a `identity-kyc` v7 lê o segredo `KYC_PEPPER` (sem valor no
+  código) e a `phone-verify` v5 lê `SUPABASE_ANON_KEY` do ambiente. Antes de
+  publicar a v7, o dono cria o segredo `KYC_PEPPER` no painel com **o mesmo
+  valor de hoje** (senão os BI já registados deixam de ser reconhecidos como
+  repetidos). O valor antigo está no histórico do git: trocá-lo obriga a pedir
+  de novo o número do BI a quem já fez a verificação (decisão do dono).
+  Um teste (`semChavesNoCodigo.test.ts`) falha se aparecer uma chave no código.
 - **Favorito do Mapa sem província/município:** o "Guardar como favorito" cria
   a morada sem `province_id`/`municipality_id` (o site procurava pelo nome). O
   validador completa na validação.
 
 ### Enviar: a seguir
 
-- **Destino fora das moradas guardadas (app):** o site já aceita Plus Code,
-  GPS e link (cria uma morada própria por validar e usa o id dela); falta o
-  mesmo na app.
-- **Pedido repetido:** se a ligação cair depois de o servidor criar a entrega
-  mas antes da resposta chegar, a app põe o pedido na fila e ele pode ficar
-  criado duas vezes. Solução: uma chave de pedido (idempotência) na `deliveries`.
+- ~~**Destino fora das moradas guardadas (app).**~~ Feito (01/10): Plus Code,
+  coordenadas, link do mapa ou QR de um sítio novo criam uma morada privada,
+  por validar (fica nas Moradas, categoria "entrega"); o pedido vai pela fila
+  logo a seguir à morada (a fila não envia a entrega antes da morada). Um
+  código postal completo é procurado no servidor (`pesquisa`) e usa a morada
+  que já existe.
+- ~~**Pedido repetido.**~~ Resolvido: a app manda o mesmo `sync_operation_id`
+  com e sem rede, a deliveries devolve a entrega já criada e a base de dados
+  tem um índice único (`deliveries_sync_operation_id_uidx`).
 
 ### Entregas do estafeta: a seguir
 
-- **Decisão B (atribuição):** o operador postal atribuir entregas aos estafetas
-  da organização e o estafeta "puxar" entregas elegíveis precisam de ações novas
-  na `deliveries` (mudança no Supabase, com o pedido do dono). Hoje o estafeta
-  vê as que já lhe foram atribuídas (pelo site ou por quem criou).
-- **Destino no mapa:** o estafeta só lê a posição de moradas publicadas/aprovadas
-  (regras da tabela addresses). Para moradas ainda por validar, falta dar a
-  posição do destino ao estafeta atribuído (ex.: pela `deliveries`).
-- **Mapa dentro da app:** "Abrir o destino no mapa" usa a app de mapas do
-  telemóvel; falta mostrar o destino no mapa offline da app.
+- ~~**Decisão B (atribuição).**~~ Decidido (01/10): os dois. Já existe:
+  `assign_driver`/`list_org_drivers` (operador) e `list_available_for_driver`/
+  `accept_delivery` (estafeta), na deliveries e na app.
+- ~~**Destino no mapa.**~~ Já resolvido pela regra da tabela `addresses`
+  (`privado.moradas_ligadas_a_mim`): o estafeta de uma entrega ativa lê a
+  morada do destino, mesmo por validar.
+- ~~**Mapa dentro da app.**~~ Feito (01/10): "🗺️ Ver o destino no mapa" abre o
+  separador Mapa da app (funciona com o mapa offline) centrado no destino;
+  "Abrir noutra app de mapas" continua disponível.

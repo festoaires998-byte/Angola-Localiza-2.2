@@ -437,6 +437,52 @@ describe('resultados do sync', () => {
   });
 });
 
+describe('entrega para uma morada criada no telemóvel', () => {
+  const MORADA = 'dddddddd-0000-4000-8000-000000000001';
+  const favorito = { address_id: MORADA, address: { latitude: -12.77, longitude: 15.73 }, category: 'entrega' };
+  const entrega = { address_id: MORADA, recipient_name: 'Maria', sync_operation_id: 'x' };
+
+  test('a morada e a entrega vão no mesmo lote, a morada primeiro', async () => {
+    const t = await montar();
+    await t.operacao('create_favorite', favorito);
+    await t.operacao('create_delivery', entrega);
+    await t.motor.sincronizar();
+    const [pedido] = t.pedidosSync();
+    expect((pedido.corpo as { operations: { operation_type: string }[] }).operations.map((o) => o.operation_type)).toEqual([
+      'create_favorite',
+      'create_delivery',
+    ]);
+  });
+
+  test('se a morada está na pausa depois de uma falha, a entrega espera (sem somar tentativas)', async () => {
+    const t = await montar();
+    const fav = await t.operacao('create_favorite', favorito);
+    const env = await t.operacao('create_delivery', entrega);
+    await t.fila.registarFalhaOperacao(ANA.userId, fav.operation_id, 'sem rede');
+
+    const r = await t.motor.sincronizar();
+
+    expect(t.pedidosSync()).toEqual([]);
+    expect(await t.fila.obter(env.operation_id)).toMatchObject({ estado: 'pendente', tentativas: 0 });
+    expect(r.adiadas).toBe(1);
+
+    // Quando a morada passa, a entrega segue na volta seguinte.
+    t.avancar(24 * 3600 * 1000);
+    await t.motor.sincronizar();
+    expect((await t.fila.obter(fav.operation_id))!.estado).toBe('concluida');
+    await t.motor.sincronizar();
+    expect((await t.fila.obter(env.operation_id))!.estado).toBe('concluida');
+  });
+
+  test('uma entrega para uma morada que já está no servidor segue logo', async () => {
+    const t = await montar();
+    const env = await t.operacao('create_delivery', { ...entrega, address_id: 'ja-no-servidor' });
+    await t.operacao('create_favorite', favorito);
+    await t.motor.sincronizar();
+    expect((await t.fila.obter(env.operation_id))!.estado).toBe('concluida');
+  });
+});
+
 describe('sessão', () => {
   test('um 401 não soma tentativas e marca precisaEntrarDeNovo', async () => {
     const t = await montar();
@@ -690,16 +736,25 @@ describe('chave do aparelho e provas de entrega', () => {
     expect(r).toMatchObject({ concluidas: 1, aguardamChave: 0, avisos: 0 });
   });
 
-  test('sem provas assinadas não pede o registo da chave', async () => {
+  test('qualquer operação regista o aparelho antes de enviar (a sync só aceita aparelhos registados), uma vez por volta', async () => {
     const t = await montar();
     await t.operacao('create_address', { nome: 'Rua 1' });
+    await t.operacao('create_favorite', { address_id: 'm1' });
     await t.operacao('delivery_proof', { delivery_id: 'd1', new_status: 'FAILED', proof: {} });
     await t.motor.sincronizar();
-    expect(t.ctx.registosChave).toEqual([]);
+    expect(t.ctx.registosChave).toEqual([0]); // antes de qualquer pedido HTTP
     expect(t.pedidosSync()).toHaveLength(1);
   });
 
-  test('se o registo falhar, a prova espera sem somar tentativas e as outras seguem', async () => {
+  test('"espera" (o servidor tem a chave antiga deste aparelho): as outras operações seguem', async () => {
+    const t = await montar();
+    const op = await t.operacao('create_favorite', { address_id: 'm1' });
+    t.ctx.chave = { tipo: 'espera', erro: 'Há provas assinadas com a chave anterior por enviar.' };
+    await t.motor.sincronizar();
+    expect((await t.fila.obter(op.operation_id))!.estado).toBe('concluida');
+  });
+
+  test('se o registo falhar, nada segue e nada soma tentativas; quando passar, segue tudo', async () => {
     const t = await montar();
     const prova = await t.operacao('delivery_proof', await provaAssinada());
     const outra = await t.operacao('create_address', { nome: 'Rua 1' });
@@ -707,14 +762,16 @@ describe('chave do aparelho e provas de entrega', () => {
 
     const r = await t.motor.sincronizar();
 
-    expect(t.pedidosSync().map(idsEnviados)).toEqual([[outra.operation_id]]);
-    expect(await t.fila.obter(prova.operation_id)).toMatchObject({
-      estado: 'pendente',
-      tentativas: 0,
-      ultimo_erro: null,
-      proxima_tentativa_em: null,
-    });
-    expect(r).toMatchObject({ concluidas: 1, adiadas: 1, aguardamChave: 1 });
+    expect(t.pedidosSync()).toEqual([]);
+    for (const op of [prova, outra]) {
+      expect(await t.fila.obter(op.operation_id)).toMatchObject({
+        estado: 'pendente',
+        tentativas: 0,
+        ultimo_erro: null,
+        proxima_tentativa_em: null,
+      });
+    }
+    expect(r).toMatchObject({ concluidas: 0, adiadas: 2, aguardamChave: 2 });
     expect(t.motor.estado.obter().ultimoErro).toBe(MENSAGENS.chave);
 
     // Várias voltas sem registo: continua sem tentativas somadas.
@@ -722,11 +779,12 @@ describe('chave do aparelho e provas de entrega', () => {
     await t.motor.sincronizar();
     expect((await t.fila.obter(prova.operation_id))!.tentativas).toBe(0);
 
-    // O registo passa a funcionar: a prova segue logo (não ficou à espera de nenhuma pausa).
+    // O registo passa a funcionar: segue tudo logo (não ficou à espera de nenhuma pausa).
     t.ctx.chave = CHAVE_OK;
     await t.motor.sincronizar();
-    expect(t.pedidosSync().map(idsEnviados).at(-1)).toEqual([prova.operation_id]);
+    expect(t.pedidosSync().map(idsEnviados).at(-1)).toEqual([prova.operation_id, outra.operation_id]);
     expect((await t.fila.obter(prova.operation_id))!.estado).toBe('concluida');
+    expect((await t.fila.obter(outra.operation_id))!.estado).toBe('concluida');
   });
 
   test('o registo recusado com 401 pára e pede para entrar de novo', async () => {

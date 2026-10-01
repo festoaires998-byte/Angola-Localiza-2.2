@@ -5,7 +5,7 @@ import { gerarUuid } from '@/database/ids';
 import { criarRepositorioFavoritos } from '@/database/repositories/favoritos';
 import { criarRepositorioMoradas } from '@/database/repositories/moradas';
 import { criarRepositorioPreferencias } from '@/database/repositories/preferencias';
-import { obterRepositoriosSync } from '@/sync/fila';
+import { acrescentarOperacao, obterRepositoriosSync } from '@/sync/fila';
 
 import { criarServicoMoradas, type DependenciasMoradas } from './moradas';
 import { criarServicoRegistos } from './registos';
@@ -40,7 +40,8 @@ const deps: DependenciasMoradas = {
   moradas: aoAbrir(moradas, ['obter', 'guardarVarias']),
   servidor: { lerFavoritos, atualizarFavorito, removerFavorito, criarFavoritoComMorada },
   gerarId: gerarUuid,
-  acrescentarOperacao: async (userId, tipo, payload) => (await obterRepositoriosSync()).fila.adicionar(userId, tipo, payload),
+  // acrescentarOperacao avisa o motor, que envia logo se houver rede.
+  acrescentarOperacao: (userId, tipo, payload) => acrescentarOperacao(userId, tipo, payload),
 };
 
 /** Serviço das Moradas ligado à base de dados e ao Supabase (um só para a app). */

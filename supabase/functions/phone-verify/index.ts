@@ -19,7 +19,8 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey = "sb_publishable_9RypatlYEYRmx8kRnyNS-A_ZRLMgl_a";
+  // Chave pública (anon) do ambiente das Edge Functions, como na sync.
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const supabase = createClient(supabaseUrl, serviceKey);
 
   const authHeader = req.headers.get("authorization") || "";

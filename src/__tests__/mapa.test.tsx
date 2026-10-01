@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, Linking, Share } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -41,7 +41,11 @@ jest.mock('@/hooks/useInfoLocal', () => ({ useInfoLocal: () => mockInfo }));
 jest.mock('@/hooks/useMapaOffline', () => ({ useMapaOffline: () => mockMapa }));
 
 const mockPush = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush, back: jest.fn() }) }));
+let mockParametros: Record<string, string> = {};
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush, back: jest.fn() }),
+  useLocalSearchParams: () => mockParametros,
+}));
 
 let mockSeparadores: string[] = ['mapa', 'guardados', 'definicoes'];
 jest.mock('@/hooks/useSessao', () => ({
@@ -524,6 +528,24 @@ describe('pesquisa única', () => {
     expect(await screen.findByText('Escreve pelo menos 3 letras.')).toBeTruthy();
   });
 });
+describe('ponto pedido por outro ecrã', () => {
+  afterEach(() => {
+    mockParametros = {};
+  });
+
+  test('o destino de uma entrega aparece no mapa com o título', async () => {
+    mockParametros = { lat: '-12.77', lng: '15.73', titulo: 'Destino: Maria João' };
+    await desenhar();
+    expect(await screen.findByText('No mapa: Destino: Maria João')).toBeTruthy();
+  });
+
+  test('coordenadas inválidas são ignoradas', async () => {
+    mockParametros = { lat: 'x', lng: '15.73', titulo: 'Destino' };
+    await desenhar();
+    expect(screen.queryByText('No mapa: Destino')).toBeNull();
+  });
+});
+
 describe('Ler QR', () => {
   test('lê um link do Google Maps e mostra o ponto (uma só leitura)', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };

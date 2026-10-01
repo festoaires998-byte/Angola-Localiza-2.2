@@ -2,7 +2,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { nomeNaPastaKyc } from "./regras.ts";
 
-// Angola Localiza - Identity KYC Service (v3, PRONPET v5.18)
+// Angola Localiza - Identity KYC Service (v7, PRONPET v5.18)
+// v7: o "pepper" do hash do BI vem do segredo KYC_PEPPER (Edge Functions ->
+// Secrets) e deixa de estar escrito no codigo. Sem o segredo, a submissao
+// responde 500 KYC_PEPPER_EM_FALTA (nunca grava um hash diferente).
 // v3: as fotos do BI e o vídeo têm de estar na pasta de quem envia
 // (kyc-artifacts/<id>/…) e existir no Storage, enviados por essa pessoa;
 // na revisão, ninguém decide a própria verificação e só se decide um pedido
@@ -21,7 +24,17 @@ const cors = {
 };
 
 const CHALLENGES = ["pisca os olhos", "sorri", "vira a cabeca para a esquerda", "vira a cabeca para a direita"];
-const KYC_PEPPER = "AL-KYC-2026-pepper-fixo";
+/** Segredo KYC_PEPPER (minimo 16 letras); null se faltar. Lido a cada pedido. */
+function pepperKyc(): string | null {
+  const valor = Deno.env.get("KYC_PEPPER") ?? "";
+  return valor.length >= 16 ? valor : null;
+}
+
+const SEM_PEPPER = () =>
+  new Response(JSON.stringify({ error: "KYC_PEPPER_EM_FALTA: o servidor ainda nao tem o segredo KYC_PEPPER configurado" }), {
+    status: 500,
+    headers: cors,
+  });
 const BI_REGEX = /^\d{9}[A-Z]{2}\d{2}$/;
 
 async function sha256(text: string): Promise<string> {
@@ -101,7 +114,9 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: "ja tens uma submissao em revisao - aguarda o resultado antes de enviar outra" }), { status: 409, headers: cors });
       }
 
-      const idHash = await sha256(idNumberNormalized + KYC_PEPPER);
+      const pepper = pepperKyc();
+      if (!pepper) return SEM_PEPPER();
+      const idHash = await sha256(idNumberNormalized + pepper);
       const { data: dup } = await supabase.from("identity_verifications").select("user_id").eq("id_hash", idHash).neq("status", "REJECTED").neq("user_id", callerId).maybeSingle();
       if (dup) return new Response(JSON.stringify({ error: "IDENTITY_DUPLICATE: este BI ja esta associado a outra conta" }), { status: 409, headers: cors });
 
@@ -127,7 +142,9 @@ Deno.serve(async (req: Request) => {
       if (!target_user_id || !id_number || !id_photo_url) {
         return new Response(JSON.stringify({ error: "target_user_id, id_number e id_photo_url sao obrigatorios" }), { status: 400, headers: cors });
       }
-      const idHash = await sha256(id_number.trim().toUpperCase() + KYC_PEPPER);
+      const pepper = pepperKyc();
+      if (!pepper) return SEM_PEPPER();
+      const idHash = await sha256(id_number.trim().toUpperCase() + pepper);
       const { data: dup } = await supabase.from("identity_verifications").select("user_id").eq("id_hash", idHash).neq("status", "REJECTED").neq("user_id", target_user_id).maybeSingle();
       if (dup) return new Response(JSON.stringify({ error: "IDENTITY_DUPLICATE: este BI ja esta associado a outra conta" }), { status: 409, headers: cors });
 

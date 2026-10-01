@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +30,7 @@ import { criarEstilo, criarEstiloOnlineOSM, criarEstiloSatelite } from '@/servic
 import { criarMapaDoPais, type EstadoMapaOffline } from '@/services/mapas/mapaOffline';
 import { CATALOGO_MAPAS_PALOP, mapaDoPais } from '@/services/mapas/catalogoMapas';
 import { dentroDaRegiao } from '@/services/mapas/regioes';
+import { pontoDaRota, type ParametrosPonto } from '@/services/mapas/pontoDaRota';
 import type { Visibilidade } from '@/services/moradas/moradas';
 import { mudancasMoradas, servicoMoradas } from '@/services/moradas/moradasApp';
 import { podeRegistar, type Verificacao } from '@/services/moradas/registo';
@@ -397,6 +398,14 @@ export default function Mapa() {
     void abrirBaseDados().then((db) => criarRepositorioHistoricoLocaliza(db).registar({ id: p.titulo + ':' + p.latitude.toFixed(5) + ':' + p.longitude.toFixed(5), titulo: p.titulo, latitude: p.latitude, longitude: p.longitude, subtitulo: null })).then(() => abrirBaseDados()).then((db) => criarRepositorioHistoricoLocaliza(db).listar()).then(setHistorico).catch(() => undefined);
     rolagem.current?.scrollTo({ y: Math.max(0, yMapa.current - 16), animated: true });
   }, [rolagem, yMapa]);
+  // Outro ecrã (ex.: o destino de uma entrega) pede para mostrar um ponto.
+  const parametros: ParametrosPonto = useLocalSearchParams();
+  useEffect(() => {
+    const ponto = pontoDaRota(parametros);
+    if (!ponto) return;
+    setAlvo(ponto);
+    rolagem.current?.scrollTo({ y: Math.max(0, yMapa.current - 16), animated: true });
+  }, [String(parametros.lat), String(parametros.lng), String(parametros.titulo)]);
   const pesquisa = usePesquisaMapa({
     online,
     referencia: captura ?? aoVivo ?? { latitude: regiao.centro[1], longitude: regiao.centro[0] },
