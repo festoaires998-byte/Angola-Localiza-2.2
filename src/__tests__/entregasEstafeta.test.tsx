@@ -102,6 +102,13 @@ const rotas = {
   'minhas-entregas/[id]': (require('@/app/(tabs)/minhas-entregas/[id]') as Ecra).default,
   'minhas-entregas/prova': (require('@/app/(tabs)/minhas-entregas/prova') as Ecra).default,
   'minhas-entregas/falha': (require('@/app/(tabs)/minhas-entregas/falha') as Ecra).default,
+  // O separador Mapa a sério tem mapa nativo; aqui só mostra o ponto que recebeu.
+  mapa: () => {
+    const { Text } = require('react-native');
+    const { useLocalSearchParams } = require('expo-router');
+    const p = useLocalSearchParams();
+    return <Text>{`Mapa em ${p.lat}, ${p.lng}: ${p.titulo}`}</Text>;
+  },
 };
 jest.mock('@/api/entregas', () => ({ listarDaOrganizacao: async () => mockEntregas, reagendarTentativa: (id: string) => mockReagendar(id) }));
 const { lojaEstafeta, ESTADO_INICIAL_ESTAFETA } = require('@/state/estafeta') as typeof import('@/state/estafeta');
@@ -260,6 +267,23 @@ describe('Entregas (estafeta): não foi possível entregar', () => {
   });
 });
 
+
+describe('Entregas (estafeta): destino no mapa da app', () => {
+  test('"Ver o destino no mapa" abre o Mapa da app centrado no destino', async () => {
+    await desenhar();
+    await carregar(/Maria João/);
+    expect(screen.getByRole('button', { name: 'Abrir noutra app de mapas' })).toBeTruthy();
+    await carregar('🗺️ Ver o destino no mapa');
+    expect(screen.getByText('Mapa em -12.77, 15.73: Destino: Maria João')).toBeTruthy();
+  });
+
+  test('sem coordenadas do destino não há botões de mapa', async () => {
+    mockEntregas = [entrega('e1', { morada: { codigoPostal: null, plusCode: null, referencia: 'Casa azul', latitude: null, longitude: null } })];
+    await desenhar();
+    await carregar(/Maria João/);
+    expect(screen.queryByRole('button', { name: '🗺️ Ver o destino no mapa' })).toBeNull();
+  });
+});
 
 describe('Entregas: regressões administrativas e reagendamento', () => {
   test('visão organizacional não fica presa no carregamento', async () => {

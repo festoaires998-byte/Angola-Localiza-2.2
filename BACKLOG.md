@@ -129,8 +129,9 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - ~~**Decisão B (atribuição).**~~ Decidido (01/10): os dois. Já existe:
   `assign_driver`/`list_org_drivers` (operador) e `list_available_for_driver`/
   `accept_delivery` (estafeta), na deliveries e na app.
-- **Destino no mapa:** o estafeta só lê a posição de moradas publicadas/aprovadas
-  (regras da tabela addresses). Para moradas ainda por validar, falta dar a
-  posição do destino ao estafeta atribuído (ex.: pela `deliveries`).
-- **Mapa dentro da app:** "Abrir o destino no mapa" usa a app de mapas do
-  telemóvel; falta mostrar o destino no mapa offline da app.
+- ~~**Destino no mapa.**~~ Já resolvido pela regra da tabela `addresses`
+  (`privado.moradas_ligadas_a_mim`): o estafeta de uma entrega ativa lê a
+  morada do destino, mesmo por validar.
+- ~~**Mapa dentro da app.**~~ Feito (01/10): "🗺️ Ver o destino no mapa" abre o
+  separador Mapa da app (funciona com o mapa offline) centrado no destino;
+  "Abrir noutra app de mapas" continua disponível.
