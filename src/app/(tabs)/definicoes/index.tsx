@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { BotaoSair } from '@/components/BotaoSair';
 import { dataHora, NOMES_CARGOS, NOMES_OPERACOES } from '@/components/nomes';
@@ -9,6 +9,7 @@ import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { KYC_VERIFICADO } from '@/domain/organizacao/cargos';
 import { PAISES_PALOP, ouvirPais, paisAtual, selecionarPais } from '@/state/pais';
+import { URL_POLITICA_PRIVACIDADE } from '@/config/links';
 import { nomeDaMarcaPorCodigo } from '@/config/pais';
 import { useCargos } from '@/hooks/useCargos';
 import { useFilaSync, type OperacaoComProblema } from '@/hooks/useFilaSync';
@@ -171,6 +172,7 @@ export default function Definicoes() {
         <Subtitulo>Ajuda</Subtitulo>
         <Texto suave>Se o suporte pedir, abre o diagnóstico e mostra os resultados.</Texto>
         <Botao titulo="Diagnóstico" variante="secundario" onPress={() => router.push('/definicoes/diagnostico')} />
+        <Botao titulo="Política de privacidade" variante="secundario" onPress={() => void Linking.openURL(URL_POLITICA_PRIVACIDADE)} />
       </Cartao>
 
       <BotaoSair />

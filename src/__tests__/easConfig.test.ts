@@ -33,3 +33,30 @@ describe('Publicação na Google Play (eas.json)', () => {
     expect(eas.build.production.autoIncrement).toBe(true);
   });
 });
+
+describe('Permissões (app.json)', () => {
+  const app = JSON.parse(ler('app.json')).expo;
+
+  test('sem localização em segundo plano: a app só lê a posição com o ecrã aberto (a Google Play exige justificar e um vídeo)', () => {
+    expect(app.android.permissions).not.toContain('android.permission.ACCESS_BACKGROUND_LOCATION');
+    expect(app.android.blockedPermissions).toContain('android.permission.ACCESS_BACKGROUND_LOCATION');
+    const [, local] = app.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-location');
+    expect(local).toMatchObject({
+      isAndroidBackgroundLocationEnabled: false,
+      isIosBackgroundLocationEnabled: false,
+      isAndroidForegroundServiceEnabled: false,
+    });
+    expect(local.locationAlwaysPermission).toBeUndefined();
+    expect(local.locationAlwaysAndWhenInUsePermission).toBeUndefined();
+    expect(local.locationWhenInUsePermission).toMatch(/localização/);
+  });
+
+  test('nenhum ficheiro da app pede a localização em segundo plano', () => {
+    const { execSync } = require('child_process') as typeof import('child_process');
+    const usos = execSync(
+      "grep -rlE 'requestBackgroundPermissionsAsync|startLocationUpdatesAsync' src --include=*.ts --include=*.tsx --exclude-dir=__tests__ --exclude='*.test.*' || true",
+      { cwd: raiz, encoding: 'utf8' },
+    ).trim();
+    expect(usos).toBe('');
+  });
+});

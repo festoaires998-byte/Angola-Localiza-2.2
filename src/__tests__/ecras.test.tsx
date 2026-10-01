@@ -246,6 +246,17 @@ describe('Definições → Sair', () => {
     expect(screen.getByText(/Angola Localiza, versão/)).toBeTruthy();
   });
 
+  test('"Política de privacidade" abre a página do site', async () => {
+    const { Linking } = require('react-native') as typeof import('react-native');
+    const abrir = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    comSessao([], null, AAL1_SEM_FATOR);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    fireEvent.press(screen.getByRole('button', { name: 'Política de privacidade' }));
+    expect(abrir).toHaveBeenCalledWith('https://festoaires998-byte.github.io/Huambo-Localiza-/privacidade.html');
+    abrir.mockRestore();
+  });
+
   test('verificação simples: o botão aparece ao cidadão e não ao pessoal com cargo', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
