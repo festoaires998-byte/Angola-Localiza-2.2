@@ -2,7 +2,7 @@
 
 Generated from project `qntbknegicaghnbnghyw` on 2026-09-30; updated 2026-10-01 (public-api v9, signing-keys v5, phone-verify v6, limpeza-kyc v1).
 
-`identity-kyc` v7 (in the repository) is **not deployed yet**: it needs the `KYC_PEPPER` secret first.
+`identity-kyc` (code v7) deployed on 2026-10-01 as server version 8, after the owner created the `KYC_PEPPER` secret.
 
 The Git repository is the versioned source of truth. This manifest records the currently deployed Supabase state that has been reconciled into `supabase/functions/`.
 
@@ -24,7 +24,7 @@ The Git repository is the versioned source of truth. This manifest records the c
 | invite-user | 7 | ACTIVE | true | e3b1fe66d39da6c0bdf70e37966f82865a8b56633128806c24d1619318e8ebd7 |
 | pricing | 5 | ACTIVE | true | 98aaf16f38da390bec51e41ca7f71eaae5cb219313debb9027d6cb7830972509 |
 | join-link | 6 | ACTIVE | false | 53e2e1c5fd84d0e608f1472b497085a24669743b4a50646cd277cfa629b85166 |
-| identity-kyc | 6 | ACTIVE | true | 2bcae31a5b87e0919982a9f88722e77f069d9aa4668f1866e31073eb53453964 |
+| identity-kyc | 8 | ACTIVE | true | f9600d2e94820f366ad5f638ca5b0c743ab53da6f2e32636be84cbffc1a585de |
 | chat | 8 | ACTIVE | false | 78502f0eebae465d64e5e0f78648c883521b115fc7576e290684dff3778bf8a1 |
 | phone-verify | 6 | ACTIVE | false | 7f0583ca6896ed51a41741a1ab71dcf40fbf7b2a7bf68d440ddf9722a785b081 |
 | citizen-verify | 8 | ACTIVE | true | 26d683d5c28c5a7b6ef13548d7753533481ed9e98dcbc09d1f8df47735c94dea |

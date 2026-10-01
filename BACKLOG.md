@@ -136,6 +136,9 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   repetidos). O valor antigo está no histórico do git: trocá-lo obriga a pedir
   de novo o número do BI a quem já fez a verificação (decisão do dono).
   Um teste (`semChavesNoCodigo.test.ts`) falha se aparecer uma chave no código.
+  **01/10 (fim do dia):** segredo criado pelo dono e `identity-kyc` publicada.
+  Como ainda não há nenhuma verificação do pessoal (`identity_verifications`
+  vazia), trocar já o valor por um novo e secreto não custa nada.
 - **Favorito do Mapa sem província/município:** o "Guardar como favorito" cria
   a morada sem `province_id`/`municipality_id` (o site procurava pelo nome). O
   validador completa na validação.
