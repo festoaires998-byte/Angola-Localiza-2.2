@@ -73,6 +73,8 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
   const rpcsChamadas: { nome: string; args: any }[] = [];
   const linksPedidos: { bucket: string; nome: string; segundos: number }[] = [];
   const removidos: { bucket: string; nome: string }[] = [];
+  const contasAlteradas: { id: string; mudancas: unknown }[] = [];
+  const contasApagadas: { id: string; suave: boolean }[] = [];
 
   const tabela = (nome: string) => (tabelas[nome] ??= []);
 
@@ -189,6 +191,14 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
         getUserById(id: string) {
           return Promise.resolve({ data: { user: { id, email: opcoes.emails?.[id] } }, error: null });
         },
+        updateUserById(id: string, mudancas: unknown) {
+          contasAlteradas.push({ id, mudancas });
+          return Promise.resolve({ data: { user: { id } }, error: null });
+        },
+        deleteUser(id: string, suave?: boolean) {
+          contasApagadas.push({ id, suave: suave === true });
+          return Promise.resolve({ data: { user: { id } }, error: null });
+        },
       },
     },
     storage: {
@@ -197,6 +207,13 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
           download(nome: string) {
             const f = ficheiros[bucket]?.[nome];
             return Promise.resolve(f ? { data: new Blob([new Uint8Array(f)]), error: null } : { data: null, error: { message: 'Object not found' } });
+          },
+          list(pasta: string, o: { limit?: number } = {}) {
+            const nomes = Object.keys(ficheiros[bucket] ?? {})
+              .filter((n) => n.startsWith(`${pasta}/`) && !n.slice(pasta.length + 1).includes('/'))
+              .slice(0, o.limit ?? 100)
+              .map((n) => ({ name: n.slice(pasta.length + 1), id: n }));
+            return Promise.resolve({ data: nomes, error: null });
           },
           remove(nomes: string[]) {
             removidos.push(...nomes.map((nome) => ({ bucket, nome })));
@@ -212,7 +229,7 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
     },
   };
 
-  return { cliente, tabelas: () => tabelas, rpcsChamadas, linksPedidos, removidos };
+  return { cliente, tabelas: () => tabelas, rpcsChamadas, linksPedidos, removidos, contasAlteradas, contasApagadas };
 }
 
 export type SupabaseFalso = ReturnType<typeof criarSupabaseFalso>;

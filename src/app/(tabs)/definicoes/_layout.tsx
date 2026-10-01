@@ -16,6 +16,7 @@ export default function LayoutDefinicoes() {
       <Stack.Screen name="verificacao" options={{ title: 'Verificação simples' }} />
       <Stack.Screen name="identidade" options={{ title: 'Verificação de identidade' }} />
       <Stack.Screen name="motorista" options={{ title: 'Motorista' }} />
+      <Stack.Screen name="apagar-conta" options={{ title: 'Apagar a conta' }} />
     </Stack>
   );
 }

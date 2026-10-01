@@ -176,6 +176,7 @@ export default function Definicoes() {
       </Cartao>
 
       <BotaoSair />
+      <Botao titulo="Apagar a minha conta" variante="perigo" onPress={() => router.push('/definicoes/apagar-conta')} />
 
       <View style={estilos.versao}>
         <Texto suave>{`${nomeDaMarcaPorCodigo(pais)}, versão ${versaoDaApp()}`}</Texto>

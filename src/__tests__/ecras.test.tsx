@@ -246,6 +246,15 @@ describe('Definições → Sair', () => {
     expect(screen.getByText(/Angola Localiza, versão/)).toBeTruthy();
   });
 
+  test('"Apagar a minha conta" abre o ecrã de confirmação', async () => {
+    comSessao([], null, AAL1_SEM_FATOR);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    fireEvent.press(screen.getByRole('button', { name: 'Apagar a minha conta' }));
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes/apagar-conta'));
+    expect(screen.getByText(/não tem volta atrás/)).toBeTruthy();
+  });
+
   test('"Política de privacidade" abre a página do site', async () => {
     const { Linking } = require('react-native') as typeof import('react-native');
     const abrir = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
