@@ -2,7 +2,10 @@
 
 ## Dívida técnica
 
-### Site antigo mostra "Verificado!" depois de enviar a verificação simples
+### ~~Site antigo mostra "Verificado!" depois de enviar a verificação simples~~
+
+- **01/10:** os 4 estados já estavam no site (PR #5 do site); a mensagem
+  depois de enviar passa a "Fica em revisão" na PR #6 do site.
 
 - **Desde:** 24/09/2026 (citizen-verify v3, PR #27).
 - **O quê:** desde a v3, o envio da verificação simples já não aprova. Fica
@@ -30,7 +33,10 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   `citizen_id_artifacts_purged` em `audit_logs`. Por decidir: o mesmo para o
   KYC do pessoal (`identity_verifications`: fotos do BI e vídeo).
 
-### Fechar a raiz do bucket kyc-artifacts (passo D)
+### ~~Fechar a raiz do bucket kyc-artifacts (passo D)~~
+
+- **01/10:** já fechada (migração `20260928072000_tighten_kyc_storage_policy`):
+  a regra só aceita `<id>/…`. O site já envia para a pasta de cada pessoa.
 
 - **Desde:** 24/09/2026 (migração `20260924050000_kyc_pasta_por_utilizador`).
 - **O quê:** a app já envia as fotos para a pasta de cada pessoa
@@ -55,9 +61,17 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - Testes das Edge Functions a correr de verdade, com uma base de dados falsa
   (feito para a `deliveries` em `src/__tests__/deliveries.test.ts`; falta levar
   o mesmo às outras funções).
-- Relatório de erros da app, leve, para gastar poucos dados.
+- ~~Relatório de erros da app, leve, para gastar poucos dados.~~ Feito (01/10):
+  tabela `app_errors` (migração `20261001110000`; cada pessoa só escreve os
+  seus, ninguém lê pela API, no máximo 50 por dia, apagados aos 90 dias) e
+  `src/services/erros` (guardados no telemóvel, no máximo 50, o mesmo erro uma
+  vez por hora, enviados em lotes de 20 depois de cada sincronização). Ecrã
+  "Algo correu mal" com "Tentar outra vez". Ver os erros: painel do Supabase →
+  Table Editor → `app_errors`.
 
-### Site antigo: pedir o nome completo no registo
+### ~~Site antigo: pedir o nome completo no registo~~
+
+- **01/10:** já feito no site (o registo exige o nome e envia `full_name`).
 
 - **Desde:** a app passou a exigir o nome completo (user_metadata.full_name).
 - **O quê:** quem cria conta no site ainda fica sem nome. A app pede-o no
@@ -67,10 +81,11 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 ### Entregas: pendências encontradas na auditoria (Fase 2)
 
 - **Desde:** 24/09/2026 (deliveries v19, migração `20260924060000_seguranca_entregas`).
-- **Site antigo (hotfix):** enviar as fotos e as assinaturas das provas para o
-  bucket privado `delivery-proofs` (`<id>/…`), como a app. Até lá, a v19 ainda
-  aceita `field-photos` (público). Depois do hotfix: deixar de aceitar
-  `field-photos` nas provas e tirar as 2 fotos de provas antigas de lá.
+- **Site antigo:** já envia as provas para `delivery-proofs/<id>/…` (01/10:
+  confirmado no código do site). O bucket `field-photos` também já é privado.
+  Falta (prioridade baixa): a `deliveries` deixar de aceitar `field-photos`
+  em provas novas; há 3 provas antigas lá (até 22/09), que continuam legíveis
+  por links temporários.
 - ~~**Rastreio público.**~~ Decidido (01/10): sim, mínimo. Já existe na
   deliveries v38 (`action=track`: estado, datas, município/província e histórico).
 - ~~`sync`: `create_address` e `update_address` gravam o payload tal como vem.~~
