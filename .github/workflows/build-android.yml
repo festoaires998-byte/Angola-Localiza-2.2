@@ -1,10 +1,9 @@
 name: Build Android (APK de teste)
 
-# Disparo temporário para validar o APK da correção KYC; será revertido após o build.
+# Só arranca quando alguém carrega em "Run workflow" no separador Actions.
+# Não correr em cada push: o plano gratuito da Expo tem poucos builds Android por mês.
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
 
 concurrency:
   group: build-android
