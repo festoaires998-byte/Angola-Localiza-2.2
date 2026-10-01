@@ -13,3 +13,4 @@ export * from './referencias';
 export * from './zonaOffline';
 export * from './zonasGeocodificadas';
 export * from './errosPendentes';
+export * from './dadosLocais';
