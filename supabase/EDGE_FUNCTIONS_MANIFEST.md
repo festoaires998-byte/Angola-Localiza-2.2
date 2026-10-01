@@ -1,6 +1,6 @@
 # Supabase Edge Functions — deployment manifest
 
-Generated from project `qntbknegicaghnbnghyw` on 2026-09-30; updated 2026-10-01 (public-api v9, signing-keys v5, phone-verify v6, limpeza-kyc v1).
+Generated from project `qntbknegicaghnbnghyw` on 2026-09-30; updated 2026-10-01 (public-api v9, signing-keys v5, phone-verify v6, limpeza-kyc v1, apagar-conta v1).
 
 `identity-kyc` (code v7) deployed on 2026-10-01 as server version 8, after the owner created the `KYC_PEPPER` secret.
 
@@ -37,6 +37,7 @@ The Git repository is the versioned source of truth. This manifest records the c
 | marketplace | 6 | ACTIVE | true | 24e0d08c0b930b930f77af13de9eb6d99750e490102cca9ffc4d288245f81085 |
 | migrate-legacy-proofs | 1 | ACTIVE | true | 73d0086138cdbc1845b048f86f33dfc90038a607b9dca74b9861c8752e490ece |
 | limpeza-kyc | 1 | ACTIVE | false | 5f5eaff92fec5025703cf1dac7d07ce3790a490ea123bf57cac9e013fe859611 |
+| apagar-conta | 1 | ACTIVE | true | 73fcb3c2d78487dba1dafd66c41e348c46b86eb0452c03c93a8c432d2202e0b3 |
 | driver-kyc | 4 | ACTIVE | true | 9f94f399070c5d9a83b512ffc88e3b1698cce4f7cf422408bb8694e7c544eb85 |
 
 `search` and `resolve-address` stay deployed only to answer 410 (disabled); the app and the site use `pesquisa`.
