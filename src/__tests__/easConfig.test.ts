@@ -11,3 +11,25 @@ describe('APK de teste (eas.json)', () => {
     expect(eas.build.preview.env.ORG_GRADLE_PROJECT_reactNativeArchitectures).toBe('arm64-v8a');
   });
 });
+
+describe('Publicação na Google Play (eas.json)', () => {
+  const eas = JSON.parse(ler('eas.json'));
+
+  test('os perfis que geram uma app para instalar têm o Supabase (sem ele a app não liga ao servidor)', () => {
+    for (const perfil of ['preview', 'production']) {
+      const env = eas.build[perfil].env ?? {};
+      expect(env.EXPO_PUBLIC_SUPABASE_URL).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co$/);
+      expect(env.EXPO_PUBLIC_SUPABASE_ANON_KEY).toBeTruthy();
+    }
+    expect(eas.build.production.env).toEqual({
+      EXPO_PUBLIC_SUPABASE_URL: eas.build.preview.env.EXPO_PUBLIC_SUPABASE_URL,
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: eas.build.preview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+    });
+  });
+
+  test('production gera o pacote da loja (AAB) para todos os telemóveis, com o número da versão a subir sozinho', () => {
+    expect(eas.build.production.android.buildType).toBe('app-bundle');
+    expect(eas.build.production.env.ORG_GRADLE_PROJECT_reactNativeArchitectures).toBeUndefined();
+    expect(eas.build.production.autoIncrement).toBe(true);
+  });
+});
