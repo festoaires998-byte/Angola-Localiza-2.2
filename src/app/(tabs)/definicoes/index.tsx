@@ -8,9 +8,11 @@ import { dataHora, NOMES_CARGOS, NOMES_OPERACOES } from '@/components/nomes';
 import { CORES, TAMANHOS } from '@/components/tema';
 import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { KYC_VERIFICADO } from '@/domain/organizacao/cargos';
-import { PAISES_PALOP, ouvirPais, paisAtual, selecionarPais } from '@/state/pais';
+import { PAISES_PALOP, ouvirPais, paisAtual } from '@/state/pais';
+import { avisoMudarPais } from '@/services/conta/mudarPais';
+import { mudarPaisDaConta } from '@/services/conta/mudarPaisApp';
 import { URL_POLITICA_PRIVACIDADE } from '@/config/links';
-import { nomeDaMarcaPorCodigo } from '@/config/pais';
+import { nomeDaMarcaPorCodigo, nomeDoPais, paisComBandeira } from '@/config/pais';
 import { useCargos } from '@/hooks/useCargos';
 import { useFilaSync, type OperacaoComProblema } from '@/hooks/useFilaSync';
 import { useSessao } from '@/hooks/useSessao';
@@ -47,15 +49,28 @@ export default function Definicoes() {
   const fila = useFilaSync();
   const [resultado, setResultado] = useState<string | null>(null);
   const [pais, setPais] = useState(paisAtual());
+  const [escolherPais, setEscolherPais] = useState(false);
+  const [paraConfirmar, setParaConfirmar] = useState<string | null>(null);
   const [aMudarPais, setAMudarPais] = useState(false);
+  const [avisoPais, setAvisoPais] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
 
   useEffect(() => ouvirPais(setPais), []);
 
-  async function mudarPais(codigo: string) {
+  async function confirmarPais(codigo: string) {
     setAMudarPais(true);
-    try { await selecionarPais(codigo); setResultado(null); }
-    catch (e) { setResultado(e instanceof Error ? e.message : 'Não foi possível mudar o país.'); }
-    finally { setAMudarPais(false); }
+    try {
+      const r = await mudarPaisDaConta(codigo);
+      if (r.ok) {
+        setPais(r.pais);
+        setAvisoPais({ tipo: 'sucesso', texto: `País da conta mudado para ${nomeDoPais(r.pais)}.` });
+        setEscolherPais(false);
+      } else {
+        setAvisoPais({ tipo: 'erro', texto: r.erro });
+      }
+      setParaConfirmar(null);
+    } finally {
+      setAMudarPais(false);
+    }
   }
 
   async function sincronizar() {
@@ -92,19 +107,30 @@ export default function Definicoes() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>País ativo</Subtitulo>
-        <Texto suave>{`Escolhe o país ativo. A identidade da plataforma será ${nomeDaMarcaPorCodigo(pais)}.`}</Texto>
-        {PAISES_PALOP.map((codigo) => (
-          <Botao
-            key={codigo}
-            titulo={pais === codigo ? `✓ ${codigo}` : codigo}
-            variante={pais === codigo ? 'primario' : 'secundario'}
-            aCarregar={aMudarPais}
-            onPress={() => void mudarPais(codigo)}
-          />
-        ))}
+        <Subtitulo>País da conta</Subtitulo>
+        <Linha nome="País" valor={paisComBandeira(pais)} />
+        {cargos.length > 0 ? (
+          <Texto suave>Tens um cargo na plataforma: para mudar de país, pede a um administrador.</Texto>
+        ) : paraConfirmar ? (
+          <Caixa tipo="aviso">
+            <Text style={estilos.problemaTitulo}>{`Mudar para ${paisComBandeira(paraConfirmar)}?`}</Text>
+            <Text style={estilos.problemaTexto}>{avisoMudarPais(paraConfirmar)}</Text>
+            <Botao titulo={`Sim, mudar para ${nomeDoPais(paraConfirmar)}`} aCarregar={aMudarPais} onPress={() => void confirmarPais(paraConfirmar)} />
+            <Botao titulo="Cancelar" variante="secundario" onPress={() => setParaConfirmar(null)} />
+          </Caixa>
+        ) : escolherPais ? (
+          <>
+            <Texto suave>Escolhe o país onde vais usar o Localiza.</Texto>
+            {PAISES_PALOP.filter((codigo) => codigo !== pais).map((codigo) => (
+              <Botao key={codigo} titulo={paisComBandeira(codigo)} variante="secundario" onPress={() => { setAvisoPais(null); setParaConfirmar(codigo); }} />
+            ))}
+            <Botao titulo="Cancelar" variante="secundario" onPress={() => setEscolherPais(false)} />
+          </>
+        ) : (
+          <Botao titulo="Mudar de país" variante="secundario" onPress={() => { setAvisoPais(null); setEscolherPais(true); }} />
+        )}
+        {avisoPais ? <Caixa tipo={avisoPais.tipo}>{avisoPais.texto}</Caixa> : null}
       </Cartao>
-
 
       <Cartao>
         <Subtitulo>Motorista</Subtitulo>

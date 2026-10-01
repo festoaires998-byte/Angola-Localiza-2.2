@@ -15,9 +15,23 @@ export function nomeDaMarca(config: Pick<ConfigPais, 'country_name'>): string {
   return `${config.country_name} Localiza`;
 }
 
+const NOMES_PAISES: Record<string, string> = { AO: 'Angola', MZ: 'Moçambique', CV: 'Cabo Verde', GW: 'Guiné-Bissau', ST: 'São Tomé e Príncipe' };
+const BANDEIRAS: Record<string, string> = { AO: '🇦🇴', MZ: '🇲🇿', CV: '🇨🇻', GW: '🇬🇼', ST: '🇸🇹' };
+
+/** Nome do país (ex.: "Moçambique"); um código desconhecido fica como está. */
+export function nomeDoPais(countryCode: CodigoPais): string {
+  const codigo = countryCode.trim().toUpperCase();
+  return NOMES_PAISES[codigo] ?? codigo;
+}
+
+/** Bandeira e nome (ex.: "🇲🇿 Moçambique"). */
+export function paisComBandeira(countryCode: CodigoPais): string {
+  const codigo = countryCode.trim().toUpperCase();
+  return BANDEIRAS[codigo] ? `${BANDEIRAS[codigo]} ${nomeDoPais(codigo)}` : nomeDoPais(codigo);
+}
+
 export function nomeDaMarcaPorCodigo(countryCode: CodigoPais): string {
-  const nomes: Record<string, string> = { AO: 'Angola', MZ: 'Moçambique', CV: 'Cabo Verde', GW: 'Guiné-Bissau', ST: 'São Tomé e Príncipe' };
-  return `${nomes[countryCode.trim().toUpperCase()] ?? countryCode.trim().toUpperCase()} Localiza`;
+  return `${nomeDoPais(countryCode)} Localiza`;
 }
 const CONFIG_AO_OFFLINE: ConfigPais = {
   country_code: 'AO', country_name: 'Angola', native_name: 'Angola', locale: 'pt-AO',

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { limparCacheConfigPais, obterConfigPais, paisTemNivel, nivelLocalidade, nivelPorChave, nomeDaMarcaPorCodigo, CONFIG_AO_OFFLINE_TESTE } from './pais';
+import { limparCacheConfigPais, obterConfigPais, paisTemNivel, nivelLocalidade, nivelPorChave, nomeDaMarcaPorCodigo, nomeDoPais, paisComBandeira, CONFIG_AO_OFFLINE_TESTE } from './pais';
 
 type CountryConfigRow = { country_code: string; name: string; native_name: string; locale: string; currency_code: string; currency_symbol: string; phone_country_code: string; enabled: boolean; };
 type LevelRow = { level_key: string; label: string; plural_label: string; level_order: number; is_locality: boolean };
@@ -80,5 +80,13 @@ describe('configuração de país', () => {
     expect(nivelLocalidade(CONFIG_AO_OFFLINE_TESTE)?.level_key).toBe('neighborhood');
     expect(nivelLocalidade(CONFIG_AO_OFFLINE_TESTE)?.label).toBe('Bairro');
     expect(nivelPorChave(CONFIG_AO_OFFLINE_TESTE, 'commune')?.plural_label).toBe('Comunas');
+  });
+
+  it('nome e bandeira de cada país PALOP', () => {
+    expect(nomeDoPais(' mz ')).toBe('Moçambique');
+    expect(paisComBandeira('AO')).toBe('🇦🇴 Angola');
+    expect(paisComBandeira('ST')).toBe('🇸🇹 São Tomé e Príncipe');
+    expect(paisComBandeira('BR')).toBe('BR');
+    expect(nomeDaMarcaPorCodigo('cv')).toBe('Cabo Verde Localiza');
   });
 });
