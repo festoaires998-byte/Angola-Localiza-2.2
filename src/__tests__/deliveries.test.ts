@@ -79,6 +79,7 @@ function cenario(entrega: Record<string, unknown> = {}) {
     sessoes: TOKENS,
     ficheiros,
     colunas: { signing_keys: COLUNAS_SIGNING_KEYS },
+    unicos: { deliveries: ['sync_operation_id'] },
     tabelas: {
       organization_members: [
         { user_id: ESTAFETA, role: 'estafeta', organization_id: 'org-1' },
@@ -309,6 +310,31 @@ describe('deliveries: criar', () => {
     expect(linhas(s, 'usage_events').map((u: any) => [u.zone_code, u.amount_total])).toEqual([['A', 1300], ['C', 3300], ['B', 2300], ['C', 3300]]);
     expect((await pedir(handler, 'create', { ...base, zone_code: 'Z1' }, 'remetente')).status).toBe(422);
     jest.useRealTimers();
+  });
+});
+
+describe('deliveries v22: pedido repetido', () => {
+  const OP = '99999999-0000-4000-8000-000000000001';
+  const pedido = { address_id: MORADA, recipient_name: 'Ana', sync_operation_id: OP };
+
+  test('o mesmo pedido duas vezes (resposta perdida, fila tenta de novo): uma só entrega', async () => {
+    const s = cenario();
+    const a = await pedir(handler, 'create', pedido, 'remetente');
+    const b = await pedir(handler, 'create', pedido, 'remetente');
+    expect(a.status).toBe(200);
+    expect(b).toEqual({ status: 200, json: expect.objectContaining({ id: a.json.id, created_by: REMETENTE }) });
+    expect(linhas(s, 'deliveries')).toHaveLength(2); // a do cenário + esta
+    expect(linhas(s, 'usage_events')).toHaveLength(1);
+  });
+
+  test('outra pessoa com o mesmo identificador não recebe a entrega (nem o PIN) de quem a criou', async () => {
+    const s = cenario();
+    const minha = await pedir(handler, 'create', pedido, 'remetente');
+    const outra = await pedir(handler, 'create', pedido, 'estafeta');
+    expect(outra.status).toBe(400);
+    expect(JSON.stringify(outra.json)).not.toContain(minha.json.id);
+    expect(JSON.stringify(outra.json)).not.toContain('confirmation_pin');
+    expect(linhas(s, 'deliveries').filter((d: any) => d.sync_operation_id === OP)).toHaveLength(1);
   });
 });
 

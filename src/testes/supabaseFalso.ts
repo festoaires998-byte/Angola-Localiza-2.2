@@ -24,6 +24,8 @@ export interface OpcoesSupabaseFalso {
   colunas?: Record<string, string[]>;
   /** storage.remove() devolve erro (simula falha do Storage). */
   falharRemover?: boolean;
+  /** Colunas com índice único (valores não nulos), como na base de dados: repetir dá o erro 23505. */
+  unicos?: Record<string, string[]>;
 }
 
 /** Colunas simples de um select ("a, b, rel(x)" → ["a", "b"]); null se for "*". */
@@ -108,6 +110,15 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
           const base = opcoes.predefinicoes?.[nome]?.(v) ?? {};
           return { id: novoId(), ...base, ...copia(v) };
         });
+        for (const c of opcoes.unicos?.[nome] ?? []) {
+          const vistos = new Set(linhas.map((l) => l[c]).filter((x) => x !== null && x !== undefined));
+          for (const n of novas) {
+            const v = n[c];
+            if (v === null || v === undefined) continue;
+            if (vistos.has(v)) return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint (${nome}.${c})` } };
+            vistos.add(v);
+          }
+        }
         linhas.push(...novas);
         return { data: devolver ? copia(novas) : null, error: null };
       }
