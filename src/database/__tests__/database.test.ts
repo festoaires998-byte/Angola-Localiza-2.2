@@ -88,6 +88,7 @@ describe('migrações', () => {
       'chaves_no_servidor',
       'codigos_confirmados',
       'entregas',
+      'erros_pendentes',
       'favoritos',
       'ficheiros_pendentes',
       'fila_saida',

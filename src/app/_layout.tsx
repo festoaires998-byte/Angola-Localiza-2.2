@@ -15,13 +15,34 @@ import { carregarPaisAtual, ouvirPais, paisAtual } from '@/state/pais';
 import { nomeDaMarcaPorCodigo } from '@/config/pais';
 import { iniciarSync } from '@/sync/gatilhos';
 import { registarTarefaSync } from '@/sync/tarefaSegundoPlano';
+import { instalarRelatorioErros, relatorioErros } from '@/services/erros/relatorioApp';
+import { Botao, Ecra, Texto, Titulo } from '@/components/ui';
 
-/** Arranque global: sessão, país ativo e sincronização. */
+/**
+ * Se um ecrã falhar ao desenhar: explica em palavras simples, guarda o erro
+ * para o relatório e deixa tentar outra vez (em vez de um ecrã em branco).
+ */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  useEffect(() => {
+    void relatorioErros.registar(error, { ecra: 'ErrorBoundary' });
+  }, [error]);
+  // O expo-router já põe tudo dentro de um SafeAreaProvider.
+  return (
+    <Ecra>
+      <Titulo>Algo correu mal</Titulo>
+      <Texto>Este ecrã teve um problema. O erro foi guardado para ser corrigido. Os teus dados continuam no telemóvel.</Texto>
+      <Botao titulo="Tentar outra vez" onPress={() => void retry()} />
+    </Ecra>
+  );
+}
+
+/** Arranque global: sessão, país ativo, sincronização e relatório de erros. */
 export default function RootLayout() {
   const url = useLinkingURL();
   const [pais, setPais] = useState(paisAtual());
 
   useEffect(() => {
+    instalarRelatorioErros();
     sessao.iniciar();
     carregarPaisAtual().catch(() => undefined);
     iniciarSync();

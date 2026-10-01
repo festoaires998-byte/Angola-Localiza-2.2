@@ -12,3 +12,4 @@ export * from './provasEvidencia';
 export * from './referencias';
 export * from './zonaOffline';
 export * from './zonasGeocodificadas';
+export * from './errosPendentes';
