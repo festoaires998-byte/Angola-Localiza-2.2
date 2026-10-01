@@ -1,6 +1,8 @@
 # Supabase Edge Functions — deployment manifest
 
-Generated from project `qntbknegicaghnbnghyw` on 2026-09-30.
+Generated from project `qntbknegicaghnbnghyw` on 2026-09-30; updated 2026-10-01 (public-api v9, signing-keys v5, phone-verify v6, limpeza-kyc v1).
+
+`identity-kyc` v7 (in the repository) is **not deployed yet**: it needs the `KYC_PEPPER` secret first.
 
 The Git repository is the versioned source of truth. This manifest records the currently deployed Supabase state that has been reconciled into `supabase/functions/`.
 
@@ -15,7 +17,7 @@ The Git repository is the versioned source of truth. This manifest records the c
 | field-service | 37 | ACTIVE | true | 5ef5882f1010e94f8b10d41ea3a8b67664185ac71cee40bc4b7f886790e54a7c |
 | admin | 15 | ACTIVE | true | 34b834f61af5fbc4ef9fdac670a7faf7c2a9cbf24afa678910bb45f4a5de6bb1 |
 | api-keys | 6 | ACTIVE | true | a3994e4f9d6a2312342c46e97d83a17606b0581142a48c27c7ee160d478f6e69 |
-| public-api | 8 | ACTIVE | false | 3505c5d57b88709e6607f408617795be1f88fd3c4f492431e7342fa8cffeccf5 |
+| public-api | 9 | ACTIVE | false | 89a4ee7e67c1a116d36dd0a5a3f973dd327707ec6f97a46f58a06ba35ddfb7c5 |
 | imports | 6 | ACTIVE | true | 1511da93ffdf519f94d094bcef78e7817df3bcacdf6735c00b1ae5d6e8a8b53c |
 | exports | 6 | ACTIVE | true | 79800be60343dc39569d5b3c4c65fe0a892538535bbd3d2098d9bae20ef695a7 |
 | health | 3 | ACTIVE | false | a228198692f5ce30fa9aa553955a1f633d3a938b56bfe626bcf7aa19b7defdc2 |
@@ -24,9 +26,9 @@ The Git repository is the versioned source of truth. This manifest records the c
 | join-link | 6 | ACTIVE | false | 53e2e1c5fd84d0e608f1472b497085a24669743b4a50646cd277cfa629b85166 |
 | identity-kyc | 6 | ACTIVE | true | 2bcae31a5b87e0919982a9f88722e77f069d9aa4668f1866e31073eb53453964 |
 | chat | 8 | ACTIVE | false | 78502f0eebae465d64e5e0f78648c883521b115fc7576e290684dff3778bf8a1 |
-| phone-verify | 4 | ACTIVE | false | 542772d9f77283b1279d3dedd69e99b43efd0062b6f2bfb8658ec495de34e268 |
+| phone-verify | 6 | ACTIVE | false | 7f0583ca6896ed51a41741a1ab71dcf40fbf7b2a7bf68d440ddf9722a785b081 |
 | citizen-verify | 8 | ACTIVE | true | 26d683d5c28c5a7b6ef13548d7753533481ed9e98dcbc09d1f8df47735c94dea |
-| signing-keys | 4 | ACTIVE | true | 7a71a488ec94e8155a4ef12f45df3a0b9cd051eba32030437c541f8b7e13d518 |
+| signing-keys | 5 | ACTIVE | true | 53bd30cd3155b4599a9126b343cee93db2a17daf9b832761806503f98bf909c1 |
 | address-history | 6 | ACTIVE | true | 4692dd58831213ae14bfc5cbdc713b0ee2508c15819911266f62b844ab5b0056 |
 | resolve-address | 4 | ACTIVE | false | fc7bc9439832dbd8685fb017222f30c3bf8d1788eae099c59728c76c799af7d4 |
 | offline-zone | 5 | ACTIVE | true | 3b0d771f133bf44ccb3d0ceeb98cedc0c020e8bacea4733f090ecfe71d02c66a |
@@ -34,6 +36,7 @@ The Git repository is the versioned source of truth. This manifest records the c
 | pesquisa | 3 | ACTIVE | false | 15a753d583005d112ab022e59261a11cae711e2c10ff0e5a02a6be857a7f8db2 |
 | marketplace | 6 | ACTIVE | true | 24e0d08c0b930b930f77af13de9eb6d99750e490102cca9ffc4d288245f81085 |
 | migrate-legacy-proofs | 1 | ACTIVE | true | 73d0086138cdbc1845b048f86f33dfc90038a607b9dca74b9861c8752e490ece |
+| limpeza-kyc | 1 | ACTIVE | false | 5f5eaff92fec5025703cf1dac7d07ce3790a490ea123bf57cac9e013fe859611 |
 | driver-kyc | 4 | ACTIVE | true | 9f94f399070c5d9a83b512ffc88e3b1698cce4f7cf422408bb8694e7c544eb85 |
 
 `search` and `resolve-address` stay deployed only to answer 410 (disabled); the app and the site use `pesquisa`.
