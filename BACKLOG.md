@@ -154,6 +154,9 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - ~~**Pedido repetido.**~~ Resolvido: a app manda o mesmo `sync_operation_id`
   com e sem rede, a deliveries devolve a entrega já criada e a base de dados
   tem um índice único (`deliveries_sync_operation_id_uidx`).
+  **01/10:** a deliveries v22 (publicada como v40) só devolve a entrega já
+  criada a quem a criou, e dois pedidos iguais ao mesmo tempo dão a mesma
+  entrega em vez de um erro.
 
 ### Entregas do estafeta: a seguir
 

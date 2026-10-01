@@ -7,7 +7,9 @@ import {
 } from "./regras.ts";
 import { aplicarDesconto, aplicarSobretaxaHorario, codigoPais, escolherZona, tarifasDaLinha, zonaValida, type Tarifas } from "./precos.ts";
 
-// Angola Localiza - Deliveries Service (v21)
+// Angola Localiza - Deliveries Service (v22)
+// v22: o pedido repetido (sync_operation_id) só devolve a entrega de quem a
+// criou, e dois pedidos iguais em simultâneo devolvem a mesma entrega.
 // v21: rastreio público (action=track, sem sessão, só estado e datas); a zona
 // de cobrança é calculada no servidor (zone_code, zone_code_hint ou pelos
 // municípios/províncias) e as tarifas vêm de country_pricing_zones, com a hora
@@ -423,7 +425,7 @@ Deno.serve(async (req: Request) => {
       if (sync_operation_id) {
         const { data: already } = await supabase.from("deliveries")
           .select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)")
-          .eq("sync_operation_id", sync_operation_id).maybeSingle();
+          .eq("sync_operation_id", sync_operation_id).eq("created_by", callerId).maybeSingle();
         if (already) return new Response(JSON.stringify(already), { headers: cors });
       }
 
@@ -444,7 +446,17 @@ Deno.serve(async (req: Request) => {
         created_by: callerId,
         sync_operation_id: sync_operation_id ?? null,
       }).select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)").single();
-      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      if (error) {
+        // Dois pedidos iguais ao mesmo tempo (ex.: a resposta perdeu-se e a fila
+        // tentou de novo): o índice único deixa passar só um; devolve esse.
+        if (error.code === "23505" && sync_operation_id) {
+          const { data: igual } = await supabase.from("deliveries")
+            .select("*, addresses(latitude,longitude,postal_code,plus_code,reference,house_number,streets(name),quadras(code),status,flagged_for_review)")
+            .eq("sync_operation_id", sync_operation_id).eq("created_by", callerId).maybeSingle();
+          if (igual) return new Response(JSON.stringify(igual), { headers: cors });
+        }
+        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors });
+      }
 
       await supabase.from("delivery_status_history").insert({ delivery_id: delivery.id, status: "CREATED" });
 

@@ -13,7 +13,7 @@ The Git repository is the versioned source of truth. This manifest records the c
 | search | 5 | ACTIVE | false | 14636a16bc22e9cc97882e755cb3805170d6f8a75c29ea157ab22de8405e7556 |
 | address-card | 9 | ACTIVE | true | 0b38f83f48a230d6073f86349a681615563a755c229d4c61b0093dcd62acbe32 |
 | sync | 18 | ACTIVE | true | cc012c58a64ab4d2f0f92f664b27d0c790c6d246259978de0e4ac5ef691d7bd7 |
-| deliveries | 38 | ACTIVE | false | a0d99464e319789f727ffd854de4a786ece8ea37d1b960faf192cafb924d8a17 |
+| deliveries | 40 | ACTIVE | false | c22086af6e6252173af48d40d4b4768d3386e0d1baf9c237bf9236e217c7e75b |
 | field-service | 37 | ACTIVE | true | 5ef5882f1010e94f8b10d41ea3a8b67664185ac71cee40bc4b7f886790e54a7c |
 | admin | 15 | ACTIVE | true | 34b834f61af5fbc4ef9fdac670a7faf7c2a9cbf24afa678910bb45f4a5de6bb1 |
 | api-keys | 6 | ACTIVE | true | a3994e4f9d6a2312342c46e97d83a17606b0581142a48c27c7ee160d478f6e69 |

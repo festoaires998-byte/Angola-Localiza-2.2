@@ -48,4 +48,4 @@ função que precisa delas (e só com o pedido do dono).
 - `identity-kyc` v6: ficheiros na pasta de quem envia; revisão sem auto-revisão.
 - `field-service` v37: fotos só em `field-photos/<id>/…`; `list_pending` com links temporários.
 - `address-card` v9: `get` devolve `address.id`; `create` exige sessão.
-
+- `deliveries` v40 (código v22): um pedido repetido (`sync_operation_id`) só devolve a entrega de quem a criou; dois pedidos iguais ao mesmo tempo devolvem a mesma entrega (índice único).
