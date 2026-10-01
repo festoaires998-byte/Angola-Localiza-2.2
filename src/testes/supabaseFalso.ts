@@ -16,6 +16,32 @@ export interface OpcoesSupabaseFalso {
   predefinicoes?: Record<string, (l: Linha) => Linha>;
   /** bucket → nome do ficheiro → conteúdo */
   ficheiros?: Record<string, Record<string, Uint8Array>>;
+  /**
+   * Colunas que existem em cada tabela (como na base de dados verdadeira).
+   * Um select de uma tabela listada aqui com uma coluna que não existe
+   * devolve erro, como o PostgREST.
+   */
+  colunas?: Record<string, string[]>;
+}
+
+/** Colunas simples de um select ("a, b, rel(x)" → ["a", "b"]); null se for "*". */
+export function colunasSimples(select: string): string[] | null {
+  let nivel = 0;
+  let atual = '';
+  const partes: string[] = [];
+  for (const c of select) {
+    if (c === '(') nivel += 1;
+    if (c === ')') nivel -= 1;
+    if (c === ',' && nivel === 0) {
+      partes.push(atual);
+      atual = '';
+    } else {
+      atual += c;
+    }
+  }
+  partes.push(atual);
+  const simples = partes.map((p) => p.trim()).filter((p) => p !== '' && !p.includes('('));
+  return simples.includes('*') ? null : simples;
 }
 
 let contador = 0;
@@ -64,6 +90,13 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
     const filtros: Filtro[] = [];
 
     function executar(): { data: any; error: any; count?: number } {
+      const conhecidas = opcoes.colunas?.[nome];
+      if (conhecidas) {
+        const emFalta = (colunasSimples(colunas) ?? []).filter((c) => !conhecidas.includes(c));
+        if (emFalta.length > 0) {
+          return { data: null, error: { message: `column ${nome}.${emFalta[0]} does not exist` } };
+        }
+      }
       const linhas = tabela(nome);
       if (op === 'insert' || op === 'upsert') {
         const novas = (Array.isArray(valores) ? valores : [valores!]).map((v) => {
@@ -117,11 +150,13 @@ export function criarSupabaseFalso(opcoes: OpcoesSupabaseFalso = {}) {
       limit(n: number) { limite = n; return b; },
       single() {
         const r = executar();
+        if (r.error) return Promise.resolve({ data: null, error: r.error });
         const d = Array.isArray(r.data) ? r.data : [];
         return Promise.resolve(d.length === 1 ? { data: d[0], error: null } : { data: null, error: { message: `esperava 1 linha, veio ${d.length}` } });
       },
       maybeSingle() {
         const r = executar();
+        if (r.error) return Promise.resolve({ data: null, error: r.error });
         const d = Array.isArray(r.data) ? r.data : [];
         if (d.length > 1) return Promise.resolve({ data: null, error: { message: 'mais de uma linha' } });
         return Promise.resolve({ data: d[0] ?? null, error: null });

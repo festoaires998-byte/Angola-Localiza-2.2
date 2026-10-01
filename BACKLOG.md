@@ -68,13 +68,15 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
   bucket privado `delivery-proofs` (`<id>/…`), como a app. Até lá, a v19 ainda
   aceita `field-photos` (público). Depois do hotfix: deixar de aceitar
   `field-photos` nas provas e tirar as 2 fotos de provas antigas de lá.
-- **Site antigo: rastreio público quebrado.** O site chama
-  `deliveries?action=track` sem sessão, mas essa ação não existe (responde 401).
-  Decidir se o rastreio público volta (só código, estado e destino, sem sessão).
+- ~~**Rastreio público.**~~ Decidido (01/10): sim, mínimo. Já existe na
+  deliveries v38 (`action=track`: estado, datas, município/província e histórico).
 - ~~`sync`: `create_address` e `update_address` gravam o payload tal como vem.~~
   Corrigido na sync v8 e na migração `20260924070000_moradas_so_por_validar`.
-- **`signing-keys`:** a chave de um aparelho pode ser trocada sem registo
-  (upsert). Registar cada troca em `audit_logs` para a prova ter valor jurídico.
+- ~~**`signing-keys`:** a chave de um aparelho pode ser trocada sem registo.~~
+  Feito na signing-keys v5 (cada registo e troca em `audit_logs`). Na mesma
+  altura (01/10) criou-se a coluna `signing_keys.revoked_at`, que a deliveries
+  já lia desde 27/09 sem ela existir (as provas assinadas ficavam todas por
+  verificar).
 - **`public-api`:** as organizações criam entregas com a chave da API, sem a
   verificação de identidade (decisão A vale para cidadãos). Confirmar que é o
   que se quer.
@@ -118,16 +120,15 @@ registo da decisão (`user_identity`, `audit_logs`) e das consultas
 - **Destino fora das moradas guardadas (app):** o site já aceita Plus Code,
   GPS e link (cria uma morada própria por validar e usa o id dela); falta o
   mesmo na app.
-- **Pedido repetido:** se a ligação cair depois de o servidor criar a entrega
-  mas antes da resposta chegar, a app põe o pedido na fila e ele pode ficar
-  criado duas vezes. Solução: uma chave de pedido (idempotência) na `deliveries`.
+- ~~**Pedido repetido.**~~ Resolvido: a app manda o mesmo `sync_operation_id`
+  com e sem rede, a deliveries devolve a entrega já criada e a base de dados
+  tem um índice único (`deliveries_sync_operation_id_uidx`).
 
 ### Entregas do estafeta: a seguir
 
-- **Decisão B (atribuição):** o operador postal atribuir entregas aos estafetas
-  da organização e o estafeta "puxar" entregas elegíveis precisam de ações novas
-  na `deliveries` (mudança no Supabase, com o pedido do dono). Hoje o estafeta
-  vê as que já lhe foram atribuídas (pelo site ou por quem criou).
+- ~~**Decisão B (atribuição).**~~ Decidido (01/10): os dois. Já existe:
+  `assign_driver`/`list_org_drivers` (operador) e `list_available_for_driver`/
+  `accept_delivery` (estafeta), na deliveries e na app.
 - **Destino no mapa:** o estafeta só lê a posição de moradas publicadas/aprovadas
   (regras da tabela addresses). Para moradas ainda por validar, falta dar a
   posição do destino ao estafeta atribuído (ex.: pela `deliveries`).

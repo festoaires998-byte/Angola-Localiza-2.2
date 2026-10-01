@@ -22,6 +22,7 @@ import {
 import { criarAssinarProva, paraCamposProva, type DadosProva } from '@/services/crypto/assinarProva';
 import { chavePublicaParaJwk } from '@/services/crypto/jwk';
 import { sha256Hex } from '@/services/imagem/hashFoto';
+import { COLUNAS_SIGNING_KEYS } from '@/testes/esquema';
 import { carregarFuncao, criarSupabaseFalso, pedir, URL_SUPABASE_FALSO, type SupabaseFalso } from '@/testes/supabaseFalso';
 
 jest.mock('jsr:@supabase/functions-js/edge-runtime.d.ts', () => ({}), { virtual: true });
@@ -77,6 +78,7 @@ function cenario(entrega: Record<string, unknown> = {}) {
   const s = criarSupabaseFalso({
     sessoes: TOKENS,
     ficheiros,
+    colunas: { signing_keys: COLUNAS_SIGNING_KEYS },
     tabelas: {
       organization_members: [
         { user_id: ESTAFETA, role: 'estafeta', organization_id: 'org-1' },
@@ -588,6 +590,13 @@ describe('deliveries v19: assinatura criptográfica ligada à prova', () => {
       expect(r.json.crypto_verified).toBe(false);
       expect(linhas(s, 'delivery_proofs')[0].crypto_failure_reason).toBe(motivo);
     }
+  });
+
+  test('chave do aparelho revogada: não confere, mas a entrega fecha com o motivo', async () => {
+    s.tabelas().signing_keys[0].revoked_at = new Date().toISOString();
+    const r = await fechar({}, { ...local, ...paraCamposProva(await assinarProva(dados)) });
+    expect(r.json).toEqual({ ok: true, status: 'DELIVERED', crypto_verified: false });
+    expect(linhas(s, 'delivery_proofs')[0].crypto_failure_reason).toBe('chave do aparelho revogada');
   });
 
   test('a mensagem do site (versão 1: entrega, local e data) também confere', async () => {
