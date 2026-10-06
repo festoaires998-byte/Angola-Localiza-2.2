@@ -63,7 +63,12 @@ export default function LayoutSeparadores() {
               options={{
                 title: NOMES_SEPARADORES[s],
                 tabBarAccessibilityLabel: NOMES_SEPARADORES[s],
-                tabBarIcon: ({ color }) => <Icone nome={s} cor={color} tamanho={26} />,
+                // O separador ativo fica numa pastilha amarelo-sol.
+                tabBarIcon: ({ color, focused }) => (
+                  <View testID={focused ? `aba-ativa-${s}` : undefined} style={[estilos.pastilha, focused && estilos.pastilhaAtiva]}>
+                    <Icone nome={s} cor={color} tamanho={24} />
+                  </View>
+                ),
               }}
             />
           </Tabs.Protected>
@@ -74,7 +79,7 @@ export default function LayoutSeparadores() {
 }
 
 const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   aviso: {
     backgroundColor: CORES.avisoFundo,
     borderBottomWidth: 2,
@@ -83,7 +88,9 @@ const estilos = StyleSheet.create({
     paddingBottom: 10,
   },
   textoAviso: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: CORES.avisoTexto, paddingTop: 10 },
-  nome: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  nome: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  pastilha: { width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  pastilhaAtiva: { backgroundColor: CORES.destaqueFundo },
   item: { paddingHorizontal: 0 },
-  barra: { minHeight: 64, paddingTop: 4 },
+  barra: { minHeight: 64, paddingTop: 4, backgroundColor: CORES.fundo, borderTopColor: CORES.bordaCartao },
 });

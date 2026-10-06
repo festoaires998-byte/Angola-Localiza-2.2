@@ -248,6 +248,24 @@ describe('Definições → Sair', () => {
     expect(screen.getByText(/Angola Localiza, versão/)).toBeTruthy();
   });
 
+  test('cores novas: título em faixa, secções com ícone e separador ativo destacado', async () => {
+    comSessao([], null, AAL1_SEM_FATOR);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    // O título "Conta" fica numa faixa verde com letra branca.
+    const titulo = screen.getByRole('header', { name: 'Conta' });
+    expect(StyleSheet.flatten(titulo.props.style).color).toBe('#FFFFFF');
+    // As secções têm o título com ícone (continuam a ser cabeçalhos).
+    for (const nome of ['A tua conta', 'País da conta', 'Motorista', 'Verificação simples', 'Notificações', 'Sincronização', 'Ajuda']) {
+      expect(screen.getByRole('header', { name: nome })).toBeTruthy();
+    }
+    // O separador ativo fica numa pastilha amarelo-sol (a barra desenha a camada
+    // ativa de cada separador e mostra só a do separador aberto).
+    const pastilha = screen.getAllByTestId('aba-ativa-definicoes')[0];
+    expect(StyleSheet.flatten(pastilha.props.style).backgroundColor).toBe('#FFE9A8');
+  });
+
   test('"Apagar a minha conta" abre o ecrã de confirmação', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/definicoes' });

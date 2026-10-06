@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CORES, TAMANHOS } from './tema';
+import { IconeSeccao, type NomeSeccao } from './IconeSeccao';
+import { CORES, PASTILHAS, TAMANHOS, type CorPastilha } from './tema';
 
 /** Ecrã com margens, deslocável e que sobe com o teclado. */
 export function Ecra({ children, centrado = false }: { children: ReactNode; centrado?: boolean }) {
@@ -31,11 +32,15 @@ export function Ecra({ children, centrado = false }: { children: ReactNode; cent
   );
 }
 
+/** Título do ecrã: faixa verde com letra branca e um traço amarelo-sol. */
 export function Titulo({ children }: { children: ReactNode }) {
   return (
-    <Text accessibilityRole="header" style={estilos.titulo}>
-      {children}
-    </Text>
+    <View style={estilos.faixaTitulo}>
+      <Text accessibilityRole="header" style={estilos.titulo}>
+        {children}
+      </Text>
+      <View style={estilos.tracoSol} />
+    </View>
   );
 }
 
@@ -159,6 +164,21 @@ export function Cartao({ children }: { children: ReactNode }) {
   return <View style={estilos.cartao}>{children}</View>;
 }
 
+/** Título de um cartão com um ícone numa pastilha de cor (ex.: secções da Conta). */
+export function CabecalhoCartao({ titulo, icone, cor }: { titulo: string; icone: NomeSeccao; cor: CorPastilha }) {
+  const [corIcone, fundo] = PASTILHAS[cor];
+  return (
+    <View style={estilos.cabecalhoCartao}>
+      <View style={[estilos.pastilha, { backgroundColor: fundo }]}>
+        <IconeSeccao nome={icone} cor={corIcone} />
+      </View>
+      <Text accessibilityRole="header" style={[estilos.subtitulo, estilos.flex1]}>
+        {titulo}
+      </Text>
+    </View>
+  );
+}
+
 /** Linha "nome: valor" dentro de um cartão. */
 export function Linha({ nome, valor }: { nome: string; valor: string }) {
   return (
@@ -180,11 +200,23 @@ export function EcraCarregamento({ texto = 'A abrir…' }: { texto?: string }) {
 }
 
 export const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: TAMANHOS.margem, gap: 16, paddingBottom: 40 },
   centrado: { flexGrow: 1, justifyContent: 'center' },
   carregamento: { alignItems: 'center', justifyContent: 'center', gap: 16 },
-  titulo: { fontSize: TAMANHOS.titulo, fontWeight: '700', color: CORES.texto },
+  faixaTitulo: {
+    backgroundColor: CORES.primaria,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    gap: 8,
+  },
+  titulo: { fontSize: TAMANHOS.titulo, fontWeight: '800', color: CORES.sobrePrimaria },
+  tracoSol: { width: 44, height: 5, borderRadius: 3, backgroundColor: CORES.destaque },
+  cabecalhoCartao: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pastilha: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  flex1: { flex: 1 },
   subtitulo: { fontSize: TAMANHOS.subtitulo, fontWeight: '700', color: CORES.texto },
   texto: { fontSize: TAMANHOS.texto, lineHeight: 26, color: CORES.texto },
   textoSuave: { color: CORES.textoSuave, fontSize: TAMANHOS.textoPequeno },
@@ -241,11 +273,11 @@ export const estilos = StyleSheet.create({
   caixa_erro: { backgroundColor: CORES.erroFundo, borderColor: CORES.perigo },
   caixa_aviso: { backgroundColor: CORES.avisoFundo, borderColor: CORES.avisoBorda },
   caixa_info: { backgroundColor: CORES.infoFundo, borderColor: CORES.primaria },
-  caixa_sucesso: { backgroundColor: '#E6F4EA', borderColor: CORES.sucesso },
+  caixa_sucesso: { backgroundColor: CORES.sucessoFundo, borderColor: CORES.sucesso },
   textoCaixa: { fontSize: TAMANHOS.textoPequeno, lineHeight: 24, color: CORES.texto, fontWeight: '600' },
   cartao: {
     borderWidth: 1,
-    borderColor: CORES.borda,
+    borderColor: CORES.bordaCartao,
     borderRadius: TAMANHOS.raio,
     padding: 16,
     gap: 10,

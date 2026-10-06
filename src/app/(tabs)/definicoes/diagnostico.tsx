@@ -77,7 +77,7 @@ export default function Diagnostico() {
 }
 
 const styles = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: 16, gap: 12, paddingBottom: 40 },
   titulo: { fontSize: 16, color: CORES.textoSuave },
   cartao: { borderWidth: 1, borderColor: CORES.borda, borderRadius: 12, padding: 12, gap: 8 },

@@ -8,7 +8,7 @@ export default function LayoutEnviar() {
       screenOptions={{
         headerTintColor: CORES.primaria,
         headerTitleStyle: { color: CORES.texto, fontWeight: '700' },
-        contentStyle: { backgroundColor: CORES.fundo },
+        contentStyle: { backgroundColor: CORES.fundoEcra },
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />

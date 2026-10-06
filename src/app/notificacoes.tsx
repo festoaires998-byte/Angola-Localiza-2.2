@@ -62,7 +62,7 @@ export default function Notificacoes() {
 }
 
 const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   cabecalho: { gap: 10, marginBottom: 4 },
   item: { borderWidth: 1, borderColor: CORES.borda, borderRadius: TAMANHOS.raio, padding: 14, gap: 6, backgroundColor: CORES.fundo },

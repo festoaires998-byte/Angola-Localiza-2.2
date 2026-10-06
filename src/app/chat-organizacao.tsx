@@ -95,7 +95,7 @@ export default function ChatOrganizacao() {
 }
 
 const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   lista: { padding: TAMANHOS.margem, gap: 10, paddingBottom: 16 },
   cabecalho: { gap: 10, marginBottom: 8 },
   canais: { gap: 8 },

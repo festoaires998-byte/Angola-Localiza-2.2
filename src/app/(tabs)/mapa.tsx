@@ -663,7 +663,7 @@ export default function Mapa() {
 }
 
 const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: 16, gap: 12, paddingBottom: 32 },
   flex: { flex: 1 },
   linhaBotoes: { flexDirection: 'row', gap: 8 },

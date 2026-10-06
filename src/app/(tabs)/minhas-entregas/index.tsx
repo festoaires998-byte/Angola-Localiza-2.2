@@ -199,7 +199,7 @@ export default function Entregas() {
 }
 
 const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   cabecalho: { gap: 12, marginBottom: 4 },
   vazio: { gap: 8, paddingVertical: 24 },
