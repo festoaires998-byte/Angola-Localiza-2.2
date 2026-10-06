@@ -8,6 +8,7 @@ import { dataHora, NOMES_CATEGORIAS, nomeEstadoMorada, plural } from '@/componen
 import { TAMANHOS, type Cores } from '@/components/tema';
 import { useEstilos } from '@/components/temaApp';
 import { Botao, CabecalhoCartao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
+import { IlustracaoVazio } from '@/components/IlustracaoVazio';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { nomeEstadoRegisto, type Registo } from '@/domain/enderecamento/meusRegistos';
 import { useMoradas } from '@/hooks/useMoradas';
@@ -116,6 +117,7 @@ export default function Moradas() {
         ListEmptyComponent={
           vazia ? (
             <View style={estilos.vazio}>
+              <IlustracaoVazio icone="estrela" cor="ambar" />
               <Texto>{moradas.aAtualizar ? 'A procurar as tuas moradas…' : 'Ainda não tens moradas guardadas.'}</Texto>
               <Texto suave>
                 Regista a tua casa (ou outro local) com o botão acima. Fica à espera de validação; quando for aprovada,

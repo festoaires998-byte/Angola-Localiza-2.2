@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TAMANHOS, type Cores } from '@/components/tema';
 import { useEstilos, useCores } from '@/components/temaApp';
 import { Caixa, EcraCarregamento, Ecra, Texto, Titulo } from '@/components/ui';
+import { IlustracaoVazio } from '@/components/IlustracaoVazio';
 import { entregaTerminada, nomeEstadoEntrega, type Envio } from '@/domain/entregas/envio';
 import { estadoEfetivo } from '@/domain/entregas/estafeta';
 import { recarregarEntregasOrganizacao, recarregarEstafeta, useEntregasEstafeta } from '@/hooks/useEntregasEstafeta';
@@ -185,6 +186,7 @@ export default function Entregas() {
         }
         ListEmptyComponent={
           <View style={estilos.vazio}>
+            <IlustracaoVazio icone="motorista" cor="azul" />
             <Texto>{pesquisa || filtro !== 'todas' ? 'Nenhuma entrega corresponde à pesquisa/filtro.' : 'Ainda sem entregas atribuídas.'}</Texto>
           </View>
         }

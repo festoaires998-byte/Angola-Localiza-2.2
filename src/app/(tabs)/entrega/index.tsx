@@ -7,6 +7,7 @@ import { dataHora, plural } from '@/components/nomes';
 import { TAMANHOS, type Cores } from '@/components/tema';
 import { useEstilos, useCores } from '@/components/temaApp';
 import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
+import { IlustracaoVazio } from '@/components/IlustracaoVazio';
 import { nomeEstadoEntrega, type Envio } from '@/domain/entregas/envio';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
@@ -156,6 +157,7 @@ export default function Envios() {
         }
         ListEmptyComponent={
           <View style={estilos.vazio}>
+            <IlustracaoVazio icone="carga" cor="verde" />
             <Texto>{estado.envios.length > 0 && enviosVisiveis.length === 0 ? 'Nenhum envio corresponde aos filtros.' : aAtualizar ? 'A procurar os teus envios…' : 'Ainda não enviaste nada.'}</Texto>
             <Texto suave>
               Escolhe uma das tuas moradas guardadas como destino, escreve quem vai receber e envia. Recebes um

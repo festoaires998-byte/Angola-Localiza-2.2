@@ -236,7 +236,7 @@ const fabricaEstilos = (CORES: Cores) => {
   const escuro = CORES.fundo !== '#FFFFFF';
   return StyleSheet.create({
     ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
-    conteudo: { padding: TAMANHOS.margem, gap: 16, paddingBottom: 120 },
+    conteudo: { padding: TAMANHOS.margem, gap: 16, paddingBottom: 48 },
     centrado: { flexGrow: 1, justifyContent: 'center' },
     carregamento: { alignItems: 'center', justifyContent: 'center', gap: 16 },
     faixaTitulo: {

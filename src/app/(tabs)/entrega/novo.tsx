@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Opcoes, type Opcao } from '@/components/Opcoes';
 import { LeitorQr } from '@/components/mapa/LeitorQr';
-import { Botao, CabecalhoCartao, Caixa, Campo, Ecra, EcraCarregamento, Texto } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Ecra, EcraCarregamento, Texto, vibrarSucesso } from '@/components/ui';
 import { faltaNoEnvio, MAX_INSTRUCOES, mensagemErroEnvio, type DadosEnvio } from '@/domain/entregas/envio';
 import { interpretarEntrada } from '@/domain/enderecamento/pesquisa';
 import { encode } from '@/domain/enderecamento/plusCode';
@@ -208,6 +208,7 @@ export default function NovoEnvio() {
       const r = await servicoEnvios.enviar(userId, dadosComCarga, online === true && !destinoEhNovo);
       if (r.tipo === 'enviado') {
         guardarEnvio(r.envio, r.pin, { tipo: 'sucesso', texto: 'Pedido enviado. Dá o PIN só a quem vai receber a encomenda.' });
+        vibrarSucesso();
         router.replace({ pathname: '/entrega/[id]', params: { id: r.envio.id } });
       } else {
         definirAvisoEnvios({ tipo: 'info', texto: destinoEhNovo ? AVISO_DESTINO_NOVO : AVISO_NA_FILA });

@@ -264,6 +264,10 @@ describe('Definições → Sair', () => {
     // ativa de cada separador e mostra só a do separador aberto).
     const pastilha = screen.getAllByTestId('aba-ativa-definicoes')[0];
     expect(StyleSheet.flatten(pastilha.props.style).backgroundColor).toBe('#FFE9A8');
+    // O separador Enviar é o botão amarelo grande do meio.
+    const enviar = screen.getAllByTestId('botao-enviar')[0];
+    expect(StyleSheet.flatten(enviar.props.style).backgroundColor).toBe('#F6B800');
+    expect(separadoresVisiveis()).toContain('Enviar');
   });
 
   test('"Apagar a minha conta" abre o ecrã de confirmação', async () => {

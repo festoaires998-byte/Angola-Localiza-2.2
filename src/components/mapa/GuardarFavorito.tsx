@@ -8,7 +8,7 @@ import { NOMES_CATEGORIAS, nomeVisibilidade } from '../nomes';
 import { Opcoes } from '../Opcoes';
 import { type Cores } from '../tema';
 import { useEstilos } from '../temaApp';
-import { Botao, Caixa } from '../ui';
+import { Botao, Caixa, vibrarSucesso } from '../ui';
 
 /** A mesma ordem do site: "Outro" primeiro. */
 const CATEGORIAS: readonly CategoriaFavorito[] = ['outro', 'casa', 'trabalho', 'familia', 'cliente', 'loja', 'entrega'];
@@ -34,6 +34,7 @@ export function GuardarFavorito({ bloqueio, guardado, aoGuardar }: Props) {
     setMensagem(null);
     try {
       setMensagem({ tipo: 'sucesso', texto: await aoGuardar({ visibilidade, categoria }) });
+      vibrarSucesso();
     } catch (e) {
       setMensagem({ tipo: 'erro', texto: e instanceof Error ? e.message : String(e) });
     } finally {

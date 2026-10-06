@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TAMANHOS, type Cores } from '@/components/tema';
 import { useEstilos } from '@/components/temaApp';
 import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
+import { IlustracaoVazio } from '@/components/IlustracaoVazio';
 import { useSessao } from '@/hooks/useSessao';
 import { listarNotificacoes, marcarNotificacaoComoLida, marcarTodasNotificacoesComoLidas, subscreverNotificacoesRealtime, type Notificacao } from '@/services/notificacoes/notificacoes';
 
@@ -47,7 +48,7 @@ export default function Notificacoes() {
             {naoLidas > 0 ? <Botao titulo={'Marcar todas como lidas (' + naoLidas + ')'} onPress={async () => { await marcarTodasNotificacoesComoLidas(); await atualizar(); }} /> : <Texto suave>Não tens notificações por ler.</Texto>}
             {erro ? <Caixa tipo="aviso">{erro}</Caixa> : null}
           </View>}
-          ListEmptyComponent={<View style={estilos.vazio}><Texto>Ainda não tens notificações.</Texto><Texto suave>Novos avisos de entregas, Campo, validações e outros eventos aparecerão aqui.</Texto></View>}
+          ListEmptyComponent={<View style={estilos.vazio}><IlustracaoVazio icone="notificacoes" cor="ambar" /><Texto>Ainda não tens notificações.</Texto><Texto suave>Novos avisos de entregas, Campo, validações e outros eventos aparecerão aqui.</Texto></View>}
           renderItem={({ item }) => (
             <Pressable accessibilityRole="button" accessibilityLabel={item.title}
               onPress={async () => { if (!item.read_at) { await marcarNotificacaoComoLida(item.id); setItens((atual) => atual?.map((n) => n.id === item.id ? { ...n, read_at: new Date().toISOString() } : n) ?? null); } }}
