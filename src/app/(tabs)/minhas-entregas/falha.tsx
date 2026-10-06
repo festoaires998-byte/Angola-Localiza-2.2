@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { Opcoes } from '@/components/Opcoes';
-import { Botao, Caixa, Campo, Ecra, Subtitulo, Texto } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Ecra, Texto } from '@/components/ui';
 import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
 import { MOTIVOS_FALHA, type FicheiroProva, type MotivoFalha } from '@/domain/entregas/estafeta';
 import { recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
@@ -63,10 +63,10 @@ export default function FalhaEntrega() {
   return (
     <Ecra>
       <Texto>{`Entrega para ${entrega.destinatario}`}</Texto>
-      <Subtitulo>Porque não foi possível?</Subtitulo>
+      <CabecalhoCartao titulo="Porque não foi possível?" icone="atencao" cor="vermelho" />
       <Opcoes grupo="Motivo" empilhadas opcoes={MOTIVOS_FALHA} valor={motivo} aoEscolher={(v) => setMotivo(v as MotivoFalha)} />
       <Campo rotulo="Observação (opcional)" value={observacao} onChangeText={setObservacao} multiline />
-      <Subtitulo>Foto (opcional)</Subtitulo>
+      <CabecalhoCartao titulo="Foto (opcional)" icone="camara" cor="azul" />
       <CamaraFachada
         foto={foto?.uri ?? null}
         podeFotografar={gps.local !== null}

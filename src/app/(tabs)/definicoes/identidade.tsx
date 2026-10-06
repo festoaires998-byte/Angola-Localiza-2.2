@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
 
-import { Botao, Caixa, Campo, Cartao, Ecra, EcraCarregamento, Marcar, Subtitulo, Texto, Titulo } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, Ecra, EcraCarregamento, Marcar, Texto, Titulo } from '@/components/ui';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import {
@@ -143,12 +143,12 @@ export default function IdentidadePessoal() {
         {numero && !numeroBiValido(numero) ? <Texto suave>Formato: 9 números + 2 letras + 2 números.</Texto> : null}
       </Cartao>
       <Cartao>
-        <Subtitulo>Fotos do BI</Subtitulo>
+        <CabecalhoCartao titulo="Fotos do BI" icone="identidade" cor="roxo" />
         <Botao titulo={fotos.frente ? '✓ Frente do BI' : 'Fotografar a frente do BI'} variante={fotos.frente ? 'secundario' : 'primario'} aCarregar={ocupado} onPress={() => void fotografar('frente')} />
         <Botao titulo={fotos.verso ? '✓ Verso do BI' : 'Fotografar o verso do BI'} variante={fotos.verso ? 'secundario' : 'primario'} aCarregar={ocupado} onPress={() => void fotografar('verso')} />
       </Cartao>
       <Cartao>
-        <Subtitulo>{`Vídeo (${VIDEO_MIN_S} a ${VIDEO_MAX_S} segundos)`}</Subtitulo>
+        <CabecalhoCartao titulo={`Vídeo (${VIDEO_MIN_S} a ${VIDEO_MAX_S} segundos)`} icone="video" cor="azul" />
         {!desafios ? <Botao titulo="Preparar o vídeo" variante="secundario" onPress={() => void prepararVideo()} /> : <>
           <Texto>Durante o vídeo, olha para a câmara e faz, por esta ordem:</Texto>
           {desafios.map((d, i) => <Texto key={d}>{`${i + 1}. ${d}`}</Texto>)}

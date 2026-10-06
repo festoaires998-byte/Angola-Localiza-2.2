@@ -56,3 +56,11 @@ export const TAMANHOS = {
   margem: 20,
   raio: 12,
 } as const;
+
+/** Barra de cima dos ecrãs com "voltar": verde, letra branca (como a faixa dos títulos). */
+export const CABECALHO = {
+  headerStyle: { backgroundColor: CORES.primaria },
+  headerTintColor: CORES.sobrePrimaria,
+  headerTitleStyle: { color: CORES.sobrePrimaria, fontWeight: '800' },
+  headerShadowVisible: false,
+} as const;

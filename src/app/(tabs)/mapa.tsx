@@ -9,7 +9,7 @@ import { QrLocal } from '@/components/mapa/QrLocal';
 import { VistaMapa, type Camada } from '@/components/mapa/VistaMapa';
 import { dataHora, megas, textoPrecisao } from '@/components/nomes';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, Campo, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { abrirBaseDados } from '@/database/client';
 import { criarRepositorioHistoricoLocaliza, type ItemHistoricoLocaliza } from '@/database/repositories/historicoLocaliza';
@@ -84,7 +84,7 @@ function CartaoMapaOffline({ mapa, estado, online, nomePais }: { mapa: ReturnTyp
   const regiaoAtual = mapaDoPais(paisAtual()).regiao;
   return (
     <Cartao>
-      <Subtitulo>Mapa para usar sem rede</Subtitulo>
+      <CabecalhoCartao titulo="Mapa para usar sem rede" icone="mapa" cor="azul" />
       <Texto>
         {remoto
           ? `Descarrega o mapa de ${regiaoAtual.nome} (${megas(remoto.bytes)}) para o veres mesmo sem internet.`
@@ -180,7 +180,7 @@ function CartaoOndeEstou({
   if (!captura) {
     return (
       <Cartao>
-        <Subtitulo>Onde estou</Subtitulo>
+        <CabecalhoCartao titulo="Onde estou" icone="origem" cor="verde" />
         <Texto>
           {comSinal
             ? `A medir a tua posição… leitura ${medida.leiturasBoas} de ${medida.necessarias} com menos de ±${medida.limite} m. Fica parado uns segundos.`
@@ -201,7 +201,7 @@ function CartaoOndeEstou({
   const local = info?.local;
   return (
     <Cartao>
-      <Subtitulo>Onde estou</Subtitulo>
+      <CabecalhoCartao titulo="Onde estou" icone="origem" cor="verde" />
       <View style={estilos.linha}>
         <Text style={estilos.rotulo}>Código Postal Digital</Text>
         {cp?.codigo ? (
@@ -549,7 +549,7 @@ export default function Mapa() {
         {historico.length > 0 ? (
           <Cartao>
             <View style={estilos.linhaAlvo}>
-              <Subtitulo>Histórico recente</Subtitulo>
+              <CabecalhoCartao titulo="Histórico recente" icone="historico" cor="roxo" />
               <Botao titulo="Limpar" variante="secundario" onPress={() => { void abrirBaseDados().then((db) => criarRepositorioHistoricoLocaliza(db).limpar()).then(() => setHistorico([])); }} />
             </View>
             {historico.map((item) => <Pressable key={item.id} onPress={() => mostrarNoMapa({ latitude: item.latitude, longitude: item.longitude, titulo: item.titulo })} style={estilos.resultado} accessibilityRole="button"><Text style={estilos.resultadoTitulo}>{item.titulo}</Text><Text style={estilos.nota}>{item.latitude.toFixed(5) + ', ' + item.longitude.toFixed(5)}</Text></Pressable>)}
@@ -636,7 +636,7 @@ export default function Mapa() {
 
         {/* 7. Privacidade, Categoria e Guardar como favorito */}
         <Cartao>
-          <Subtitulo>Guardar este local</Subtitulo>
+          <CabecalhoCartao titulo="Guardar este local" icone="estrela" cor="ambar" />
           <GuardarFavorito bloqueio={bloqueioFavorito} guardado={!!plusCode && guardadoEm === plusCode} aoGuardar={guardarFavorito} />
         </Cartao>
 
@@ -645,7 +645,7 @@ export default function Mapa() {
 
         {/* 9. Mapas nacionais PALOP: podem ser descarregados individualmente */}
         <Cartao>
-          <Subtitulo>Mapas offline dos países</Subtitulo>
+          <CabecalhoCartao titulo="Mapas offline dos países" icone="mapa" cor="azul" />
           <Texto>Descarrega os mapas que quiseres para os usar sem internet. Cada país fica guardado separadamente no telemóvel.</Texto>
         </Cartao>
         {CATALOGO_MAPAS_PALOP.filter((entrada) => entrada.pais !== codigoPais).map((entrada) => (

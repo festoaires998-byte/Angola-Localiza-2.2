@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Categorias } from '@/components/Categorias';
 import { dataHora, NOMES_CATEGORIAS, nomeEstadoMorada, plural } from '@/components/nomes';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, EcraCarregamento, Subtitulo, Texto, Titulo } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { nomeEstadoRegisto, type Registo } from '@/domain/enderecamento/meusRegistos';
 import { useMoradas } from '@/hooks/useMoradas';
@@ -98,12 +98,12 @@ export default function Moradas() {
             ) : null}
             {moradas.registos.length > 0 ? (
               <View style={estilos.registos}>
-                <Subtitulo>Os meus registos</Subtitulo>
+                <CabecalhoCartao titulo="Os meus registos" icone="nota" cor="azul" />
                 <Texto suave>As moradas que registaste. Quando uma é aprovada, entra sozinha na lista abaixo.</Texto>
                 {moradas.registos.map((r) => (
                   <ItemRegisto key={r.id} registo={r} />
                 ))}
-                <Subtitulo>Moradas guardadas</Subtitulo>
+                <CabecalhoCartao titulo="Moradas guardadas" icone="estrela" cor="ambar" />
               </View>
             ) : null}
             {!vazia ? <Categorias comTodas valor={categoria} aoEscolher={setCategoria} /> : null}

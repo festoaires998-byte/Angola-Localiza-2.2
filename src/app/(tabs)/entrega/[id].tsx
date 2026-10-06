@@ -6,7 +6,7 @@ import QRCode from 'react-native-qrcode-svg';
 
 import { dataHora } from '@/components/nomes';
 import { CORES } from '@/components/tema';
-import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Cartao, Ecra, Linha, Texto } from '@/components/ui';
 import { entregaTerminada, mensagemErroEnvio, nomeEstadoEntrega, podeCancelar } from '@/domain/entregas/envio';
 import { useOnline } from '@/hooks/useOnline';
 import { servicoEnvios } from '@/services/entregas/enviosApp';
@@ -138,7 +138,7 @@ export default function DetalheEnvio() {
 
       {!terminada ? (
         <>
-          <Subtitulo>PIN de confirmação</Subtitulo>
+          <CabecalhoCartao titulo="PIN de confirmação" icone="pin" cor="verde" />
           {pin ? (
             <Cartao>
               <Text

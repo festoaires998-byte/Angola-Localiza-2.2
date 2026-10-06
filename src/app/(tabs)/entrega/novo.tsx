@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Opcoes, type Opcao } from '@/components/Opcoes';
 import { LeitorQr } from '@/components/mapa/LeitorQr';
-import { Botao, Caixa, Campo, Ecra, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Ecra, EcraCarregamento, Texto } from '@/components/ui';
 import { faltaNoEnvio, MAX_INSTRUCOES, mensagemErroEnvio, type DadosEnvio } from '@/domain/entregas/envio';
 import { interpretarEntrada } from '@/domain/enderecamento/pesquisa';
 import { encode } from '@/domain/enderecamento/plusCode';
@@ -226,7 +226,7 @@ export default function NovoEnvio() {
         <Caixa tipo="info">Sem rede não foi possível confirmar a tua verificação. O servidor confirma ao receber.</Caixa>
       ) : null}
 
-      <Subtitulo>De onde?</Subtitulo>
+      <CabecalhoCartao titulo="De onde?" icone="origem" cor="verde" />
       <Opcoes grupo="Local de recolha" opcoes={[
         { valor: 'gps', nome: '📍 Minha localização' },
         ...(origensGuardadas.length > 0 ? [{ valor: 'guardado', nome: '⭐ Guardados' }] : []),
@@ -293,7 +293,7 @@ export default function NovoEnvio() {
       ) : (
         <Caixa tipo="info">A obter a localização atual…</Caixa>
       )}
-      <Subtitulo>Para onde?</Subtitulo>
+      <CabecalhoCartao titulo="Para onde?" icone="destino" cor="vermelho" />
       {destinos.length > 0 ? (
         <Opcoes grupo="Morada de destino" empilhadas opcoes={destinos} valor={dados.moradaId} aoEscolher={(v) => { setDestinoNovo(null); mudar({ moradaId: v }); }} />
       ) : null}
@@ -332,7 +332,7 @@ export default function NovoEnvio() {
         </Caixa>
       ) : null}
 
-      <Subtitulo>Carga</Subtitulo>
+      <CabecalhoCartao titulo="Carga" icone="carga" cor="ambar" />
       <Opcoes grupo="Tipo de carga" opcoes={[
         { valor: 'Encomenda', nome: '📦 Encomenda' }, { valor: 'Documentos', nome: '📄 Documentos' },
         { valor: 'Alimentos', nome: '🍎 Alimentos' }, { valor: 'Frágil', nome: '⚠️ Frágil' },
@@ -346,7 +346,7 @@ export default function NovoEnvio() {
       <Campo rotulo="Largura" value={carga.larguraCm} onChangeText={(v) => setCarga((x) => ({ ...x, larguraCm: v }))} keyboardType="decimal-pad" placeholder="cm" />
       <Campo rotulo="Altura" value={carga.alturaCm} onChangeText={(v) => setCarga((x) => ({ ...x, alturaCm: v }))} keyboardType="decimal-pad" placeholder="cm" />
       <Campo rotulo="Valor declarado (Kz, opcional)" value={carga.valorDeclarado} onChangeText={(v) => setCarga((x) => ({ ...x, valorDeclarado: v }))} keyboardType="decimal-pad" placeholder="Ex.: 50000" />
-      <Subtitulo>Veículo pretendido</Subtitulo>
+      <CabecalhoCartao titulo="Veículo pretendido" icone="motorista" cor="azul" />
       <Opcoes grupo="Tipo de veículo" opcoes={[
         { valor: 'moto', nome: '🏍️ Moto' }, { valor: 'carro', nome: '🚗 Carro' },
         { valor: 'carrinha', nome: '🚐 Carrinha' }, { valor: 'furgão', nome: '🚚 Furgão' },
@@ -354,7 +354,7 @@ export default function NovoEnvio() {
       ]} valor={carga.tipoVeiculo || null} aoEscolher={(v) => setCarga((x) => ({ ...x, tipoVeiculo: String(v) }))} />
       <Campo rotulo="Capacidade mínima pretendida (kg, opcional)" value={carga.capacidadeVeiculoKg} onChangeText={(v) => setCarga((x) => ({ ...x, capacidadeVeiculoKg: v }))} keyboardType="decimal-pad" placeholder="Ex.: 500" />
 
-      <Subtitulo>Quem vai receber?</Subtitulo>
+      <CabecalhoCartao titulo="Quem vai receber?" icone="conta" cor="roxo" />
       <Campo
         rotulo="Nome de quem recebe"
         value={dados.destinatario}
@@ -369,7 +369,7 @@ export default function NovoEnvio() {
         keyboardType="phone-pad"
         placeholder="Ex.: 923 456 789"
       />
-      <Subtitulo>Nota para o estafeta</Subtitulo>
+      <CabecalhoCartao titulo="Nota para o estafeta" icone="nota" cor="ambar" />
       <Opcoes grupo="Sugestões rápidas" opcoes={[
         { valor: 'Portão azul', nome: 'Portão azul' },
         { valor: 'Entrada lateral', nome: 'Entrada lateral' },
@@ -384,7 +384,7 @@ export default function NovoEnvio() {
         placeholder="Ex.: Portão azul, entrada lateral"
       />
 
-      <Subtitulo>Prioridade</Subtitulo>
+      <CabecalhoCartao titulo="Prioridade" icone="prioridade" cor="vermelho" />
       {online ? (
         <Caixa tipo="info">
           {cotacao ? textoCotacao(cotacao) : cotacaoErro ? 'Preço: não disponível neste momento; podes continuar e o servidor recalcula ao criar.' : 'Preço: a calcular…'}

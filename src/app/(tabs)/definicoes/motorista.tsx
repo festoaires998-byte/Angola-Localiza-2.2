@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import { ScrollView } from 'react-native';
 
-import { Caixa, Botao, Cartao, Campo, EcraCarregamento, Subtitulo, Texto, Titulo } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import { supabase } from '@/api/supabase';
@@ -104,14 +104,14 @@ export default function Motorista() {
     <Titulo>Motorista / KYC</Titulo>
     {app?.status==='REJECTED'?<Caixa tipo="erro">{`Candidatura recusada: ${app.rejection_reason||'sem motivo indicado'}. Podes corrigir e enviar de novo.`}</Caixa>:null}
     <Texto>O país da candidatura é o país associado à tua conta: {estado?.profile?.country_code ?? 'será definido pelo servidor'}.</Texto>
-    <Cartao><Subtitulo>Dados do veículo</Subtitulo>
+    <Cartao><CabecalhoCartao titulo="Dados do veículo" icone="motorista" cor="azul" />
       <Campo rotulo="Tipo de veículo" value={vehicleType} onChangeText={setVehicleType} placeholder="Moto, carro, carrinha…" />
       <Campo rotulo="Matrícula" value={plate} onChangeText={setPlate} placeholder="Matrícula" />
       <Campo rotulo="Número da carta" value={license} onChangeText={setLicense} placeholder="Número da carta de condução" />
       <Campo rotulo="Validade da carta (AAAA-MM-DD)" value={expiry} onChangeText={setExpiry} placeholder="AAAA-MM-DD" />
       <Campo rotulo="Capacidade de carga (kg)" value={capacidade} onChangeText={setCapacidade} placeholder="Ex.: 40" keyboardType="decimal-pad" />
     </Cartao>
-    <Cartao><Subtitulo>Documentos</Subtitulo>
+    <Cartao><CabecalhoCartao titulo="Documentos" icone="identidade" cor="roxo" />
       {([['id','BI/identificação'],['licenseFront','Carta — frente'],['licenseBack','Carta — verso'],['vehicle','Documento do veículo'],['selfie','Selfie do candidato']] as [DocKey,string][]).map(([k,l])=><Botao key={k} titulo={docs[k]?`✓ ${l}`:`Fotografar: ${l}`} variante={docs[k]?'secundario':'primario'} onPress={()=>void foto(k,l)} aCarregar={busy}/>)}
     </Cartao>
     {erro?<Caixa tipo="erro">{erro}</Caixa>:null}{ok?<Caixa tipo="sucesso">{ok}</Caixa>:null}

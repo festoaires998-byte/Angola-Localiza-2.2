@@ -7,7 +7,7 @@ import { CamaraFachada } from '@/components/CamaraFachada';
 import { textoPrecisao } from '@/components/nomes';
 import { Opcoes } from '@/components/Opcoes';
 import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, Campo, Cartao, Linha, Marcar, Subtitulo, Texto } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, Linha, Marcar, Texto } from '@/components/ui';
 import { codificarGrelha } from '@/domain/enderecamento/codigoPostal';
 import { CONFIG_AO_OFFLINE_TESTE, nivelLocalidade, obterConfigPais } from '@/config/pais';
 import { encode } from '@/domain/enderecamento/plusCode';
@@ -234,7 +234,7 @@ export default function RegistarMorada() {
       ) : null}
 
       <Cartao>
-        <Subtitulo>1. Onde fica</Subtitulo>
+        <CabecalhoCartao titulo="1. Onde fica" icone="origem" cor="verde" />
         {!captura ? (
           <Texto>
             {gps.estado === 'ok'
@@ -278,7 +278,7 @@ export default function RegistarMorada() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>2. O local</Subtitulo>
+        <CabecalhoCartao titulo="2. O local" icone="nota" cor="ambar" />
         <Text style={estilos.rotulo}>Tipo de local</Text>
         <Opcoes<TipoLocal> grupo="Tipo de local" valor={tipo} aoEscolher={setTipo} opcoes={TIPOS_LOCAL.map((t) => ({ valor: t, nome: t }))} />
         {tipo === 'Outro' ? (
@@ -375,7 +375,7 @@ export default function RegistarMorada() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>3. Foto da fachada</Subtitulo>
+        <CabecalhoCartao titulo="3. Foto da fachada" icone="camara" cor="azul" />
         <CamaraFachada
           foto={foto?.uri ?? null}
           podeFotografar={!!boa}

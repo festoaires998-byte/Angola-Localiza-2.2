@@ -1,6 +1,9 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { CORES, PASTILHAS } from './tema';
+import { readdirSync, readFileSync } from 'fs';
+import { join } from 'path';
+
+import { CABECALHO, CORES, PASTILHAS } from './tema';
 
 /** Contraste WCAG entre duas cores #RRGGBB. */
 function contraste(a: string, b: string): number {
@@ -43,5 +46,16 @@ describe('paleta "Verde e sol": letra legível ao sol', () => {
   test('é mesmo a paleta escolhida', () => {
     expect(CORES.primaria).toBe('#0B5D45');
     expect(CORES.destaque).toBe('#F6B800');
+  });
+
+  test('a barra de cima dos ecrãs com "voltar" é verde com letra branca, em todas as pilhas', () => {
+    expect(CABECALHO.headerStyle.backgroundColor).toBe(CORES.primaria);
+    expect(contraste(CABECALHO.headerTintColor, CABECALHO.headerStyle.backgroundColor)).toBeGreaterThanOrEqual(7);
+    const separadores = join(__dirname, '../app/(tabs)');
+    const pilhas = readdirSync(separadores, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => join(separadores, d.name, '_layout.tsx'));
+    expect(pilhas.length).toBeGreaterThanOrEqual(5);
+    for (const f of pilhas) expect(readFileSync(f, 'utf8')).toContain('...CABECALHO');
   });
 });
