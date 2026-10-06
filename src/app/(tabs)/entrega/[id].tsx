@@ -5,7 +5,8 @@ import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 
 import { dataHora } from '@/components/nomes';
-import { CORES } from '@/components/tema';
+import { type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, CabecalhoCartao, Caixa, Cartao, Ecra, Linha, Texto } from '@/components/ui';
 import { entregaTerminada, mensagemErroEnvio, nomeEstadoEntrega, podeCancelar } from '@/domain/entregas/envio';
 import { useOnline } from '@/hooks/useOnline';
@@ -14,6 +15,7 @@ import { guardarEnvio, guardarPin, useEnvios } from '@/state/envios';
 
 /** Detalhe de um envio: estado, código de rastreio, PIN (só para quem criou) e cancelar. */
 export default function DetalheEnvio() {
+  const estilos = useEstilos(fabricaEstilos);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const online = useOnline();
@@ -177,7 +179,7 @@ export default function DetalheEnvio() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   qrBloco: { gap: 8, alignItems: 'center', paddingTop: 8 },
   qrTitulo: { fontSize: 15, fontWeight: '700', color: CORES.textoSuave },
   qrCaixa: { padding: 4, backgroundColor: '#FFFFFF', borderRadius: 8 },

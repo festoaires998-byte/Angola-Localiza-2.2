@@ -5,10 +5,12 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { BotaoSair } from '@/components/BotaoSair';
 import { dataHora, NOMES_CARGOS, NOMES_OPERACOES } from '@/components/nomes';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, CabecalhoCartao, Caixa, Cartao, Ecra, Linha, Texto, Titulo } from '@/components/ui';
 import { KYC_VERIFICADO } from '@/domain/organizacao/cargos';
 import { PAISES_PALOP, ouvirPais, paisAtual } from '@/state/pais';
+import { escolherTema, ouvirPreferenciaTema, preferenciaTema, type PreferenciaTema } from '@/state/tema';
 import { avisoMudarPais } from '@/services/conta/mudarPais';
 import { mudarPaisDaConta } from '@/services/conta/mudarPaisApp';
 import { URL_POLITICA_PRIVACIDADE } from '@/config/links';
@@ -17,6 +19,8 @@ import { useCargos } from '@/hooks/useCargos';
 import { useFilaSync, type OperacaoComProblema } from '@/hooks/useFilaSync';
 import { useSessao } from '@/hooks/useSessao';
 
+const OPCOES_TEMA: [PreferenciaTema, string][] = [['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']];
+
 function versaoDaApp(): string {
   const versao = Constants.expoConfig?.version ?? '—';
   const build = Constants.nativeBuildVersion;
@@ -24,6 +28,7 @@ function versaoDaApp(): string {
 }
 
 function Problema({ op, aoVer }: { op: OperacaoComProblema; aoVer(): void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const aviso = op.gravidade === 'aviso';
   return (
     <Caixa tipo={aviso ? 'aviso' : 'erro'}>
@@ -43,12 +48,15 @@ function Problema({ op, aoVer }: { op: OperacaoComProblema; aoVer(): void }) {
 }
 
 export default function Definicoes() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const { utilizador } = useSessao();
   const { cargos, estadoKyc, confirmadoAgora } = useCargos();
   const fila = useFilaSync();
   const [resultado, setResultado] = useState<string | null>(null);
   const [pais, setPais] = useState(paisAtual());
+  const [preferencia, setPreferencia] = useState(preferenciaTema());
+  useEffect(() => ouvirPreferenciaTema(setPreferencia), []);
   const [escolherPais, setEscolherPais] = useState(false);
   const [paraConfirmar, setParaConfirmar] = useState<string | null>(null);
   const [aMudarPais, setAMudarPais] = useState(false);
@@ -133,6 +141,19 @@ export default function Definicoes() {
       </Cartao>
 
       <Cartao>
+        <CabecalhoCartao titulo="Aparência" icone="aparencia" cor="roxo" />
+        <Texto suave>O modo escuro cansa menos a vista à noite. "Automático" segue o telemóvel.</Texto>
+        {OPCOES_TEMA.map(([valor, nome]) => (
+          <Botao
+            key={valor}
+            titulo={preferencia === valor ? `✓ ${nome}` : nome}
+            variante={preferencia === valor ? 'primario' : 'secundario'}
+            onPress={() => void escolherTema(valor)}
+          />
+        ))}
+      </Cartao>
+
+      <Cartao>
         <CabecalhoCartao titulo="Motorista" icone="motorista" cor="azul" />
         <Texto suave>Candidata-te para trabalhar como motorista. A documentação é revista antes de ativares o perfil.</Texto>
         <Botao titulo="Motorista / KYC" variante="secundario" onPress={() => router.push('/definicoes/motorista')} />
@@ -211,7 +232,7 @@ export default function Definicoes() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   problemaTitulo: { fontSize: TAMANHOS.texto, fontWeight: '700', color: CORES.texto },
   problemaTexto: { fontSize: TAMANHOS.textoPequeno, lineHeight: 22, color: CORES.texto },
   problemaData: { fontSize: 14, color: CORES.textoSuave },

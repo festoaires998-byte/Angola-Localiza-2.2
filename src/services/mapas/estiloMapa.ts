@@ -38,11 +38,11 @@ function semEspacos<T>(valor: T): T {
 }
 
 /**
- * Estilo MapLibre do mapa base (Protomaps "light", nomes em português).
+ * Estilo MapLibre do mapa base (Protomaps "light" ou "dark", nomes em português).
  * Serve para o ficheiro no telemóvel e para a leitura pela rede.
  */
-export function criarEstilo(origem: OrigemMapa): StyleSpecification {
-  const camadas = semEspacos(layers('protomaps', namedFlavor('light'), { lang: 'pt' }));
+export function criarEstilo(origem: OrigemMapa, escuro = false): StyleSpecification {
+  const camadas = semEspacos(layers('protomaps', namedFlavor(escuro ? 'dark' : 'light'), { lang: 'pt' }));
   return {
     version: 8,
     name: 'Angola Localiza',
@@ -84,11 +84,14 @@ export function criarEstiloSatelite(): StyleSpecification {
   };
 }
 /** Mapa online de contingência para países ainda sem pacote PMTiles offline. */
-export function criarEstiloOnlineOSM(): StyleSpecification {
+export function criarEstiloOnlineOSM(escuro = false): StyleSpecification {
   return {
     version: 8,
     name: 'Localiza · Mapa online',
     sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: ATRIBUICAO_OSM } },
-    layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+    // No modo escuro as imagens do OSM ficam mais escuras e menos vivas (não encandeiam).
+    layers: [escuro
+      ? { id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-brightness-max': 0.62, 'raster-saturation': -0.35, 'raster-contrast': 0.08 } }
+      : { id: 'osm', type: 'raster', source: 'osm' }],
   };
 }

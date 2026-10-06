@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { CORES } from './tema';
+import { type Cores } from './tema';
+import { useEstilos } from './temaApp';
 
 export interface Opcao<T extends string> {
   valor: T;
@@ -21,6 +22,7 @@ interface Props<T extends string> {
 
 /** Botões grandes para escolher uma opção (a escolhida fica azul). */
 export function Opcoes<T extends string>({ grupo, opcoes, valor, aoEscolher, empilhadas = false }: Props<T>) {
+  const estilos = useEstilos(fabricaEstilos);
   return (
     <View style={[estilos.grupo, empilhadas && estilos.empilhadas]} accessibilityRole="radiogroup">
       {opcoes.map((o) => {
@@ -43,7 +45,7 @@ export function Opcoes<T extends string>({ grupo, opcoes, valor, aoEscolher, emp
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   grupo: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   empilhadas: { flexDirection: 'column' },
   botao: {

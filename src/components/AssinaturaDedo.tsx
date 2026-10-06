@@ -4,7 +4,8 @@ import Svg, { Path } from 'react-native-svg';
 
 import { assinaturaValida, caminhoSvg, type Traco } from '@/domain/entregas/assinaturaDedo';
 
-import { CORES, TAMANHOS } from './tema';
+import { TAMANHOS, type Cores } from './tema';
+import { useEstilos, useCores } from './temaApp';
 import { Botao, Caixa, Texto } from './ui';
 
 interface Props {
@@ -19,6 +20,8 @@ const ALTURA = 220;
 
 /** Quadro onde quem recebe assina com o dedo. */
 export function AssinaturaDedo({ assinatura, aoConfirmar, aoApagar }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   const [tracos, setTracos] = useState<Traco[]>([]);
   const [largura, setLargura] = useState(0);
   const [aGravar, setAGravar] = useState(false);
@@ -98,7 +101,7 @@ export function AssinaturaDedo({ assinatura, aoConfirmar, aoApagar }: Props) {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   bloco: { gap: 10 },
   quadro: {
     height: ALTURA,

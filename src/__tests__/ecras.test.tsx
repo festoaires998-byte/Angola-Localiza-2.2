@@ -334,6 +334,21 @@ describe('Definições → Sair', () => {
     expect(screen.getByText(/para mudar de país, pede a um administrador/)).toBeTruthy();
   });
 
+  test('Aparência: escolher "Escuro" muda as cores da app na hora', async () => {
+    const { escolherTema } = jest.requireActual<typeof import('@/state/tema')>('@/state/tema');
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    comSessao([], null, AAL1_SEM_FATOR);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    const fundoCartao = () => StyleSheet.flatten(screen.getByRole('header', { name: 'Aparência' }).props.style).color;
+    expect(fundoCartao()).toBe('#111111');
+    fireEvent.press(screen.getByRole('button', { name: 'Escuro' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '✓ Escuro' })).toBeTruthy());
+    expect(fundoCartao()).toBe('#ECF2EE');
+    await act(async () => { await escolherTema('auto'); });
+    expect(screen.getByRole('button', { name: '✓ Automático' })).toBeTruthy();
+  });
+
   test('verificação simples: o botão aparece ao cidadão e não ao pessoal com cargo', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/definicoes' });

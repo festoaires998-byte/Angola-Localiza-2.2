@@ -1,12 +1,14 @@
 import { Stack } from 'expo-router';
 
-import { CABECALHO, CORES } from '@/components/tema';
+import { cabecalho } from '@/components/tema';
+import { useCores } from '@/components/temaApp';
 
 export default function LayoutMoradas() {
+  const CORES = useCores();
   return (
     <Stack
       screenOptions={{
-        ...CABECALHO,
+        ...cabecalho(CORES),
         contentStyle: { backgroundColor: CORES.fundoEcra },
       }}
     >

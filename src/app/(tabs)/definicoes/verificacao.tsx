@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, CabecalhoCartao, Caixa, Cartao, EcraCarregamento, Texto } from '@/components/ui';
 import { EMOJI_DESAFIO, escolherDesafio, linhasMarcaVerificacao } from '@/domain/identidade/verificacaoSimples';
 import { useOnline } from '@/hooks/useOnline';
@@ -16,6 +17,7 @@ import { servicoVerificacao } from '@/services/identidade/verificacaoApp';
 type Resultado = { tipo: 'sucesso' | 'info' | 'erro'; texto: string };
 
 export default function VerificacaoSimples() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const online = useOnline();
   const userId = useSessao().utilizador?.id ?? null;
@@ -223,7 +225,7 @@ function textoEnviado(r: 'verificado' | 'em_revisao'): Resultado {
     : { tipo: 'sucesso', texto: 'Verificação enviada ✅ A equipa vai rever as fotos.' };
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   desafio: { fontSize: TAMANHOS.subtitulo, fontWeight: '800', color: CORES.primaria },
   emojiDesafio: { fontSize: 72, lineHeight: 88, textAlign: 'center' },

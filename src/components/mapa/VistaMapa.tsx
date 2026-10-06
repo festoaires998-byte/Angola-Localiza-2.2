@@ -6,7 +6,8 @@ import type { PontoEncontrado } from '@/hooks/usePesquisaMapa';
 import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE } from '@/services/mapas/estiloMapa';
 import { REGIAO_HUAMBO } from '@/services/mapas/regioes';
 
-import { CORES, TAMANHOS } from '../tema';
+import { TAMANHOS, type Cores } from '../tema';
+import { useEstilos } from '../temaApp';
 
 export type Camada = 'mapa' | 'satelite';
 
@@ -41,6 +42,7 @@ export function VistaMapa({
   aoTocar,
   botaoCanto,
 }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const [seguir, setSeguir] = useState(alvo === null);
   const abrirDefinicoesLocalizacao = () => { void Linking.openSettings(); };
   const camara = useRef<CameraRef>(null);
@@ -185,7 +187,7 @@ export function VistaMapa({
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   mapa: { backgroundColor: CORES.fundoSuave, borderRadius: 12, overflow: 'hidden' },
   cheio: { flex: 1, borderRadius: 0 },
   semMapa: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
@@ -224,7 +226,7 @@ const estilos = StyleSheet.create({
     bottom: 6,
     fontSize: 12,
     color: CORES.texto,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: CORES.fundo + 'D9',
     paddingHorizontal: 4,
     borderRadius: 4,
   },

@@ -1,3 +1,5 @@
+import { type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
@@ -32,6 +34,7 @@ export function CamaraFachada({
   rotuloFoto = 'Foto da fachada',
   mostrarFoto = true,
 }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const [permissao, pedirPermissao] = useCameraPermissions();
   const [aberta, setAberta] = useState(false);
   const [aTirar, setATirar] = useState(false);
@@ -93,7 +96,7 @@ export function CamaraFachada({
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   bloco: { gap: 10 },
   camara: { width: '100%', aspectRatio: 3 / 4, borderRadius: 12, overflow: 'hidden' },
   foto: { width: '100%', aspectRatio: 4 / 3, borderRadius: 12 },

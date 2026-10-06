@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { abrirFotosKyc, decidirPedidoKyc, lerFotoKyc } from '@/api/revisaoKyc';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos, useCores } from '@/components/temaApp';
 import { Botao, Caixa, Campo, Cartao, Subtitulo, Texto } from '@/components/ui';
 import {
   dataEnvio,
@@ -27,6 +28,7 @@ import { marcarDecidido, useRevisaoKyc } from '@/state/revisaoKyc';
  * motivo. Depois da decisão, volta à lista.
  */
 export default function DetalheVerificacao() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const online = useOnline();
@@ -63,6 +65,8 @@ export default function DetalheVerificacao() {
 }
 
 function RevisaoPedido({ pedido, aoDecidir }: { pedido: PedidoKyc; aoDecidir(aprovado: boolean): void }) {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   const [fotos, setFotos] = useState<FotosKyc | null>(null);
   const [erroFotos, setErroFotos] = useState<string | null>(null);
   const [pedidoFotos, setPedidoFotos] = useState(0);
@@ -180,6 +184,8 @@ function RevisaoPedido({ pedido, aoDecidir }: { pedido: PedidoKyc; aoDecidir(apr
 
 /** Uma foto do bucket privado, mostrada só a partir da memória. */
 function FotoPrivada({ titulo, url, aoExpirar }: { titulo: string; url: string | null; aoExpirar(): void }) {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   const [dados, setDados] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -217,7 +223,7 @@ function FotoPrivada({ titulo, url, aoExpirar }: { titulo: string; url: string |
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   bloco: { gap: 12 },
   nomePedido: { fontSize: TAMANHOS.subtitulo, fontWeight: '800', color: CORES.texto },

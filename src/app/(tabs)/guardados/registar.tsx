@@ -6,7 +6,8 @@ import type { Duplicado, Rua } from '@/api/registoNucleo';
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { textoPrecisao } from '@/components/nomes';
 import { Opcoes } from '@/components/Opcoes';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, Linha, Marcar, Texto } from '@/components/ui';
 import { codificarGrelha } from '@/domain/enderecamento/codigoPostal';
 import { CONFIG_AO_OFFLINE_TESTE, nivelLocalidade, obterConfigPais } from '@/config/pais';
@@ -65,6 +66,7 @@ function motivoBloqueio(v: Verificacao | null): { texto: string; botao: string |
 const NOME_LADO = { norte: 'a norte', sul: 'a sul', este: 'a este', oeste: 'a oeste' } as const;
 
 export default function RegistarMorada() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const online = useOnline();
   const userId = useSessao().utilizador?.id ?? null;
@@ -418,7 +420,7 @@ export default function RegistarMorada() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   bloco: { gap: 10 },
   rotulo: { fontSize: 15, color: CORES.textoSuave, fontWeight: '600' },

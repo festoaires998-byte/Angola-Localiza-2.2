@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { PontoEncontrado } from '@/hooks/usePesquisaMapa';
-import { CORES, TAMANHOS } from '../tema';
+import { TAMANHOS, type Cores } from '../tema';
+import { useEstilos } from '../temaApp';
 
 export type Camada = 'mapa' | 'satelite';
 
@@ -34,6 +35,7 @@ export function VistaMapa({
   aoTocar,
   botaoCanto,
 }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const [zoom, setZoom] = useState(16);
   const centro = alvo ?? posicao;
   const lat = centro?.latitude ?? -8.839;
@@ -105,7 +107,7 @@ export function VistaMapa({
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   mapa: { backgroundColor: CORES.fundoSuave, borderRadius: 12, overflow: 'hidden', minHeight: 320 },
   cheio: { flex: 1, borderRadius: 0 },
   controles: { position: 'absolute', left: 8, top: 44, gap: 4 },

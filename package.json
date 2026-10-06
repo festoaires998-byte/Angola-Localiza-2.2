@@ -11,6 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@maplibre/maplibre-react-native": "^11.4.0",
     "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^2.4.0",

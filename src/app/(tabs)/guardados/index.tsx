@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Categorias } from '@/components/Categorias';
 import { dataHora, NOMES_CATEGORIAS, nomeEstadoMorada, plural } from '@/components/nomes';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, CabecalhoCartao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { nomeEstadoRegisto, type Registo } from '@/domain/enderecamento/meusRegistos';
@@ -14,6 +15,7 @@ import { useOnline } from '@/hooks/useOnline';
 import { tituloMorada, type ItemMorada } from '@/services/moradas/moradas';
 
 function ItemLista({ item, aoAbrir }: { item: ItemMorada; aoAbrir(): void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const m = item.morada;
   const titulo = tituloMorada(item);
   const sitio = [m?.municipio, m?.provincia].filter(Boolean).join(', ');
@@ -48,6 +50,7 @@ const COR_ESTADO: Record<Registo['estado'], 'aviso' | 'info' | 'sucesso' | 'erro
 
 /** Um registo (morada registada pela pessoa) e em que ponto está. */
 function ItemRegisto({ registo }: { registo: Registo }) {
+  const estilos = useEstilos(fabricaEstilos);
   const estado = nomeEstadoRegisto(registo);
   const titulo = registo.referencia || registo.tipo || 'Morada registada';
   return (
@@ -63,6 +66,7 @@ function ItemRegisto({ registo }: { registo: Registo }) {
 }
 
 export default function Moradas() {
+  const estilos = useEstilos(fabricaEstilos);
   const online = useOnline();
   const moradas = useMoradas(online);
   const router = useRouter();
@@ -135,7 +139,7 @@ export default function Moradas() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   cabecalho: { gap: 12, marginBottom: 4 },
@@ -177,6 +181,6 @@ const estilos = StyleSheet.create({
   tituloRegisto: { fontSize: TAMANHOS.texto, fontWeight: '700', color: CORES.texto },
   estado_aviso: { alignSelf: 'flex-start', backgroundColor: CORES.avisoFundo, color: CORES.avisoTexto },
   estado_info: { alignSelf: 'flex-start', backgroundColor: CORES.infoFundo, color: CORES.primaria },
-  estado_sucesso: { alignSelf: 'flex-start', backgroundColor: '#E6F4EA', color: CORES.sucesso },
+  estado_sucesso: { alignSelf: 'flex-start', backgroundColor: CORES.sucessoFundo, color: CORES.sucesso },
   estado_erro: { alignSelf: 'flex-start', backgroundColor: CORES.erroFundo, color: CORES.perigo },
 });

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { CORES } from '@/components/tema';
+import { type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao } from '@/components/ui';
 
 import {
@@ -24,6 +25,7 @@ const ICONE: Record<Resultado['estado'], string> = {
 };
 
 export default function Diagnostico() {
+  const styles = useEstilos(fabricaStyles);
   const [resultados, setResultados] = useState<Record<string, Resultado>>({});
 
   const correr = useCallback(async (verificacao: Verificacao) => {
@@ -76,7 +78,7 @@ export default function Diagnostico() {
   );
 }
 
-const styles = StyleSheet.create({
+const fabricaStyles = (CORES: Cores) => StyleSheet.create({
   ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: 16, gap: 12, paddingBottom: 40 },
   titulo: { fontSize: 16, color: CORES.textoSuave },

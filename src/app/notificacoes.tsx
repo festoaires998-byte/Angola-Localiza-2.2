@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import { useSessao } from '@/hooks/useSessao';
 import { listarNotificacoes, marcarNotificacaoComoLida, marcarTodasNotificacoesComoLidas, subscreverNotificacoesRealtime, type Notificacao } from '@/services/notificacoes/notificacoes';
@@ -13,6 +14,7 @@ function formatarData(valor: string): string {
 }
 
 export default function Notificacoes() {
+  const estilos = useEstilos(fabricaEstilos);
   const estado = useSessao();
   const router = useRouter();
   const [itens, setItens] = useState<Notificacao[] | null>(null);
@@ -61,7 +63,7 @@ export default function Notificacoes() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   cabecalho: { gap: 10, marginBottom: 4 },

@@ -1,3 +1,5 @@
+import { type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -31,6 +33,7 @@ type Opcao = { value: string; label: string };
 function Seletor({ label, value, placeholder, options, onChange }: {
   label: string; value: string; placeholder: string; options: Opcao[]; onChange: (v: string) => void;
 }) {
+  const estilos = useEstilos(fabricaEstilos);
   const [aberto, setAberto] = useState(false);
   const atual = options.find((o) => o.value === value);
   return (
@@ -57,6 +60,7 @@ function Seletor({ label, value, placeholder, options, onChange }: {
 }
 
 export default function Campo() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const online = useOnline();
   const sessao = useSessao();
@@ -365,31 +369,31 @@ export default function Campo() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   cabecalhoLinha: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  contador: { color: '#666', fontSize: 13 },
-  rotulo: { fontSize: 12, fontWeight: '600', color: '#333', marginBottom: 6 },
+  contador: { color: CORES.textoSuave, fontSize: 13 },
+  rotulo: { fontSize: 12, fontWeight: '600', color: CORES.texto, marginBottom: 6 },
   seletorWrap: { gap: 6 },
-  seletor: { minHeight: 52, borderWidth: 1, borderColor: '#aaa', borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4ead4' },
-  seletorTexto: { color: '#222', fontSize: 15, flex: 1 },
-  placeholder: { color: '#777' },
-  seta: { fontSize: 22, color: '#555' },
+  seletor: { minHeight: 52, borderWidth: 1, borderColor: CORES.borda, borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: CORES.avisoFundo },
+  seletorTexto: { color: CORES.texto, fontSize: 15, flex: 1 },
+  placeholder: { color: CORES.textoSuave },
+  seta: { fontSize: 22, color: CORES.textoSuave },
   modalFundo: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  menu: { backgroundColor: '#fff', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, maxHeight: '75%' },
-  menuTitulo: { fontSize: 18, fontWeight: '800', color: '#222', marginBottom: 8 },
-  opcao: { paddingVertical: 15, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  opcaoAtiva: { backgroundColor: '#e8f1fb' },
-  opcaoTexto: { fontSize: 16, color: '#222' },
-  negrito: { fontWeight: '800', color: '#222' },
-  listaItem: { marginTop: 5, color: '#333', fontSize: 12 },
-  textoSuave: { color: '#777', marginTop: 5, fontSize: 12 },
+  menu: { backgroundColor: CORES.fundo, borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, maxHeight: '75%' },
+  menuTitulo: { fontSize: 18, fontWeight: '800', color: CORES.texto, marginBottom: 8 },
+  opcao: { paddingVertical: 15, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: CORES.bordaCartao },
+  opcaoAtiva: { backgroundColor: CORES.infoFundo },
+  opcaoTexto: { fontSize: 16, color: CORES.texto },
+  negrito: { fontWeight: '800', color: CORES.texto },
+  listaItem: { marginTop: 5, color: CORES.texto, fontSize: 12 },
+  textoSuave: { color: CORES.textoSuave, marginTop: 5, fontSize: 12 },
   checkboxLinha: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  checkbox: { width: 24, height: 24, borderWidth: 1.5, borderColor: '#888', borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
-  checkboxAtivo: { backgroundColor: '#1f6feb', borderColor: '#1f6feb' },
-  check: { color: '#fff', fontWeight: '900' },
-  checkboxTexto: { flex: 1, color: '#333' },
+  checkbox: { width: 24, height: 24, borderWidth: 1.5, borderColor: CORES.borda, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
+  checkboxAtivo: { backgroundColor: CORES.primaria, borderColor: CORES.primaria },
+  check: { color: CORES.sobrePrimaria, fontWeight: '900' },
+  checkboxTexto: { flex: 1, color: CORES.texto },
   foto: { width: '100%', height: 220, borderRadius: 12, marginVertical: 8 },
-  numeroCard: { backgroundColor: '#f4ead4', borderRadius: 12, padding: 14, gap: 4 },
-  numeroTitulo: { fontSize: 14, fontWeight: '700', color: '#333' },
-  numeroVerde: { fontSize: 14, fontWeight: '700', color: '#237a4b' },
+  numeroCard: { backgroundColor: CORES.avisoFundo, borderRadius: 12, padding: 14, gap: 4 },
+  numeroTitulo: { fontSize: 14, fontWeight: '700', color: CORES.texto },
+  numeroVerde: { fontSize: 14, fontWeight: '700', color: CORES.sucesso },
 });

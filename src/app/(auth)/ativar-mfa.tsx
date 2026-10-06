@@ -15,7 +15,8 @@ import {
 } from '@/api/auth';
 import { BotaoSair } from '@/components/BotaoSair';
 import { CampoCodigo } from '@/components/CampoCodigo';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, Caixa, Cartao, Ecra, EcraCarregamento, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { useCargos } from '@/hooks/useCargos';
 import { useSessao } from '@/hooks/useSessao';
@@ -35,6 +36,7 @@ function mensagem(e: unknown, alternativa: string): string {
 
 /** Utilizador com cargos e sem fator MFA: tem de ativar a app de autenticação. */
 export default function AtivarMfa() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const { carregado, utilizador } = useSessao();
   const { faltaMfa } = useCargos();
@@ -168,7 +170,7 @@ export default function AtivarMfa() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   qr: { alignSelf: 'center', padding: 16, backgroundColor: '#FFFFFF' },
   segredo: {
     fontSize: TAMANHOS.subtitulo,

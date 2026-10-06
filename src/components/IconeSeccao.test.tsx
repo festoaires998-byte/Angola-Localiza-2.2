@@ -5,7 +5,7 @@ import { join } from 'path';
 
 import { CabecalhoCartao } from './ui';
 import type { NomeSeccao } from './IconeSeccao';
-import { PASTILHAS } from './tema';
+import { PASTILHAS_CLARO as PASTILHAS } from './tema';
 
 const NOMES = (readFileSync(join(__dirname, 'IconeSeccao.tsx'), 'utf8').match(/export type NomeSeccao =([^;]+);/)?.[1] ?? '')
   .match(/'([a-z]+)'/g)!.map((n) => n.slice(1, -1)) as NomeSeccao[];

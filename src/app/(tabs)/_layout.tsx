@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icone } from '@/components/Icone';
 import { NOMES_SEPARADORES } from '@/components/nomes';
-import { CORES } from '@/components/tema';
+import { type Cores } from '@/components/tema';
+import { useEstilos, useCores } from '@/components/temaApp';
 import { EcraCarregamento } from '@/components/ui';
 import { SEPARADORES } from '@/domain/organizacao/cargos';
 import { useSessao } from '@/hooks/useSessao';
@@ -18,6 +19,8 @@ export const AVISO_KYC =
  * ficam "protegidos" (não aparecem e não se abrem nem por link).
  */
 export default function LayoutSeparadores() {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   const estado = useSessao();
   const destino = destinoDaSessao(estado);
   if (destino === 'carregar') return <EcraCarregamento />;
@@ -78,7 +81,7 @@ export default function LayoutSeparadores() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   aviso: {
     backgroundColor: CORES.avisoFundo,

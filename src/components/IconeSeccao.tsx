@@ -23,7 +23,8 @@ export type NomeSeccao =
   | 'historico'
   | 'estrela'
   | 'mapa'
-  | 'apagar';
+  | 'apagar'
+  | 'aparencia';
 
 /** Ícones simples (traço) das secções, para as pastilhas de cor dos cartões. */
 export function IconeSeccao({ nome, cor, tamanho = 22 }: { nome: NomeSeccao; cor: ColorValue; tamanho?: number }) {
@@ -123,6 +124,11 @@ export function IconeSeccao({ nome, cor, tamanho = 22 }: { nome: NomeSeccao; cor
         <>
           <Path d="M3 6l6-2.5 6 2.5 6-2.5v14.5L15 20.5 9 18l-6 2.5z" {...traco} />
           <Path d="M9 3.5V18M15 6v14.5" {...traco} />
+        </>
+      ) : nome === 'aparencia' ? (
+        <>
+          <Circle cx={12} cy={12} r={8.5} {...traco} />
+          <Path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill={cor} />
         </>
       ) : nome === 'apagar' ? (
         <>

@@ -8,7 +8,8 @@ import { LeitorQr } from '@/components/mapa/LeitorQr';
 import { QrLocal } from '@/components/mapa/QrLocal';
 import { VistaMapa, type Camada } from '@/components/mapa/VistaMapa';
 import { dataHora, megas, textoPrecisao } from '@/components/nomes';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos, useTema } from '@/components/temaApp';
 import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { abrirBaseDados } from '@/database/client';
@@ -52,6 +53,7 @@ function origemDoMapa(mapa: ReturnType<typeof criarMapaDoPais>, estado: EstadoMa
 }
 
 function CartaoMapaOffline({ mapa, estado, online, nomePais }: { mapa: ReturnType<typeof criarMapaDoPais>; estado: EstadoMapaOffline; online: boolean | null; nomePais: string }) {
+  const estilos = useEstilos(fabricaEstilos);
   const [erroAtualizar, setErroAtualizar] = useState<string | null>(null);
   const descarregar = () => {
     setErroAtualizar(null);
@@ -104,6 +106,7 @@ function CartaoMapaOffline({ mapa, estado, online, nomePais }: { mapa: ReturnTyp
 }
 
 function CartaoMapaPaisOffline({ pais, nome }: { pais: Parameters<typeof criarMapaDoPais>[0]; nome: string }) {
+  const estilos = useEstilos(fabricaEstilos);
   const online = useOnline();
   const mapa = criarMapaDoPais(pais);
   const estado = useMapaOffline(online, pais);
@@ -176,6 +179,7 @@ function CartaoOndeEstou({
   children?: ReactNode;
   rotulos: ReturnType<typeof rotulosMapa>;
 }) {
+  const estilos = useEstilos(fabricaEstilos);
   const captura = medida.captura;
   if (!captura) {
     return (
@@ -296,6 +300,7 @@ function rotulosMapa(config: typeof CONFIG_AO_OFFLINE_TESTE) {
 
 /** Passo 1: resultados da pesquisa única. */
 function ResultadosPesquisa({ resultados, aoEscolher, localidade }: { resultados: ResultadoPesquisa[]; aoEscolher(p: PontoEncontrado): void; localidade: string }) {
+  const estilos = useEstilos(fabricaEstilos);
   if (resultados.length === 0) return <Caixa tipo="info">Sem resultados.</Caixa>;
   return (
     <View style={estilos.resultados}>
@@ -322,6 +327,8 @@ function ResultadosPesquisa({ resultados, aoEscolher, localidade }: { resultados
 }
 
 export default function Mapa() {
+  const estilos = useEstilos(fabricaEstilos);
+  const escuro = useTema().esquema === 'escuro';
   const [configPais, setConfigPais] = useState(CONFIG_AO_OFFLINE_TESTE);
   const [codigoPais, setCodigoPais] = useState(paisAtual());
   const regiao = useMemo(() => mapaDoPais(codigoPais).regiao, [codigoPais]);
@@ -350,8 +357,8 @@ export default function Mapa() {
   // Online: usa os mesmos tiles OSM do site, para manter o nível de detalhe visual.
   // Offline: usa o PMTiles nacional descarregado no telemóvel.
   const estiloBase = useMemo(
-    () => online ? criarEstiloOnlineOSM() : (origem ? criarEstilo(origem) : null),
-    [codigoPais, online, chaveOrigem],
+    () => online ? criarEstiloOnlineOSM(escuro) : (origem ? criarEstilo(origem, escuro) : null),
+    [codigoPais, online, chaveOrigem, escuro],
   );
   const estiloSatelite = useMemo(() => criarEstiloSatelite(), []);
   const semPermissao = gps.estado === 'sem_permissao' || gps.estado === 'gps_desligado';
@@ -662,7 +669,7 @@ export default function Mapa() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: 16, gap: 12, paddingBottom: 32 },
   flex: { flex: 1 },
@@ -698,7 +705,7 @@ const estilos = StyleSheet.create({
     overflow: 'hidden',
   },
   provisorio: { backgroundColor: CORES.avisoFundo, color: CORES.avisoTexto },
-  confirmado: { backgroundColor: '#E6F4EA', color: CORES.sucesso },
+  confirmado: { backgroundColor: CORES.sucessoFundo, color: CORES.sucesso },
   nota: { fontSize: 15, lineHeight: 21, color: CORES.textoSuave },
   textoCaixa: { fontSize: 16, lineHeight: 22, color: CORES.texto, fontWeight: '600' },
   barra: { height: 12, borderRadius: 6, backgroundColor: CORES.fundoSuave, overflow: 'hidden' },
