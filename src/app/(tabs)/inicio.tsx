@@ -5,7 +5,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { IconeSeccao, type NomeSeccao } from '@/components/IconeSeccao';
-import { nomeDaMarcaPorCodigo, paisComBandeira } from '@/config/pais';
+import { paisComBandeira } from '@/config/pais';
 import { sombraCartao, TAMANHOS, type CorPastilha, type Cores } from '@/components/tema';
 import { useCores, useEstilos, useTema } from '@/components/temaApp';
 import { vibrarToque } from '@/components/ui';
@@ -121,7 +121,7 @@ export default function Inicio() {
           <Text accessibilityRole="header" style={estilos.nome} numberOfLines={1}>{nome ?? 'bem-vindo'}</Text>
           <View style={estilos.chip}>
             <View style={estilos.chipPonto} />
-            <Text style={estilos.chipTexto}>{`${paisComBandeira(pais)} · ${nomeDaMarcaPorCodigo(pais)}`}</Text>
+            <Text style={estilos.chipTexto}>{paisComBandeira(pais)}</Text>
           </View>
         </SafeAreaView>
 
