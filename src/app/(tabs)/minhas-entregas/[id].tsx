@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { dataHora } from '@/components/nomes';
+import { LinhaTempo } from '@/components/LinhaTempo';
 import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto } from '@/components/ui';
 import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
 import { type Cores } from '@/components/tema';
@@ -185,6 +186,7 @@ export default function DetalheEntrega() {
       <Cartao>
         <Linha nome="Para" valor={entrega.destinatario} />
         <Linha nome="Estado" valor={nomeEstadoEntrega(efetivo)} />
+        <LinhaTempo estado={efetivo} />
         {m?.referencia ? <Linha nome="Referência" valor={m.referencia} /> : null}
         {m?.codigoPostal || m?.plusCode ? <Linha nome="Destino" valor={[m.codigoPostal, m.plusCode].filter(Boolean).join(' · ')} /> : null}
         {entrega.instrucoes ? <Linha nome="Instruções" valor={entrega.instrucoes} /> : null}

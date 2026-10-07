@@ -7,6 +7,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { dataHora } from '@/components/nomes';
 import { type Cores } from '@/components/tema';
 import { useEstilos } from '@/components/temaApp';
+import { LinhaTempo } from '@/components/LinhaTempo';
 import { Botao, CabecalhoCartao, Caixa, Cartao, Ecra, Linha, Texto } from '@/components/ui';
 import { entregaTerminada, mensagemErroEnvio, nomeEstadoEntrega, podeCancelar } from '@/domain/entregas/envio';
 import { useOnline } from '@/hooks/useOnline';
@@ -102,6 +103,11 @@ export default function DetalheEnvio() {
   return (
     <Ecra>
       {estado.aviso?.tipo === 'sucesso' && pin ? <Caixa tipo="sucesso">{estado.aviso.texto}</Caixa> : null}
+      <Cartao>
+        <Text style={estilos.rotuloCodigo}>Código de rastreio</Text>
+        <Text style={estilos.codigoGrande} selectable>{envio.codigo ?? 'A atribuir'}</Text>
+        <LinhaTempo estado={envio.estado} />
+      </Cartao>
       <Botao titulo="💬 Falar com o estafeta" variante="secundario" onPress={() => router.push({ pathname: '/chat-organizacao', params: { tipo: 'DELIVERY', chave: envio.id, titulo: 'Chat da entrega' } })} />
       <Cartao>
         {envio.origem ? (
@@ -184,5 +190,17 @@ const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   qrTitulo: { fontSize: 15, fontWeight: '700', color: CORES.textoSuave },
   qrCaixa: { padding: 4, backgroundColor: '#FFFFFF', borderRadius: 8 },
 
-  pin: { fontSize: 48, fontWeight: '800', letterSpacing: 12, color: CORES.primaria, textAlign: 'center' },
+  pin: {
+    fontSize: 48,
+    fontWeight: '800',
+    letterSpacing: 14,
+    color: CORES.primaria,
+    textAlign: 'center',
+    backgroundColor: CORES.infoFundo,
+    borderRadius: 18,
+    paddingVertical: 14,
+    overflow: 'hidden',
+  },
+  rotuloCodigo: { fontSize: 14, fontWeight: '700', color: CORES.textoSuave },
+  codigoGrande: { fontSize: 30, fontWeight: '800', color: CORES.primaria, letterSpacing: 1 },
 });
