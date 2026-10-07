@@ -6,8 +6,9 @@ import type { Duplicado, Rua } from '@/api/registoNucleo';
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { textoPrecisao } from '@/components/nomes';
 import { Opcoes } from '@/components/Opcoes';
-import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, Campo, Cartao, Linha, Marcar, Subtitulo, Texto } from '@/components/ui';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
+import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, Linha, Marcar, Texto } from '@/components/ui';
 import { codificarGrelha } from '@/domain/enderecamento/codigoPostal';
 import { CONFIG_AO_OFFLINE_TESTE, nivelLocalidade, obterConfigPais } from '@/config/pais';
 import { encode } from '@/domain/enderecamento/plusCode';
@@ -65,6 +66,7 @@ function motivoBloqueio(v: Verificacao | null): { texto: string; botao: string |
 const NOME_LADO = { norte: 'a norte', sul: 'a sul', este: 'a este', oeste: 'a oeste' } as const;
 
 export default function RegistarMorada() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const online = useOnline();
   const userId = useSessao().utilizador?.id ?? null;
@@ -234,7 +236,7 @@ export default function RegistarMorada() {
       ) : null}
 
       <Cartao>
-        <Subtitulo>1. Onde fica</Subtitulo>
+        <CabecalhoCartao titulo="1. Onde fica" icone="origem" cor="verde" />
         {!captura ? (
           <Texto>
             {gps.estado === 'ok'
@@ -278,7 +280,7 @@ export default function RegistarMorada() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>2. O local</Subtitulo>
+        <CabecalhoCartao titulo="2. O local" icone="nota" cor="ambar" />
         <Text style={estilos.rotulo}>Tipo de local</Text>
         <Opcoes<TipoLocal> grupo="Tipo de local" valor={tipo} aoEscolher={setTipo} opcoes={TIPOS_LOCAL.map((t) => ({ valor: t, nome: t }))} />
         {tipo === 'Outro' ? (
@@ -375,7 +377,7 @@ export default function RegistarMorada() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>3. Foto da fachada</Subtitulo>
+        <CabecalhoCartao titulo="3. Foto da fachada" icone="camara" cor="azul" />
         <CamaraFachada
           foto={foto?.uri ?? null}
           podeFotografar={!!boa}
@@ -418,7 +420,7 @@ export default function RegistarMorada() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   bloco: { gap: 10 },
   rotulo: { fontSize: 15, color: CORES.textoSuave, fontWeight: '600' },

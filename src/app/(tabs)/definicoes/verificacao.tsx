@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
-import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, Cartao, EcraCarregamento, Subtitulo, Texto } from '@/components/ui';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
+import { Botao, CabecalhoCartao, Caixa, Cartao, EcraCarregamento, Texto } from '@/components/ui';
 import { EMOJI_DESAFIO, escolherDesafio, linhasMarcaVerificacao } from '@/domain/identidade/verificacaoSimples';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
@@ -16,6 +17,7 @@ import { servicoVerificacao } from '@/services/identidade/verificacaoApp';
 type Resultado = { tipo: 'sucesso' | 'info' | 'erro'; texto: string };
 
 export default function VerificacaoSimples() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const online = useOnline();
   const userId = useSessao().utilizador?.id ?? null;
@@ -139,7 +141,7 @@ export default function VerificacaoSimples() {
       </Texto>
 
       <Cartao>
-        <Subtitulo>1. BI — frente</Subtitulo>
+        <CabecalhoCartao titulo="1. BI — frente" icone="identidade" cor="roxo" />
         <Texto suave>Põe o BI numa superfície lisa, com boa luz, e enquadra-o todo.</Texto>
         <CamaraFachada
           foto={frente?.uri ?? null}
@@ -151,7 +153,7 @@ export default function VerificacaoSimples() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>2. BI — verso</Subtitulo>
+        <CabecalhoCartao titulo="2. BI — verso" icone="identidade" cor="roxo" />
         <CamaraFachada
           foto={verso?.uri ?? null}
           podeFotografar={!!frente}
@@ -163,7 +165,7 @@ export default function VerificacaoSimples() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>3. Selfie</Subtitulo>
+        <CabecalhoCartao titulo="3. Selfie" icone="camara" cor="azul" />
         <Texto suave>Olha de frente para a câmara, com a cara toda visível.</Texto>
         <CamaraFachada
           foto={selfieCrua}
@@ -185,7 +187,7 @@ export default function VerificacaoSimples() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>4. Selfie com um gesto</Subtitulo>
+        <CabecalhoCartao titulo="4. Selfie com um gesto" icone="camara" cor="azul" />
         {/* O emoji mostra o gesto de relance; o texto diz o mesmo (e é o que os leitores de ecrã leem). */}
         <Text style={estilos.emojiDesafio} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" testID="emoji-desafio">
           {EMOJI_DESAFIO[desafio]}
@@ -223,7 +225,7 @@ function textoEnviado(r: 'verificado' | 'em_revisao'): Resultado {
     : { tipo: 'sucesso', texto: 'Verificação enviada ✅ A equipa vai rever as fotos.' };
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   desafio: { fontSize: TAMANHOS.subtitulo, fontWeight: '800', color: CORES.primaria },
   emojiDesafio: { fontSize: 72, lineHeight: 88, textAlign: 'center' },

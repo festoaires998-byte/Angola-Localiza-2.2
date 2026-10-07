@@ -4,8 +4,10 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { dataHora, plural } from '@/components/nomes';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos, useCores } from '@/components/temaApp';
 import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
+import { IlustracaoVazio } from '@/components/IlustracaoVazio';
 import { nomeEstadoEntrega, type Envio } from '@/domain/entregas/envio';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
@@ -15,6 +17,7 @@ import { eventosSync } from '@/sync/eventos';
 import { useRealtimeEntregas } from '@/hooks/useRealtimeEntregas';
 
 function ItemEnvio({ envio, aoAbrir, aoUrgente }: { envio: Envio; aoAbrir(): void; aoUrgente(): void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const estado = nomeEstadoEntrega(envio.estado);
   return (
     <Pressable
@@ -43,6 +46,8 @@ function ItemEnvio({ envio, aoAbrir, aoUrgente }: { envio: Envio; aoAbrir(): voi
 
 /** Separador Enviar: os pedidos de entrega do utilizador e o botão para um novo. */
 export default function Envios() {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   const online = useOnline();
   const userId = useSessao().utilizador?.id ?? null;
   const router = useRouter();
@@ -152,6 +157,7 @@ export default function Envios() {
         }
         ListEmptyComponent={
           <View style={estilos.vazio}>
+            <IlustracaoVazio icone="carga" cor="verde" />
             <Texto>{estado.envios.length > 0 && enviosVisiveis.length === 0 ? 'Nenhum envio corresponde aos filtros.' : aAtualizar ? 'A procurar os teus envios…' : 'Ainda não enviaste nada.'}</Texto>
             <Texto suave>
               Escolhe uma das tuas moradas guardadas como destino, escreve quem vai receber e envia. Recebes um
@@ -176,8 +182,8 @@ export default function Envios() {
   );
 }
 
-const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   cabecalho: { gap: 12, marginBottom: 4 },
   vazio: { gap: 8, paddingVertical: 24 },

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { CORES, TAMANHOS } from './tema';
+import { TAMANHOS, type Cores } from './tema';
+import { useEstilos, useCores } from './temaApp';
 
 /** Caixa grande para os 6 dígitos do código da app de autenticação. */
 export function CampoCodigo({
@@ -12,6 +13,8 @@ export function CampoCodigo({
   aoMudar(v: string): void;
   aoCompletar?(codigo: string): void;
 }) {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   return (
     <View style={estilos.campo}>
       <Text style={estilos.rotulo}>Código de 6 dígitos</Text>
@@ -36,7 +39,7 @@ export function CampoCodigo({
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   campo: { gap: 6 },
   rotulo: { fontSize: TAMANHOS.textoPequeno, fontWeight: '600', color: CORES.texto },
   entrada: {

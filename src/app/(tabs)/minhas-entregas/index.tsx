@@ -3,8 +3,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos, useCores } from '@/components/temaApp';
 import { Caixa, EcraCarregamento, Ecra, Texto, Titulo } from '@/components/ui';
+import { IlustracaoVazio } from '@/components/IlustracaoVazio';
 import { entregaTerminada, nomeEstadoEntrega, type Envio } from '@/domain/entregas/envio';
 import { estadoEfetivo } from '@/domain/entregas/estafeta';
 import { recarregarEntregasOrganizacao, recarregarEstafeta, useEntregasEstafeta } from '@/hooks/useEntregasEstafeta';
@@ -17,6 +19,7 @@ import { servicoEstafeta } from '@/services/entregas/estafetaApp';
 import { definirAvisoEstafeta } from '@/state/estafeta';
 
 function ItemEntrega({ entrega, acoes, aoAbrir }: { entrega: Envio; acoes: AcaoNaFila[]; aoAbrir(): void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const estado = nomeEstadoEntrega(estadoEfetivo(entrega.estado, acoes));
   const aEspera = acoes.some((a) => a.erro === null);
   const recusada = acoes.some((a) => a.erro !== null);
@@ -43,6 +46,7 @@ function ItemEntrega({ entrega, acoes, aoAbrir }: { entrega: Envio; acoes: AcaoN
 }
 
 function ItemPedidoDisponivel({ pedido, aoAceitar }: { pedido: import('@/api/entregas').PedidoDisponivelEstafeta; aoAceitar(): void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const compat = pedido.compatibilidade === 'COMPATIVEL';
   const carga = pedido.carga;
   return (
@@ -63,6 +67,8 @@ function ItemPedidoDisponivel({ pedido, aoAceitar }: { pedido: import('@/api/ent
 }
 /** Separador Entregas: as entregas atribuídas ao estafeta (as por fazer primeiro). */
 export default function Entregas() {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   const online = useOnline();
   const sessao = useSessao();
   const userId = sessao.utilizador?.id ?? null;
@@ -180,6 +186,7 @@ export default function Entregas() {
         }
         ListEmptyComponent={
           <View style={estilos.vazio}>
+            <IlustracaoVazio icone="motorista" cor="azul" />
             <Texto>{pesquisa || filtro !== 'todas' ? 'Nenhuma entrega corresponde à pesquisa/filtro.' : 'Ainda sem entregas atribuídas.'}</Texto>
           </View>
         }
@@ -198,8 +205,8 @@ export default function Entregas() {
   );
 }
 
-const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   cabecalho: { gap: 12, marginBottom: 4 },
   vazio: { gap: 8, paddingVertical: 24 },

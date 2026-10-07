@@ -4,6 +4,7 @@ import type { Cargo, Separador } from '@/domain/organizacao/cargos';
 
 /** Nome de cada separador, como aparece na barra de baixo. */
 export const NOMES_SEPARADORES: Record<Separador, string> = {
+  inicio: 'Início',
   mapa: 'Mapa',
   guardados: 'Moradas',
   entrega: 'Enviar',

@@ -3,11 +3,14 @@ import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos, useCores } from '@/components/temaApp';
 import { Botao, Caixa, EcraCarregamento, Texto, Titulo } from '@/components/ui';
 import { enviarMensagemChat, listarCanaisOrganizacao, listarMensagensChat, type CanalOrganizacao, type MensagemChat } from '@/services/chat/organizacao';
 
 export default function ChatOrganizacao() {
+  const estilos = useEstilos(fabricaEstilos);
+  const CORES = useCores();
   const params = useLocalSearchParams<{ tipo?: string; chave?: string; titulo?: string }>();
   const tipo = String(params.tipo || 'ORG_ESTAFETA');
   const chave = params.chave ? String(params.chave) : null;
@@ -94,8 +97,8 @@ export default function ChatOrganizacao() {
   );
 }
 
-const estilos = StyleSheet.create({
-  ecra: { flex: 1, backgroundColor: CORES.fundo },
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
+  ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   lista: { padding: TAMANHOS.margem, gap: 10, paddingBottom: 16 },
   cabecalho: { gap: 10, marginBottom: 8 },
   canais: { gap: 8 },

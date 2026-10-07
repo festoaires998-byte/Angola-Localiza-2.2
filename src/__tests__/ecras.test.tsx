@@ -80,7 +80,8 @@ jest.mock('@/api/pesquisa', () => ({ pesquisarNoServidor: async () => [] }));
 const mockMudarPais = jest.fn(async (codigo: string): Promise<{ ok: true; pais: string } | { ok: false; erro: string }> => ({ ok: true, pais: codigo }));
 jest.mock('@/services/conta/mudarPaisApp', () => ({ mudarPaisDaConta: (codigo: string) => mockMudarPais(codigo) }));
 jest.mock('@/services/moradas/moradasApp', () => ({
-  servicoMoradas: { guardarDoMapa: async () => ({}), enviarPendentes: async () => ({ enviados: 0, erro: null }) },
+  servicoMoradas: { guardarDoMapa: async () => ({}), enviarPendentes: async () => ({ enviados: 0, erro: null }), listar: async () => [] },
+  servicoRegistos: { listar: async () => [], atualizar: async () => undefined },
   mudancasMoradas: { avisar: () => undefined, ouvir: () => () => undefined },
 }));
 
@@ -118,8 +119,11 @@ const AAL2: NivelSessao = { atual: 'aal2', proximo: 'aal2' };
 
 const TODOS = ['Mapa', 'Moradas', 'Enviar', 'Entregas', 'Campo', 'Validar', 'Gestão', 'Conta'];
 
+/** Os botões da barra de baixo (não os atalhos do Início com o mesmo nome). */
 function separadoresVisiveis(): string[] {
-  return TODOS.filter((nome) => screen.queryAllByRole('button', { name: nome }).length > 0);
+  const { SEPARADORES } = jest.requireActual<typeof import('@/domain/organizacao/cargos')>('@/domain/organizacao/cargos');
+  const { NOMES_SEPARADORES } = jest.requireActual<typeof import('@/components/nomes')>('@/components/nomes');
+  return SEPARADORES.filter((s) => screen.queryAllByTestId(`aba-${s}`).length > 0).map((s) => NOMES_SEPARADORES[s]);
 }
 
 beforeEach(() => {
@@ -151,11 +155,12 @@ describe('arranque', () => {
 });
 
 describe('separadores', () => {
-  test('cidadão vê Mapa, Moradas, Enviar, Entregas e Conta', async () => {
+  test('cidadão abre no Início e vê Início, Mapa, Enviar, Entregas e Conta', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/' });
-    await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
-    expect(separadoresVisiveis()).toEqual(['Mapa', 'Moradas', 'Enviar', 'Entregas', 'Conta']);
+    await waitFor(() => expect(r.getPathname()).toBe('/inicio'));
+    // As moradas abrem-se no Início: a barra fica com 5 botões e o Enviar ao meio.
+    expect(separadoresVisiveis()).toEqual(['Início', 'Mapa', 'Enviar', 'Entregas', 'Conta']);
     expect(await screen.findByText('Onde estou')).toBeTruthy();
   });
 
@@ -177,33 +182,33 @@ describe('separadores', () => {
   test('técnico verificado em AAL2 vê o separador Campo', async () => {
     comSessao(['tecnico_campo'], 'ID_VERIFIED', AAL2);
     const r = renderRouter('./src/app', { initialUrl: '/' });
-    await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
-    expect(separadoresVisiveis()).toEqual(['Mapa', 'Moradas', 'Campo', 'Conta']);
+    await waitFor(() => expect(r.getPathname()).toBe('/inicio'));
+    expect(separadoresVisiveis()).toEqual(['Início', 'Mapa', 'Campo', 'Conta']);
   });
 
   test('staff com KYC pendente vê o aviso fixo e só Mapa e Conta', async () => {
     comSessao(['supervisor'], 'PENDING', AAL2);
     const r = renderRouter('./src/app', { initialUrl: '/' });
-    await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
+    await waitFor(() => expect(r.getPathname()).toBe('/inicio'));
     expect(
       screen.getByText(
-        'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Mapa e à Conta.',
+        'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Início, ao Mapa e à Conta.',
       ),
     ).toBeTruthy();
-    expect(separadoresVisiveis()).toEqual(['Mapa', 'Conta']);
+    expect(separadoresVisiveis()).toEqual(['Início', 'Mapa', 'Conta']);
   });
 
   test('cidadão não vê o aviso de KYC', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/' });
-    await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
+    await waitFor(() => expect(r.getPathname()).toBe('/inicio'));
     expect(screen.queryByText(/identidade ainda não foi verificada/)).toBeNull();
   });
 
   test('um separador não permitido não abre, nem por link', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/admin' });
-    await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
+    await waitFor(() => expect(r.getPathname()).toBe('/inicio'));
     expect(screen.queryByText('Gestão')).toBeNull();
   });
 });
@@ -246,6 +251,28 @@ describe('Definições → Sair', () => {
     expect(screen.getByText('Técnico de campo')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Diagnóstico' })).toBeTruthy();
     expect(screen.getByText(/Angola Localiza, versão/)).toBeTruthy();
+  });
+
+  test('cores novas: título em faixa, secções com ícone e separador ativo destacado', async () => {
+    comSessao([], null, AAL1_SEM_FATOR);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    // O título "Conta" fica numa faixa verde com letra branca.
+    const titulo = screen.getByRole('header', { name: 'Conta' });
+    expect(StyleSheet.flatten(titulo.props.style).color).toBe('#FFFFFF');
+    // As secções têm o título com ícone (continuam a ser cabeçalhos).
+    for (const nome of ['A tua conta', 'País da conta', 'Motorista', 'Verificação simples', 'Notificações', 'Sincronização', 'Ajuda']) {
+      expect(screen.getByRole('header', { name: nome })).toBeTruthy();
+    }
+    // O separador ativo fica numa pastilha amarelo-sol (a barra desenha a camada
+    // ativa de cada separador e mostra só a do separador aberto).
+    const pastilha = screen.getAllByTestId('aba-ativa-definicoes')[0];
+    expect(StyleSheet.flatten(pastilha.props.style).backgroundColor).toBe('#FFE9A8');
+    // O separador Enviar é o botão amarelo grande do meio.
+    const enviar = screen.getAllByTestId('botao-enviar')[0];
+    expect(StyleSheet.flatten(enviar.props.style).backgroundColor).toBe('#F6B800');
+    expect(separadoresVisiveis()).toContain('Enviar');
   });
 
   test('"Apagar a minha conta" abre o ecrã de confirmação', async () => {
@@ -316,6 +343,21 @@ describe('Definições → Sair', () => {
     expect(screen.getByText(/para mudar de país, pede a um administrador/)).toBeTruthy();
   });
 
+  test('Aparência: escolher "Escuro" muda as cores da app na hora', async () => {
+    const { escolherTema } = jest.requireActual<typeof import('@/state/tema')>('@/state/tema');
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    comSessao([], null, AAL1_SEM_FATOR);
+    const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
+    await waitFor(() => expect(r.getPathname()).toBe('/definicoes'));
+    const fundoCartao = () => StyleSheet.flatten(screen.getByRole('header', { name: 'Aparência' }).props.style).color;
+    expect(fundoCartao()).toBe('#111111');
+    fireEvent.press(screen.getByRole('button', { name: 'Escuro' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '✓ Escuro' })).toBeTruthy());
+    expect(fundoCartao()).toBe('#ECF2EE');
+    await act(async () => { await escolherTema('auto'); });
+    expect(screen.getByRole('button', { name: '✓ Automático' })).toBeTruthy();
+  });
+
   test('verificação simples: o botão aparece ao cidadão e não ao pessoal com cargo', async () => {
     comSessao([], null, AAL1_SEM_FATOR);
     const r = renderRouter('./src/app', { initialUrl: '/definicoes' });
@@ -376,7 +418,7 @@ describe('nome completo obrigatório', () => {
     await waitFor(() => expect(mockGuardarNome).toHaveBeenCalledWith('  Ana   Maria Silva '));
   });
 
-  test('depois de guardar (a sessão passa a ter nome), segue para o mapa', async () => {
+  test('depois de guardar (a sessão passa a ter nome), segue para o Início', async () => {
     comSessao([], null, AAL1_SEM_FATOR, null);
     const r = renderRouter('./src/app', { initialUrl: '/' });
     await waitFor(() => expect(r.getPathname()).toBe('/o-teu-nome'));
@@ -384,7 +426,7 @@ describe('nome completo obrigatório', () => {
     await act(async () => {
       comSessao([], null, AAL1_SEM_FATOR, 'Ana Silva');
     });
-    await waitFor(() => expect(r.getPathname()).toBe('/mapa'));
+    await waitFor(() => expect(r.getPathname()).toBe('/inicio'));
   });
 
   test('o código MFA vem primeiro; o nome a seguir', async () => {

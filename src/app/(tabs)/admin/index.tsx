@@ -17,7 +17,8 @@ import {
 import { listarPedidosKyc } from '@/api/revisaoKyc';
 import { cargoPodeReverKycPessoal } from '@/services/identidade/kycPessoal';
 import { lojaRevisaoKyc, useRevisaoKyc } from '@/state/revisaoKyc';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, Caixa, Campo, Cartao, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
 import { useSessao } from '@/hooks/useSessao';
 import { useOnline } from '@/hooks/useOnline';
@@ -51,6 +52,7 @@ function numero(v: unknown) {
 }
 
 export default function GestaoAdmin() {
+  const estilos = useEstilos(fabricaEstilos);
   const { perfil } = useSessao();
   const cargos = perfil?.cargos ?? [];
   const tabs = useMemo(() => TABS.filter((t) => permitido(t.id, cargos)), [cargos]);
@@ -95,6 +97,7 @@ export default function GestaoAdmin() {
 }
 
 function Operacao({ onError }: { onError: (v: string | null) => void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const { perfil } = useSessao();
   const cargos = perfil?.cargos ?? [];
   const online = useOnline();
@@ -227,6 +230,7 @@ function Operacao({ onError }: { onError: (v: string | null) => void }) {
 }
 
 function Pessoas({ onError }: { onError: (v: string | null) => void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const { perfil } = useSessao();
   const cargos = perfil?.cargos ?? [];
   const best = cargos.includes('super_admin') ? 'super_admin' : cargos.includes('admin_nacional') ? 'admin_nacional' : cargos.includes('admin_provincial') ? 'admin_provincial' : cargos.includes('admin_municipal') ? 'admin_municipal' : cargos.includes('supervisor') ? 'supervisor' : null;
@@ -342,6 +346,7 @@ function Pessoas({ onError }: { onError: (v: string | null) => void }) {
   </>;
 }
 function Dados({ onError }: { onError: (v: string | null) => void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const { perfil } = useSessao();
   const podeImportar = (perfil?.cargos ?? []).some((c) => ['super_admin', 'admin_nacional'].includes(c));
   const [resumo, setResumo] = useState<any>(null);
@@ -419,6 +424,7 @@ function Dados({ onError }: { onError: (v: string | null) => void }) {
 }
 
 function Financeiro({ onError }: { onError: (v: string | null) => void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const [zones, setZones] = useState<any[]>([]);
   const [ledger, setLedger] = useState<any[]>([]);
   const load = useCallback(async () => {
@@ -476,6 +482,7 @@ function Financeiro({ onError }: { onError: (v: string | null) => void }) {
 }
 
 function Programadores({ onError }: { onError: (v: string | null) => void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const [keys, setKeys] = useState<any[]>([]);
   const [name, setName] = useState('');
   const [newKey, setNewKey] = useState('');
@@ -520,6 +527,7 @@ function Programadores({ onError }: { onError: (v: string | null) => void }) {
 }
 
 function Auditoria({ cargos, onError }: { cargos: string[]; onError: (v: string | null) => void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const [logs, setLogs] = useState<any[]>([]);
   const [filter, setFilter] = useState('');
   const load = useCallback(async () => {
@@ -551,7 +559,7 @@ function Auditoria({ cargos, onError }: { cargos: string[]; onError: (v: string 
   </>;
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   abas: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   aba: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: CORES.borda, backgroundColor: CORES.fundoSuave },
   abaAtiva: { backgroundColor: CORES.primaria, borderColor: CORES.primaria },

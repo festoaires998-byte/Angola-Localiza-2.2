@@ -6,7 +6,8 @@ import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { lerDadosMorada } from '@/api/moradasNucleo';
 import { Categorias } from '@/components/Categorias';
 import { dataHora, nomeEstadoMorada, nomeVisibilidade, textoPrecisao } from '@/components/nomes';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { Botao, Caixa, Campo, Cartao, EcraCarregamento, Linha, Subtitulo, Texto } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { useMoradas } from '@/hooks/useMoradas';
@@ -25,6 +26,7 @@ function textoPartilha(codigo: string | null, plusCode: string | null, lat: numb
 }
 
 export default function DetalheMorada() {
+  const estilos = useEstilos(fabricaEstilos);
   const { id } = useLocalSearchParams<{ id: string }>();
   const online = useOnline();
   const moradas = useMoradas(online, { atualizarAoAbrir: false });
@@ -170,7 +172,7 @@ export default function DetalheMorada() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   conteudo: { padding: TAMANHOS.margem, gap: 12 },
   bloco: { gap: 2 },
   rotulo: { fontSize: 15, color: CORES.textoSuave },

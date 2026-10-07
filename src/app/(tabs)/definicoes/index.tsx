@@ -5,10 +5,12 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 
 import { BotaoSair } from '@/components/BotaoSair';
 import { dataHora, NOMES_CARGOS, NOMES_OPERACOES } from '@/components/nomes';
-import { CORES, TAMANHOS } from '@/components/tema';
-import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto, Titulo } from '@/components/ui';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
+import { Botao, CabecalhoCartao, Caixa, Cartao, Ecra, Linha, Texto, Titulo } from '@/components/ui';
 import { KYC_VERIFICADO } from '@/domain/organizacao/cargos';
 import { PAISES_PALOP, ouvirPais, paisAtual } from '@/state/pais';
+import { escolherTema, ouvirPreferenciaTema, preferenciaTema, type PreferenciaTema } from '@/state/tema';
 import { avisoMudarPais } from '@/services/conta/mudarPais';
 import { mudarPaisDaConta } from '@/services/conta/mudarPaisApp';
 import { URL_POLITICA_PRIVACIDADE } from '@/config/links';
@@ -17,6 +19,8 @@ import { useCargos } from '@/hooks/useCargos';
 import { useFilaSync, type OperacaoComProblema } from '@/hooks/useFilaSync';
 import { useSessao } from '@/hooks/useSessao';
 
+const OPCOES_TEMA: [PreferenciaTema, string][] = [['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']];
+
 function versaoDaApp(): string {
   const versao = Constants.expoConfig?.version ?? '—';
   const build = Constants.nativeBuildVersion;
@@ -24,6 +28,7 @@ function versaoDaApp(): string {
 }
 
 function Problema({ op, aoVer }: { op: OperacaoComProblema; aoVer(): void }) {
+  const estilos = useEstilos(fabricaEstilos);
   const aviso = op.gravidade === 'aviso';
   return (
     <Caixa tipo={aviso ? 'aviso' : 'erro'}>
@@ -43,12 +48,15 @@ function Problema({ op, aoVer }: { op: OperacaoComProblema; aoVer(): void }) {
 }
 
 export default function Definicoes() {
+  const estilos = useEstilos(fabricaEstilos);
   const router = useRouter();
   const { utilizador } = useSessao();
   const { cargos, estadoKyc, confirmadoAgora } = useCargos();
   const fila = useFilaSync();
   const [resultado, setResultado] = useState<string | null>(null);
   const [pais, setPais] = useState(paisAtual());
+  const [preferencia, setPreferencia] = useState(preferenciaTema());
+  useEffect(() => ouvirPreferenciaTema(setPreferencia), []);
   const [escolherPais, setEscolherPais] = useState(false);
   const [paraConfirmar, setParaConfirmar] = useState<string | null>(null);
   const [aMudarPais, setAMudarPais] = useState(false);
@@ -89,7 +97,7 @@ export default function Definicoes() {
       <Titulo>Conta</Titulo>
 
       <Cartao>
-        <Subtitulo>A tua conta</Subtitulo>
+        <CabecalhoCartao titulo="A tua conta" icone="conta" cor="verde" />
         <Linha nome="Email" valor={utilizador?.email ?? '—'} />
         <Linha
           nome={cargos.length > 1 ? 'Cargos' : 'Cargo'}
@@ -107,7 +115,7 @@ export default function Definicoes() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>País da conta</Subtitulo>
+        <CabecalhoCartao titulo="País da conta" icone="pais" cor="ambar" />
         <Linha nome="País" valor={paisComBandeira(pais)} />
         {cargos.length > 0 ? (
           <Texto suave>Tens um cargo na plataforma: para mudar de país, pede a um administrador.</Texto>
@@ -133,14 +141,27 @@ export default function Definicoes() {
       </Cartao>
 
       <Cartao>
-        <Subtitulo>Motorista</Subtitulo>
+        <CabecalhoCartao titulo="Aparência" icone="aparencia" cor="roxo" />
+        <Texto suave>O modo escuro cansa menos a vista à noite. "Automático" segue o telemóvel.</Texto>
+        {OPCOES_TEMA.map(([valor, nome]) => (
+          <Botao
+            key={valor}
+            titulo={preferencia === valor ? `✓ ${nome}` : nome}
+            variante={preferencia === valor ? 'primario' : 'secundario'}
+            onPress={() => void escolherTema(valor)}
+          />
+        ))}
+      </Cartao>
+
+      <Cartao>
+        <CabecalhoCartao titulo="Motorista" icone="motorista" cor="azul" />
         <Texto suave>Candidata-te para trabalhar como motorista. A documentação é revista antes de ativares o perfil.</Texto>
         <Botao titulo="Motorista / KYC" variante="secundario" onPress={() => router.push('/definicoes/motorista')} />
       </Cartao>
 
       {cargos.length > 0 && !cargos.includes('super_admin') ? (
         <Cartao>
-          <Subtitulo>Verificação de identidade</Subtitulo>
+          <CabecalhoCartao titulo="Verificação de identidade" icone="identidade" cor="roxo" />
           <Texto suave>Obrigatória para o pessoal (técnicos, estafetas, supervisores…): fotos do BI e um vídeo curto, revistos por uma pessoa.</Texto>
           <Botao titulo="Verificação de identidade" variante="secundario" onPress={() => router.push('/definicoes/identidade')} />
         </Cartao>
@@ -148,20 +169,20 @@ export default function Definicoes() {
 
       {cargos.length === 0 ? (
         <Cartao>
-          <Subtitulo>Verificação simples</Subtitulo>
+          <CabecalhoCartao titulo="Verificação simples" icone="verificacao" cor="verde" />
           <Texto suave>Obrigatória para registares moradas: fotos do BI e duas selfies. Funciona sem rede.</Texto>
           <Botao titulo="Verificação simples" variante="secundario" onPress={() => router.push('/definicoes/verificacao')} />
         </Cartao>
       ) : null}
 
       <Cartao>
-        <Subtitulo>Notificações</Subtitulo>
+        <CabecalhoCartao titulo="Notificações" icone="notificacoes" cor="ambar" />
         <Texto suave>Vê avisos de entregas, validações, Campo e outros eventos da tua conta.</Texto>
         <Botao titulo="Abrir notificações" variante="secundario" onPress={() => router.push('/notificacoes')} />
       </Cartao>
 
       <Cartao>
-        <Subtitulo>Sincronização</Subtitulo>
+        <CabecalhoCartao titulo="Sincronização" icone="sincronizacao" cor="azul" />
         <Linha nome="Trabalhos por enviar" valor={String(fila.pendentes)} />
         <Linha nome="Fotos por enviar" valor={String(fila.fotosPendentes)} />
         <Linha nome="Última sincronização" valor={dataHora(fila.ultimaSincronizacao)} />
@@ -183,7 +204,7 @@ export default function Definicoes() {
 
       {fila.operacoesComProblema.length > 0 ? (
         <Cartao>
-          <Subtitulo>Precisam da tua atenção</Subtitulo>
+          <CabecalhoCartao titulo="Precisam da tua atenção" icone="atencao" cor="vermelho" />
           {fila.operacoesComProblema.map((op) => (
             <Problema
               key={`${op.gravidade}-${op.operation_id}`}
@@ -195,7 +216,7 @@ export default function Definicoes() {
       ) : null}
 
       <Cartao>
-        <Subtitulo>Ajuda</Subtitulo>
+        <CabecalhoCartao titulo="Ajuda" icone="ajuda" cor="roxo" />
         <Texto suave>Se o suporte pedir, abre o diagnóstico e mostra os resultados.</Texto>
         <Botao titulo="Diagnóstico" variante="secundario" onPress={() => router.push('/definicoes/diagnostico')} />
         <Botao titulo="Política de privacidade" variante="secundario" onPress={() => void Linking.openURL(URL_POLITICA_PRIVACIDADE)} />
@@ -211,7 +232,7 @@ export default function Definicoes() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   problemaTitulo: { fontSize: TAMANHOS.texto, fontWeight: '700', color: CORES.texto },
   problemaTexto: { fontSize: TAMANHOS.textoPequeno, lineHeight: 22, color: CORES.texto },
   problemaData: { fontSize: 14, color: CORES.textoSuave },

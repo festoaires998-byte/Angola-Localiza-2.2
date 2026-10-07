@@ -6,7 +6,8 @@ import type { PontoEncontrado } from '@/hooks/usePesquisaMapa';
 import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE } from '@/services/mapas/estiloMapa';
 import { REGIAO_HUAMBO } from '@/services/mapas/regioes';
 
-import { CORES, TAMANHOS } from '../tema';
+import { TAMANHOS, type Cores } from '../tema';
+import { useEstilos } from '../temaApp';
 
 export type Camada = 'mapa' | 'satelite';
 
@@ -26,6 +27,11 @@ interface Props {
   aoTocar?(tocar: boolean): void;
   /** Botão do canto: "Ecrã inteiro" (no ecrã) ou "Fechar" (no ecrã inteiro). */
   botaoCanto: { titulo: string; aoCarregar(): void };
+  /** Espaço livre em cima (pesquisa a flutuar) e em baixo (folha por cima do mapa). */
+  margemTopo?: number;
+  margemBaixo?: number;
+  /** Mapa de ponta a ponta, sem cantos redondos. */
+  semCantos?: boolean;
 }
 
 /** O mapa (MapLibre) com o alternador Mapa/Satélite, o ponto azul e o ponto encontrado. */
@@ -40,7 +46,11 @@ export function VistaMapa({
   altura,
   aoTocar,
   botaoCanto,
+  margemTopo = 0,
+  margemBaixo = 0,
+  semCantos = false,
 }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const [seguir, setSeguir] = useState(alvo === null);
   const abrirDefinicoesLocalizacao = () => { void Linking.openSettings(); };
   const camara = useRef<CameraRef>(null);
@@ -67,7 +77,7 @@ export function VistaMapa({
   return (
     <View
       testID="vista-mapa"
-      style={[estilos.mapa, altura === 'cheio' ? estilos.cheio : { height: altura }]}
+      style={[estilos.mapa, altura === 'cheio' ? estilos.cheio : { height: altura }, semCantos && estilos.semCantos]}
       onTouchStart={() => aoTocar?.(true)}
       onTouchEnd={() => aoTocar?.(false)}
       onTouchCancel={() => aoTocar?.(false)}
@@ -103,14 +113,14 @@ export function VistaMapa({
       )}
 
       {alvo && estilo ? (
-        <View style={estilos.fichaAlvo} accessibilityRole="summary" accessibilityLabel={`Local selecionado: ${alvo.titulo}`}>
+        <View style={[estilos.fichaAlvo, { top: 10 + margemTopo }]} accessibilityRole="summary" accessibilityLabel={`Local selecionado: ${alvo.titulo}`}>
           <Text numberOfLines={2} style={estilos.fichaTitulo}>{alvo.titulo}</Text>
           <Text style={estilos.fichaCoordenadas}>{alvo.latitude.toFixed(5)}, {alvo.longitude.toFixed(5)}</Text>
         </View>
       ) : null}
 
       {estilo ? (
-        <View style={estilos.zoom} accessibilityLabel="Controlos de zoom">
+        <View style={[estilos.zoom, { top: (alvo ? 96 : 10) + margemTopo }]} accessibilityLabel="Controlos de zoom">
           <Pressable accessibilityRole="button" accessibilityLabel="Aumentar zoom" onPress={() => camara.current?.zoomTo(18, { duration: 250 })} style={estilos.zoomBotao}>
             <Text style={estilos.zoomTexto}>+</Text>
           </Pressable>
@@ -120,7 +130,7 @@ export function VistaMapa({
         </View>
       ) : null}
 
-      <View style={estilos.camadas} accessibilityRole="radiogroup">
+      <View style={[estilos.camadas, { top: 10 + margemTopo }]} accessibilityRole="radiogroup">
         {(['mapa', 'satelite'] as const).map((c) => {
           const ativa = camada === c;
           const nome = c === 'mapa' ? 'Mapa' : 'Satélite';
@@ -141,14 +151,14 @@ export function VistaMapa({
 
       {estilo ? (
         <Text
-          style={estilos.atribuicao}
+          style={[estilos.atribuicao, { bottom: 6 + margemBaixo }]}
           accessibilityLabel={camada === 'satelite' ? 'Imagens de satélite: Esri' : 'Dados do mapa: OpenStreetMap'}
         >
           {camada === 'satelite' ? ATRIBUICAO_SATELITE : ATRIBUICAO_OSM}
         </Text>
       ) : null}
 
-      <View style={estilos.botoesBaixo}>
+      <View style={[estilos.botoesBaixo, { bottom: 28 + margemBaixo }]}>
         {estilo && !seguir && !semPermissao ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Centrar em mim" onPress={() => {
               setSeguir(true);
@@ -168,7 +178,7 @@ export function VistaMapa({
       </View>
 
       {semPermissao ? (
-        <View style={estilos.faixaLocalizacao} accessibilityRole="alert">
+        <View style={[estilos.faixaLocalizacao, { top: margemTopo }]} accessibilityRole="alert">
           <Text style={estilos.textoFaixa}>Localização indisponível. Ativa a localização nas definições para centrar o mapa em ti.</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Abrir definições de localização" onPress={abrirDefinicoesLocalizacao} style={estilos.botaoDefinicoes}>
             <Text style={estilos.textoBotaoDefinicoes}>Abrir definições</Text>
@@ -177,7 +187,7 @@ export function VistaMapa({
       ) : null}
 
       {online === false ? (
-        <View style={estilos.faixaSemRede}>
+        <View style={[estilos.faixaSemRede, { top: margemTopo }]}>
           <Text style={estilos.textoFaixa}>Sem rede: a mostrar o que está neste telemóvel</Text>
         </View>
       ) : null}
@@ -185,9 +195,10 @@ export function VistaMapa({
   );
 }
 
-const estilos = StyleSheet.create({
-  mapa: { backgroundColor: CORES.fundoSuave, borderRadius: 12, overflow: 'hidden' },
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
+  mapa: { backgroundColor: CORES.fundoSuave, borderRadius: TAMANHOS.raioCartao, overflow: 'hidden' },
   cheio: { flex: 1, borderRadius: 0 },
+  semCantos: { borderRadius: 0 },
   semMapa: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   semMapaTexto: { fontSize: TAMANHOS.texto, color: CORES.texto, textAlign: 'center', fontWeight: '600' },
   marcador: {
@@ -224,7 +235,7 @@ const estilos = StyleSheet.create({
     bottom: 6,
     fontSize: 12,
     color: CORES.texto,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: CORES.fundo + 'D9',
     paddingHorizontal: 4,
     borderRadius: 4,
   },

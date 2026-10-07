@@ -171,6 +171,8 @@ describe('Enviar: novo envio', () => {
     );
     expect(r.getPathname()).toBe('/entrega/n1');
     expect(screen.getByTestId('pin-envio').props.children).toBe('4821');
+    // A linha do tempo mostra em que passo está o envio.
+    expect(screen.getByTestId('linha-tempo')).toBeTruthy();
     expect(screen.getByLabelText('PIN 4 8 2 1')).toBeTruthy();
     expect(screen.getByText('Pedido enviado. Dá o PIN só a quem vai receber a encomenda.')).toBeTruthy();
   });

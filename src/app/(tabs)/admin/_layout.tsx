@@ -1,15 +1,16 @@
 import { Stack } from 'expo-router';
 
-import { CORES } from '@/components/tema';
+import { cabecalho } from '@/components/tema';
+import { useCores } from '@/components/temaApp';
 
 /** Admin: a lista das verificações por rever e, por cima, o detalhe de cada uma (Voltar regressa à lista). */
 export default function LayoutAdmin() {
+  const CORES = useCores();
   return (
     <Stack
       screenOptions={{
-        headerTintColor: CORES.primaria,
-        headerTitleStyle: { color: CORES.texto, fontWeight: '700' },
-        contentStyle: { backgroundColor: CORES.fundo },
+        ...cabecalho(CORES),
+        contentStyle: { backgroundColor: CORES.fundoEcra },
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />

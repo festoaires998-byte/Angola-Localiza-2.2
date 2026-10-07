@@ -3,7 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { CATEGORIAS_FAVORITO, type CategoriaFavorito } from '@/database/repositories/favoritos';
 
 import { NOMES_CATEGORIAS } from './nomes';
-import { CORES } from './tema';
+import { type Cores } from './tema';
+import { useEstilos } from './temaApp';
 
 interface Props {
   valor: CategoriaFavorito | null;
@@ -14,6 +15,7 @@ interface Props {
 
 /** Botões das categorias, numa linha que se arrasta para o lado. */
 export function Categorias({ valor, aoEscolher, comTodas = false }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const opcoes: (CategoriaFavorito | null)[] = comTodas ? [null, ...CATEGORIAS_FAVORITO] : [...CATEGORIAS_FAVORITO];
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={estilos.linha}>
@@ -37,7 +39,7 @@ export function Categorias({ valor, aoEscolher, comTodas = false }: Props) {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   linha: { gap: 8, paddingVertical: 4 },
   botao: {
     minHeight: 44,

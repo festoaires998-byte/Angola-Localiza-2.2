@@ -6,8 +6,9 @@ import { VISIBILIDADES, type Visibilidade } from '@/services/moradas/moradas';
 
 import { NOMES_CATEGORIAS, nomeVisibilidade } from '../nomes';
 import { Opcoes } from '../Opcoes';
-import { CORES } from '../tema';
-import { Botao, Caixa } from '../ui';
+import { type Cores } from '../tema';
+import { useEstilos } from '../temaApp';
+import { Botao, Caixa, vibrarSucesso } from '../ui';
 
 /** A mesma ordem do site: "Outro" primeiro. */
 const CATEGORIAS: readonly CategoriaFavorito[] = ['outro', 'casa', 'trabalho', 'familia', 'cliente', 'loja', 'entrega'];
@@ -22,6 +23,7 @@ interface Props {
 
 /** Privacidade, Categoria e "Guardar como favorito" (como no fundo do Mapa do site). */
 export function GuardarFavorito({ bloqueio, guardado, aoGuardar }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const [visibilidade, setVisibilidade] = useState<Visibilidade>('PUBLIC');
   const [categoria, setCategoria] = useState<CategoriaFavorito>('outro');
   const [aGuardar, setAGuardar] = useState(false);
@@ -32,6 +34,7 @@ export function GuardarFavorito({ bloqueio, guardado, aoGuardar }: Props) {
     setMensagem(null);
     try {
       setMensagem({ tipo: 'sucesso', texto: await aoGuardar({ visibilidade, categoria }) });
+      vibrarSucesso();
     } catch (e) {
       setMensagem({ tipo: 'erro', texto: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -69,7 +72,7 @@ export function GuardarFavorito({ bloqueio, guardado, aoGuardar }: Props) {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   bloco: { gap: 8 },
   rotulo: { fontSize: 17, fontWeight: '700', color: CORES.texto, marginTop: 4 },
   nota: { fontSize: 15, lineHeight: 21, color: CORES.textoSuave },

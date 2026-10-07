@@ -1,3 +1,5 @@
+import { type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -12,6 +14,7 @@ interface Props {
 
 /** Leitor de QR Codes com a câmara de trás (como o "Ler QR" do site). Funciona sem rede. */
 export function LeitorQr({ aoLer, aoFechar }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const [permissao, pedirPermissao] = useCameraPermissions();
   const [recusada, setRecusada] = useState(false);
   const lido = useRef(false);
@@ -52,7 +55,7 @@ export function LeitorQr({ aoLer, aoFechar }: Props) {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   bloco: { gap: 8 },
   camara: { width: '100%', aspectRatio: 1, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' },
 });

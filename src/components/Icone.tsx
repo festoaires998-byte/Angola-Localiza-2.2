@@ -4,11 +4,15 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import type { Separador } from '@/domain/organizacao/cargos';
 
 /** Ícones simples (traço) dos separadores. */
-export function Icone({ nome, cor, tamanho = 28 }: { nome: Separador; cor: ColorValue; tamanho?: number }) {
+export function Icone({ nome, cor, tamanho = 28, fundo = 'transparent' }: { nome: Separador; cor: ColorValue; tamanho?: number; fundo?: ColorValue }) {
   const traco = { stroke: cor, strokeWidth: 2.2, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
   return (
     <Svg width={tamanho} height={tamanho} viewBox="0 0 24 24" accessibilityElementsHidden>
-      {nome === 'mapa' ? (
+      {nome === 'inicio' ? (
+        <>
+          <Path d="M4 11l8-7 8 7v9.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5z" {...traco} />
+        </>
+      ) : nome === 'mapa' ? (
         <>
           <Path d="M12 22s7-7.6 7-13a7 7 0 0 0-14 0c0 5.4 7 13 7 13z" {...traco} />
           <Circle cx={12} cy={9} r={2.6} {...traco} />
@@ -43,9 +47,9 @@ export function Icone({ nome, cor, tamanho = 28 }: { nome: Separador; cor: Color
       ) : (
         <>
           <Path d="M4 6h16M4 12h16M4 18h16" {...traco} />
-          <Circle cx={9} cy={6} r={2.2} fill="#FFFFFF" stroke={cor} strokeWidth={2.2} />
-          <Circle cx={15} cy={12} r={2.2} fill="#FFFFFF" stroke={cor} strokeWidth={2.2} />
-          <Circle cx={8} cy={18} r={2.2} fill="#FFFFFF" stroke={cor} strokeWidth={2.2} />
+          <Circle cx={9} cy={6} r={2.2} fill={fundo} stroke={cor} strokeWidth={2.2} />
+          <Circle cx={15} cy={12} r={2.2} fill={fundo} stroke={cor} strokeWidth={2.2} />
+          <Circle cx={8} cy={18} r={2.2} fill={fundo} stroke={cor} strokeWidth={2.2} />
         </>
       )}
     </Svg>

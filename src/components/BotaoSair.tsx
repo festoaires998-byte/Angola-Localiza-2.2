@@ -6,7 +6,8 @@ import { useSessao } from '@/hooks/useSessao';
 import { obterRepositoriosSync } from '@/sync/fila';
 
 import { plural } from './nomes';
-import { CORES, TAMANHOS } from './tema';
+import { TAMANHOS, type Cores } from './tema';
+import { useEstilos } from './temaApp';
 import { Botao, Caixa } from './ui';
 
 /** Texto do aviso quando há trabalhos por enviar (null = não se conseguiu contar). */
@@ -26,6 +27,7 @@ type Passo = { tipo: 'inicial' } | { tipo: 'a_verificar' } | { tipo: 'aviso'; pe
  * (a fila NÃO é apagada: fica à espera que ele volte a entrar).
  */
 export function BotaoSair() {
+  const estilos = useEstilos(fabricaEstilos);
   const userId = useSessao().utilizador?.id ?? null;
   const [passo, setPasso] = useState<Passo>({ tipo: 'inicial' });
   const [erro, setErro] = useState<string | null>(null);
@@ -81,7 +83,7 @@ export function BotaoSair() {
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   titulo: { fontSize: TAMANHOS.subtitulo, fontWeight: '700', color: CORES.avisoTexto },
   texto: { fontSize: TAMANHOS.texto, lineHeight: 26, color: CORES.avisoTexto },
   botoes: { gap: 12 },

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AssinaturaDedo } from '@/components/AssinaturaDedo';
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { Opcoes } from '@/components/Opcoes';
-import { Botao, Caixa, Campo, Ecra, Subtitulo, Texto } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Ecra, Subtitulo, Texto } from '@/components/ui';
 import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
 import { faltaNaPod, type DadosPod, type FicheiroProva } from '@/domain/entregas/estafeta';
 import { recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
@@ -86,7 +86,7 @@ export default function ProvaEntrega() {
       <Texto>{`Entrega para ${entrega.destinatario}`}</Texto>
       <Caixa tipo={gps.local ? (gps.fraca ? 'aviso' : 'info') : 'aviso'}>{gps.texto}</Caixa>
 
-      <Subtitulo>1. Foto da entrega</Subtitulo>
+      <CabecalhoCartao titulo="1. Foto da entrega" icone="camara" cor="azul" />
       <Texto suave>Fotografa a encomenda entregue (leva a marca de água com o local e a hora).</Texto>
       <CamaraFachada
         foto={foto?.uri ?? null}
@@ -97,7 +97,7 @@ export default function ProvaEntrega() {
         rotuloFoto="Foto da entrega"
       />
 
-      <Subtitulo>2. Assinatura de quem recebe</Subtitulo>
+      <CabecalhoCartao titulo="2. Assinatura de quem recebe" icone="assinatura" cor="roxo" />
       <AssinaturaDedo
         assinatura={assinatura?.uri ?? null}
         aoConfirmar={async (tracos, largura, altura) => {
@@ -106,7 +106,7 @@ export default function ProvaEntrega() {
         aoApagar={() => setAssinatura(null)}
       />
 
-      <Subtitulo>3. PIN de quem recebe</Subtitulo>
+      <CabecalhoCartao titulo="3. PIN de quem recebe" icone="pin" cor="verde" />
       <Campo
         rotulo="PIN (4 algarismos)"
         value={pin}

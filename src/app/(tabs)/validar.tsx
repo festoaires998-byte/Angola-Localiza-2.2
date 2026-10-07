@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Botao, Caixa, Ecra, Titulo } from '@/components/ui';
-import { CORES, TAMANHOS } from '@/components/tema';
+import { TAMANHOS, type Cores } from '@/components/tema';
+import { useEstilos, useCores } from '@/components/temaApp';
 import { usePosicao } from '@/hooks/usePosicao';
 import { listarQuadraAtual, listarValidacoesPendentes, validarLevantamento, type ContextoQuadraValidacao, type DecisaoValidacao, type ValidacaoCampo } from '@/services/validacao/validacao';
 
 export default function Validar() {
+  const s = useEstilos(fabricaS);
+  const CORES = useCores();
   const [registos, setRegistos] = useState<ValidacaoCampo[]>([]);
   const [carregar, setCarregar] = useState(true);
   const [atualizar, setAtualizar] = useState(false);
@@ -79,7 +82,7 @@ export default function Validar() {
     <Text style={s.footer}>A validação é autorizada pelo servidor e protegida contra duas validações simultâneas do mesmo registo.</Text>
   </Ecra>;
 }
-const s=StyleSheet.create({
+const fabricaS=(CORES: Cores) => StyleSheet.create({
  loading:{flex:1,backgroundColor:CORES.fundo,alignItems:'center',justifyContent:'center',padding:24,gap:16},
  text:{fontSize:TAMANHOS.texto,color:CORES.texto,textAlign:'center'},sub:{fontSize:TAMANHOS.texto,lineHeight:26,color:CORES.textoSuave},
  row:{minHeight:48,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},count:{fontSize:TAMANHOS.subtitulo,fontWeight:'700',color:CORES.texto},

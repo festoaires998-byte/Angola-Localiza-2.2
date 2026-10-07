@@ -205,6 +205,8 @@ describe('Entregas (estafeta): prova de entrega', () => {
     await desenhar();
     await carregar(/^Entrega para Maria João/);
     expect(screen.getByRole('button', { name: 'Ligar a Maria João' })).toBeTruthy();
+    // A linha do tempo mostra o passo da entrega também ao estafeta.
+    expect(screen.getByTestId('linha-tempo')).toBeTruthy();
     await carregar('Entregar (prova de entrega)');
   }
 

@@ -5,7 +5,8 @@ import QRCode from 'react-native-qrcode-svg';
 import { linkGoogleMaps, textoPartilhaLocal } from '@/domain/enderecamento/pesquisa';
 import { partilharQrPng } from '@/services/imagem/qrPng';
 
-import { CORES } from '../tema';
+import { type Cores } from '../tema';
+import { useEstilos } from '../temaApp';
 import { Botao, Caixa } from '../ui';
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
 
 /** "QR Code · abre no Google Maps", com Guardar e Partilhar (como no site). Funciona sem rede. */
 export function QrLocal({ latitude, longitude, plusCode, codigoPostal }: Props) {
+  const estilos = useEstilos(fabricaEstilos);
   const qr = useRef<{ toDataURL(cb: (base64: string) => void): void } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const link = linkGoogleMaps(latitude, longitude);
@@ -64,7 +66,7 @@ export function QrLocal({ latitude, longitude, plusCode, codigoPostal }: Props) 
   );
 }
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   bloco: { gap: 8 },
   rotulo: { fontSize: 15, color: CORES.textoSuave },
   caixaQr: { alignSelf: 'center', padding: 4, backgroundColor: '#FFFFFF', borderRadius: 8 },

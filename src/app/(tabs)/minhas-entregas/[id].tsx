@@ -5,9 +5,11 @@ import * as Location from 'expo-location';
 
 import { CamaraFachada } from '@/components/CamaraFachada';
 import { dataHora } from '@/components/nomes';
+import { LinhaTempo } from '@/components/LinhaTempo';
 import { Botao, Caixa, Cartao, Ecra, Linha, Subtitulo, Texto } from '@/components/ui';
 import { linhasMarcaDeAgua } from '@/domain/enderecamento/registoMorada';
-import { CORES } from '@/components/tema';
+import { type Cores } from '@/components/tema';
+import { useEstilos } from '@/components/temaApp';
 import { entregaTerminada, nomeEstadoEntrega } from '@/domain/entregas/envio';
 import { estadoEfetivo, mensagemErroEstafeta, podeFechar, proximoPasso, type FicheiroProva } from '@/domain/entregas/estafeta';
 import { recarregarEntregasOrganizacao, recarregarEstafeta } from '@/hooks/useEntregasEstafeta';
@@ -23,6 +25,7 @@ import { avisoAcao, definirAvisoEstafeta, useEstafeta } from '@/state/estafeta';
 
 /** Detalhe de uma entrega do estafeta: destino, contacto, etapas e prova. */
 export default function DetalheEntrega() {
+  const estilos = useEstilos(fabricaEstilos);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const online = useOnline();
@@ -183,6 +186,7 @@ export default function DetalheEntrega() {
       <Cartao>
         <Linha nome="Para" valor={entrega.destinatario} />
         <Linha nome="Estado" valor={nomeEstadoEntrega(efetivo)} />
+        <LinhaTempo estado={efetivo} />
         {m?.referencia ? <Linha nome="Referência" valor={m.referencia} /> : null}
         {m?.codigoPostal || m?.plusCode ? <Linha nome="Destino" valor={[m.codigoPostal, m.plusCode].filter(Boolean).join(' · ')} /> : null}
         {entrega.instrucoes ? <Linha nome="Instruções" valor={entrega.instrucoes} /> : null}
@@ -289,11 +293,11 @@ export default function DetalheEntrega() {
 }
 
 
-const estilos = StyleSheet.create({
+const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   modalFundo: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
   modalCartao: { maxHeight: '80%', padding: 20, gap: 12, backgroundColor: CORES.fundo, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   listaEstafetas: { maxHeight: 420 },
-  estafetaItem: { paddingVertical: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 10, marginBottom: 8 },
+  estafetaItem: { paddingVertical: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: CORES.bordaCartao, borderRadius: 10, marginBottom: 8 },
   estafetaNome: { fontSize: 16, fontWeight: '700', color: CORES.texto },
   estafetaEmail: { marginTop: 3, fontSize: 13, color: CORES.textoSuave },
 });

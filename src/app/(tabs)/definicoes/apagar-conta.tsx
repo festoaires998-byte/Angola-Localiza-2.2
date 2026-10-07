@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Botao, Caixa, Campo, Ecra, Subtitulo, Texto, Titulo } from '@/components/ui';
+import { Botao, CabecalhoCartao, Caixa, Campo, Ecra, Texto, Titulo } from '@/components/ui';
 import { useOnline } from '@/hooks/useOnline';
 import { useSessao } from '@/hooks/useSessao';
 import { PALAVRA_CONFIRMACAO } from '@/services/conta/palavra';
@@ -30,14 +30,14 @@ export default function ApagarConta() {
       <Titulo>Apagar a minha conta</Titulo>
       <Caixa tipo="aviso">Isto não tem volta atrás. Depois de apagada, não consegues voltar a entrar com esta conta.</Caixa>
 
-      <Subtitulo>O que é apagado</Subtitulo>
+      <CabecalhoCartao titulo="O que é apagado" icone="apagar" cor="vermelho" />
       <Texto>• O teu nome, email e telefone.</Texto>
       <Texto>• As fotos do BI, a selfie, o vídeo e os documentos de motorista.</Texto>
       <Texto>• Os teus favoritos, notificações e moradas privadas.</Texto>
       <Texto>• Os anexos que enviaste no chat.</Texto>
       <Texto>• O que está neste telemóvel à espera de ser enviado.</Texto>
 
-      <Subtitulo>O que fica, sem o teu nome</Subtitulo>
+      <CabecalhoCartao titulo="O que fica, sem o teu nome" icone="verificacao" cor="verde" />
       <Texto>• As entregas e as provas de entrega (para reclamações e contas).</Texto>
       <Texto>• As moradas públicas já validadas, que continuam no mapa.</Texto>
 

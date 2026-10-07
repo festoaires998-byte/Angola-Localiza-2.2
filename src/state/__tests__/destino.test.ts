@@ -14,7 +14,7 @@ describe('destino da sessão: nome completo obrigatório', () => {
   test('sem nome → /o-teu-nome; com nome → /mapa', () => {
     expect(destinoDaSessao({ ...base, utilizador: { id: 'u', email: 'a@b.ao', nome: null }, acesso: cidadao })).toBe('/o-teu-nome');
     expect(destinoDaSessao({ ...base, utilizador: { id: 'u', email: 'a@b.ao' }, acesso: cidadao })).toBe('/o-teu-nome');
-    expect(destinoDaSessao({ ...base, utilizador: { id: 'u', email: 'a@b.ao', nome: 'Ana Silva' }, acesso: cidadao })).toBe('/mapa');
+    expect(destinoDaSessao({ ...base, utilizador: { id: 'u', email: 'a@b.ao', nome: 'Ana Silva' }, acesso: cidadao })).toBe('/inicio');
   });
 
   test('sem sessão, a carregar e MFA vêm antes do nome', () => {
