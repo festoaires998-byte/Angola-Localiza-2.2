@@ -381,7 +381,7 @@ const PLUS = encode(POS.latitude, POS.longitude);
 const LINK = 'https://www.google.com/maps?q=-12.776100,15.739200';
 
 describe('Mapa igual ao site (8 passos)', () => {
-  test('a ordem do ecrã é a aprovada', async () => {
+  test('a ordem do ecrã é a aprovada (06/10: o mapa no topo, com a pesquisa a flutuar)', async () => {
     mockOnline = true;
     mockInfo = INFO_CONFIRMADA;
     mockMapa = { estado: 'sem_mapa', remoto: MANIFESTO };
@@ -389,6 +389,7 @@ describe('Mapa igual ao site (8 passos)', () => {
     await screen.findByRole('button', { name: 'Registar esta casa, loja, escola...' });
     const texto = JSON.stringify(screen.toJSON());
     const posicoes = [
+      'mapa-nativo',
       'Pesquisar código, Plus Code, rua, bairro...',
       'Atualizar localização',
       'Ler QR',
@@ -399,7 +400,6 @@ describe('Mapa igual ao site (8 passos)', () => {
       'Coordenadas',
       'QR Code · abre no Google Maps',
       'Registar esta casa, loja, escola...',
-      'mapa-nativo',
       'Privacidade',
       'Categoria',
       'Guardar como favorito',
@@ -408,6 +408,19 @@ describe('Mapa igual ao site (8 passos)', () => {
     for (const [t, i] of posicoes) expect([t, i >= 0]).toEqual([t, true]);
     const indices = posicoes.map(([, i]) => i);
     expect(indices).toEqual([...indices].sort((a, b) => a - b));
+  });
+
+  test('o mapa vai de ponta a ponta e deixa espaço para a pesquisa e a folha', async () => {
+    mockOnline = true;
+    await desenhar();
+    const { StyleSheet } = require('react-native') as typeof import('react-native');
+    const vista = screen.getByTestId('vista-mapa');
+    expect(StyleSheet.flatten(vista.props.style).borderRadius).toBe(0);
+    // Os botões do mapa (Mapa/Satélite) descem para não ficarem por baixo da pesquisa.
+    let camadas = screen.getByLabelText('Vista: Mapa').parent;
+    while (camadas && StyleSheet.flatten(camadas.props.style)?.top === undefined) camadas = camadas.parent;
+    expect(StyleSheet.flatten(camadas!.props.style).top).toBeGreaterThanOrEqual(74);
+    expect(screen.getByLabelText('Pesquisar')).toBeTruthy();
   });
 
   test('coordenadas e QR Code com o link do Google Maps', async () => {

@@ -1,16 +1,17 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { GuardarFavorito } from '@/components/mapa/GuardarFavorito';
 import { LeitorQr } from '@/components/mapa/LeitorQr';
 import { QrLocal } from '@/components/mapa/QrLocal';
 import { VistaMapa, type Camada } from '@/components/mapa/VistaMapa';
 import { dataHora, megas, textoPrecisao } from '@/components/nomes';
-import { TAMANHOS, type Cores } from '@/components/tema';
-import { useEstilos, useTema } from '@/components/temaApp';
-import { Botao, CabecalhoCartao, Caixa, Campo, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
+import { sombraCartao, TAMANHOS, type Cores } from '@/components/tema';
+import { useCores, useEstilos, useTema } from '@/components/temaApp';
+import { Botao, CabecalhoCartao, Caixa, Cartao, Linha, Subtitulo, Texto } from '@/components/ui';
 import type { CategoriaFavorito } from '@/database/repositories/favoritos';
 import { abrirBaseDados } from '@/database/client';
 import { criarRepositorioHistoricoLocaliza, type ItemHistoricoLocaliza } from '@/database/repositories/historicoLocaliza';
@@ -329,6 +330,9 @@ function ResultadosPesquisa({ resultados, aoEscolher, localidade }: { resultados
 export default function Mapa() {
   const estilos = useEstilos(fabricaEstilos);
   const escuro = useTema().esquema === 'escuro';
+  const CORES = useCores();
+  const insets = useSafeAreaInsets();
+  const alturaMapa = Math.round(Math.max(360, useWindowDimensions().height * 0.52));
   const [configPais, setConfigPais] = useState(CONFIG_AO_OFFLINE_TESTE);
   const [codigoPais, setCodigoPais] = useState(paisAtual());
   const regiao = useMemo(() => mapaDoPais(codigoPais).regiao, [codigoPais]);
@@ -509,8 +513,13 @@ export default function Mapa() {
       : 'Guardado no telemóvel. Vai para o servidor quando houver rede.';
   };
 
-  const mapa = (altura: number | 'cheio', botaoCanto: { titulo: string; aoCarregar(): void }) => (
+  const mapa = (
+    altura: number | 'cheio',
+    botaoCanto: { titulo: string; aoCarregar(): void },
+    extra: { margemTopo?: number; margemBaixo?: number; semCantos?: boolean } = {},
+  ) => (
     <VistaMapa
+      {...extra}
       estilo={estilo}
       camada={satelite ? 'satelite' : 'mapa'}
       aoEscolherCamada={escolherCamada}
@@ -525,26 +534,47 @@ export default function Mapa() {
   );
 
   return (
-    <SafeAreaView style={estilos.ecra} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={estilos.ecra} edges={['left', 'right']}>
       <ScrollView
         ref={rolagem}
         scrollEnabled={podeRolar}
         style={estilos.ecra}
-        contentContainerStyle={estilos.conteudo}
+        contentContainerStyle={estilos.conteudoComMapa}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 1. Pesquisa única */}
-        <Campo
-          rotulo="Pesquisar"
-          placeholder="Pesquisar código, Plus Code, rua, bairro..."
-          value={pesquisa.texto}
-          onChangeText={pesquisa.setTexto}
-          onSubmitEditing={() => void pesquisa.procurar()}
-          returnKeyType="search"
-          autoCapitalize="none"
-          autoCorrect={false}
-          maxLength={200}
-        />
+        {/* 1. O mapa no topo, de ponta a ponta, com a pesquisa a flutuar por cima */}
+        <View style={estilos.heroi} onLayout={(e) => (yMapa.current = e.nativeEvent.layout.y)}>
+          {mapa(alturaMapa, { titulo: 'Ecrã inteiro', aoCarregar: () => setEcraInteiro(true) }, {
+            margemTopo: insets.top + 74,
+            margemBaixo: 30,
+            semCantos: true,
+          })}
+          <View style={[estilos.flutua, { top: insets.top + 10 }]} pointerEvents="box-none">
+            <View style={estilos.pesquisa}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" accessibilityElementsHidden>
+                <Circle cx={11} cy={11} r={7} stroke={CORES.textoSuave} strokeWidth={2.4} fill="none" />
+                <Path d="M20 20l-3.5-3.5" stroke={CORES.textoSuave} strokeWidth={2.4} strokeLinecap="round" />
+              </Svg>
+              <TextInput
+                accessibilityLabel="Pesquisar"
+                placeholder="Pesquisar código, Plus Code, rua, bairro..."
+                placeholderTextColor={CORES.inativo}
+                value={pesquisa.texto}
+                onChangeText={pesquisa.setTexto}
+                onSubmitEditing={() => void pesquisa.procurar()}
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={200}
+                style={estilos.pesquisaTexto}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* A "folha" por cima do fundo do mapa, com o resto do ecrã */}
+        <View style={estilos.folha}>
+        <View style={estilos.pega} />
         {pesquisa.estado.erro ? <Caixa tipo="erro">{pesquisa.estado.erro}</Caixa> : null}
         {pesquisa.estado.link ? (
           <Caixa tipo="info">
@@ -621,10 +651,6 @@ export default function Mapa() {
           </CartaoOndeEstou>
         ) : null}
 
-        {/* 6. Mapa (com Mapa/Satélite) */}
-        <View onLayout={(e) => (yMapa.current = e.nativeEvent.layout.y)}>
-          {mapa(340, { titulo: 'Ecrã inteiro', aoCarregar: () => setEcraInteiro(true) })}
-        </View>
         {alvo ? (
           <View style={estilos.linhaAlvo}>
             <Text style={[estilos.nota, estilos.flex]}>{`No mapa: ${alvo.titulo}`}</Text>
@@ -658,6 +684,7 @@ export default function Mapa() {
         {CATALOGO_MAPAS_PALOP.filter((entrada) => entrada.pais !== codigoPais).map((entrada) => (
           <CartaoMapaPaisOffline key={entrada.pais} pais={entrada.pais} nome={entrada.nome} />
         ))}
+        </View>
       </ScrollView>
 
       <Modal visible={ecraInteiro} animationType="slide" onRequestClose={() => setEcraInteiro(false)}>
@@ -672,6 +699,32 @@ export default function Mapa() {
 const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   ecra: { flex: 1, backgroundColor: CORES.fundoEcra },
   conteudo: { padding: 16, gap: 12, paddingBottom: 32 },
+  conteudoComMapa: { paddingBottom: 32 },
+  heroi: { position: 'relative' },
+  flutua: { position: 'absolute', left: 14, right: 14 },
+  pesquisa: {
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: CORES.fundo,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    ...sombraCartao(CORES),
+    shadowOpacity: 0.18,
+    elevation: 8,
+  },
+  pesquisaTexto: { flex: 1, minHeight: 52, fontSize: TAMANHOS.texto, color: CORES.texto },
+  folha: {
+    marginTop: -28,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: CORES.fundoEcra,
+    padding: 16,
+    paddingTop: 10,
+    gap: 12,
+  },
+  pega: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: CORES.borda, opacity: 0.5, marginBottom: 2 },
   flex: { flex: 1 },
   linhaBotoes: { flexDirection: 'row', gap: 8 },
   botaoGrande: { flex: 3 },
