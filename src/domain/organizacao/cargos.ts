@@ -19,6 +19,7 @@ export type Cargo = (typeof CARGOS)[number];
 
 /** Separadores da app, pela ordem em que aparecem. */
 export const SEPARADORES = [
+  'inicio',
   'mapa',
   'guardados',
   'entrega',
@@ -37,7 +38,7 @@ export const KYC_VERIFICADO = 'ID_VERIFIED';
 export type NivelGarantia = 'aal1' | 'aal2';
 
 /** O que qualquer pessoa vê, mesmo sem nada confirmado. */
-export const SEPARADORES_MINIMOS: readonly Separador[] = ['mapa', 'definicoes'];
+export const SEPARADORES_MINIMOS: readonly Separador[] = ['inicio', 'mapa', 'definicoes'];
 
 const DO_CIDADAO: readonly Separador[] = ['guardados', 'entrega', 'minhas-entregas'];
 
@@ -68,7 +69,7 @@ function porOrdem(conjunto: Set<Separador>): Separador[] {
 /**
  * Separadores permitidos pelos cargos e pelo KYC (as mesmas regras do site):
  * - super_admin → todos;
- * - sempre: mapa e definicoes;
+ * - sempre: inicio, mapa e definicoes;
  * - sem cargos (cidadão) → mais guardados, entrega e minhas-entregas
  *   (o cidadão nunca é bloqueado por KYC);
  * - staff com KYC diferente de "ID_VERIFIED" → mapa e definicoes;

@@ -135,7 +135,7 @@ export default function IdentidadePessoal() {
   return (
     <Ecra>
       <Titulo>Verificação de identidade</Titulo>
-      <Texto>Obrigatória para o pessoal: até ser aprovada, só tens acesso ao Mapa e à Conta.</Texto>
+      <Texto>Obrigatória para o pessoal: até ser aprovada, só tens acesso ao Início, ao Mapa e à Conta.</Texto>
       {situacao.motivoAnterior ? <Caixa tipo="erro">{`Pedido anterior recusado: ${situacao.motivoAnterior}. Tentativa ${situacao.tentativa} de 3.`}</Caixa> : null}
       <Cartao>
         <Marcar rotulo="Aceito que as fotos do BI e o vídeo sejam vistos por um revisor para confirmar a minha identidade." marcado={consentiu} aoMudar={setConsentiu} />

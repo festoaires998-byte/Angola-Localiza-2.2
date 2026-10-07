@@ -13,7 +13,7 @@ import { useSessao } from '@/hooks/useSessao';
 import { destinoDaSessao } from '@/state/destino';
 
 export const AVISO_KYC =
-  'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Mapa e à Conta.';
+  'A tua identidade ainda não foi verificada. Até lá só tens acesso ao Início, ao Mapa e à Conta.';
 
 /**
  * Separadores. Só existem os que useCargos/decidirAcesso permitem: os outros
@@ -27,7 +27,7 @@ export default function LayoutSeparadores() {
   const destino = destinoDaSessao(estado);
   if (destino === 'carregar') return <EcraCarregamento />;
   // Sem sessão → Entrar; falta MFA → ecrã do código.
-  if (destino !== '/mapa') return <Redirect href={destino} />;
+  if (destino !== '/inicio') return <Redirect href={destino} />;
 
   const { separadores, restricao } = estado.acesso;
   return (
@@ -68,7 +68,10 @@ export default function LayoutSeparadores() {
               name={s}
               options={{
                 title: NOMES_SEPARADORES[s],
+                // As moradas abrem-se no Início ("As minhas moradas"): a barra fica com 5 botões e o Enviar ao meio.
+                ...(s === 'guardados' ? { href: null } : {}),
                 tabBarAccessibilityLabel: NOMES_SEPARADORES[s],
+                tabBarButtonTestID: `aba-${s}`,
                 // "Enviar" é o botão amarelo grande no meio; nos outros, o
                 // separador ativo fica numa pastilha amarelo-sol.
                 tabBarIcon: ({ color, focused }) =>
