@@ -60,3 +60,25 @@ describe('Permissões (app.json)', () => {
     expect(usos).toBe('');
   });
 });
+
+describe('Workflow do build Android (build-android.yml)', () => {
+  const wf = ler('.github/workflows/build-android.yml');
+
+  test('só arranca à mão, com a escolha entre o APK de teste e o AAB da Google Play', () => {
+    expect(wf).toMatch(/on:\n  workflow_dispatch:\n    inputs:\n      perfil:/);
+    expect(wf).not.toMatch(/^\s*(push|pull_request|schedule):/m);
+    expect(wf).toMatch(/options:\n\s+- preview\n\s+- production\n\s+default: preview/);
+  });
+
+  test('o eas build usa o perfil escolhido (sem escolha: preview) e só perfis que existem no eas.json', () => {
+    const eas = JSON.parse(ler('eas.json'));
+    expect(wf).toContain("PERFIL: ${{ inputs.perfil || 'preview' }}");
+    expect(wf).toContain('eas build --platform android --profile "$PERFIL" --non-interactive');
+    expect(wf).not.toMatch(/--profile (preview|production)\b/);
+    for (const perfil of ['preview', 'production']) expect(eas.build[perfil]).toBeDefined();
+  });
+
+  test('nunca usa a chave de serviço do Supabase', () => {
+    expect(wf).not.toMatch(/SERVICE_ROLE/i);
+  });
+});
