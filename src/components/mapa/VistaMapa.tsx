@@ -1,13 +1,24 @@
 import { Camera, Map, Marker, NativeUserLocation, type CameraRef, type StyleSpecification } from '@maplibre/maplibre-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+
+import {
+  ORIENTACAO_INICIAL,
+  VISTA,
+  outraOrientacao,
+  rotuloOrientacao,
+  seguimentoCamara,
+  vistaAoEscolher,
+  type Orientacao,
+} from '@/domain/mapa/orientacao';
 
 import type { PontoEncontrado } from '@/hooks/usePesquisaMapa';
 import { ATRIBUICAO_OSM, ATRIBUICAO_SATELITE } from '@/services/mapas/estiloMapa';
 import { REGIAO_HUAMBO } from '@/services/mapas/regioes';
 
 import { TAMANHOS, type Cores } from '../tema';
-import { useEstilos } from '../temaApp';
+import { useCores, useEstilos } from '../temaApp';
 
 export type Camada = 'mapa' | 'satelite';
 
@@ -51,7 +62,9 @@ export function VistaMapa({
   semCantos = false,
 }: Props) {
   const estilos = useEstilos(fabricaEstilos);
+  const cores = useCores();
   const [seguir, setSeguir] = useState(alvo === null);
+  const [orientacao, setOrientacao] = useState<Orientacao>(ORIENTACAO_INICIAL);
   const abrirDefinicoesLocalizacao = () => { void Linking.openSettings(); };
   const camara = useRef<CameraRef>(null);
 
@@ -74,6 +87,18 @@ export function VistaMapa({
   useEffect(() => {
     if (semPermissao) setSeguir(false);
   }, [semPermissao]);
+
+  /** Troca entre "seguir a minha direção" e "Norte para cima"; volta a seguir a pessoa. */
+  const mudarOrientacao = () => {
+    const nova = outraOrientacao(orientacao);
+    setOrientacao(nova);
+    const vista = { ...vistaAoEscolher(nova), duration: 500 };
+    if (!semPermissao) setSeguir(true);
+    void camara.current?.setStop(
+      posicao && !semPermissao ? { ...vista, center: [posicao.longitude, posicao.latitude] } : vista,
+    );
+  };
+  const rotulo = rotuloOrientacao(orientacao);
   return (
     <View
       testID="vista-mapa"
@@ -88,14 +113,16 @@ export function VistaMapa({
             ref={camara}
             initialViewState={{
               center: centro ? [centro.longitude, centro.latitude] : REGIAO_HUAMBO.centro,
-              zoom: alvo ? 17 : 16,
+              zoom: alvo ? 17 : VISTA[orientacao].zoom,
+              pitch: alvo || semPermissao ? 0 : VISTA[orientacao].pitch,
             }}
-            trackUserLocation={seguir && !semPermissao ? 'default' : undefined}
+            trackUserLocation={seguimentoCamara(orientacao, seguir && !semPermissao)}
             onTrackUserLocationChange={(e) => {
               if (!e.nativeEvent.trackUserLocation) setSeguir(false);
             }}
           />
-          {!semPermissao ? <NativeUserLocation /> : null}
+          {/* O personagem: ponto com uma seta para onde a pessoa está virada (bússola). */}
+          {!semPermissao ? <NativeUserLocation mode="heading" androidPreferredFramesPerSecond={60} /> : null}
           {alvo ? (
             <Marker lngLat={[alvo.longitude, alvo.latitude]} anchor="bottom">
               <View accessibilityLabel={`Ponto encontrado: ${alvo.titulo}`} style={estilos.marcador} />
@@ -130,6 +157,28 @@ export function VistaMapa({
         </View>
       ) : null}
 
+      {estilo ? (
+        <Pressable
+          testID="botao-orientacao"
+          accessibilityRole="button"
+          accessibilityLabel={rotulo.acessivel}
+          onPress={mudarOrientacao}
+          style={[estilos.orientacao, { top: (alvo ? 96 : 10) + 104 + margemTopo }, orientacao === 'direcao' && estilos.orientacaoAtiva]}
+        >
+          <Svg width={22} height={22} viewBox="0 0 24 24" accessibilityElementsHidden>
+            {orientacao === 'direcao' ? (
+              <Path d="M12 2l7 19-7-4-7 4z" fill={cores.sobrePrimaria} />
+            ) : (
+              <>
+                <Path d="M12 2l4.5 10h-9z" fill={cores.perigo} />
+                <Path d="M7.5 12h9L12 22z" fill={cores.textoSuave} />
+              </>
+            )}
+          </Svg>
+          <Text style={[estilos.textoOrientacao, orientacao === 'direcao' && estilos.textoOrientacaoAtiva]}>{rotulo.curto}</Text>
+        </Pressable>
+      ) : null}
+
       <View style={[estilos.camadas, { top: 10 + margemTopo }]} accessibilityRole="radiogroup">
         {(['mapa', 'satelite'] as const).map((c) => {
           const ativa = camada === c;
@@ -162,7 +211,7 @@ export function VistaMapa({
         {estilo && !seguir && !semPermissao ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Centrar em mim" onPress={() => {
               setSeguir(true);
-              if (posicao) camara.current?.flyTo({ center: [posicao.longitude, posicao.latitude], zoom: 16, duration: 500 });
+              if (posicao) camara.current?.flyTo({ center: [posicao.longitude, posicao.latitude], ...vistaAoEscolher(orientacao), duration: 500 });
             }} style={estilos.botaoMapa}>
             <Text style={estilos.textoBotaoMapa}>Centrar em mim</Text>
           </Pressable>
@@ -214,6 +263,22 @@ const fabricaEstilos = (CORES: Cores) => StyleSheet.create({
   zoom: { position: 'absolute', left: 8, top: 44, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: CORES.borda, backgroundColor: CORES.fundo },
   zoomBotao: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: CORES.borda },
   zoomTexto: { fontSize: 28, lineHeight: 30, fontWeight: '700', color: CORES.texto },
+  orientacao: {
+    position: 'absolute',
+    left: 8,
+    width: 56,
+    minHeight: 56,
+    paddingVertical: 4,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: CORES.borda,
+    backgroundColor: CORES.fundo,
+  },
+  orientacaoAtiva: { backgroundColor: CORES.primaria, borderColor: CORES.primaria },
+  textoOrientacao: { fontSize: 11, fontWeight: '700', color: CORES.texto, marginTop: 2 },
+  textoOrientacaoAtiva: { color: CORES.sobrePrimaria },
   camadas: {
     position: 'absolute',
     top: 10,

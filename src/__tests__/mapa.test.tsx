@@ -5,7 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { ResultadoPesquisa } from '@/domain/enderecamento/pesquisa';
 import type { NovoFavoritoComMorada } from '@/services/moradas/moradas';
-import { chamadasCamara } from '@/testes/mocksMapa';
+import { chamadasCamara, ultimasProps } from '@/testes/mocksMapa';
 
 import { limitesCelula } from '@/domain/enderecamento/codigoPostal';
 import { encode } from '@/domain/enderecamento/plusCode';
@@ -615,6 +615,58 @@ describe('Mapa / Satélite', () => {
     expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'zoomTo', args: [14, { duration: 250 }] });
   });
 
+
+  test('o personagem tem uma seta (bússola) e o mapa segue a direção, inclinado, no Mapa e no Satélite', async () => {
+    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    mockOnline = true;
+    await desenhar();
+    for (const vista of ['Mapa', 'Satélite']) {
+      fireEvent.press(screen.getByRole('radio', { name: `Vista: ${vista}` }));
+      await waitFor(() => expect(ultimasProps.camara.trackUserLocation).toBe('heading'));
+      expect(ultimasProps.personagem).toMatchObject({ mode: 'heading' });
+      expect(ultimasProps.camara.initialViewState).toMatchObject({ pitch: 55, zoom: 17.5 });
+      expect(screen.getByTestId('botao-orientacao').props.accessibilityLabel).toMatch(/segue a tua direção/);
+    }
+  });
+
+  test('o botão de orientação põe o Norte para cima (mapa plano) e volta a seguir a direção', async () => {
+    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    await desenhar();
+    fireEvent.press(screen.getByRole('button', { name: /segue a tua direção/ }));
+    expect(ultimasProps.camara.trackUserLocation).toBe('default');
+    expect(chamadasCamara.at(-1)).toMatchObject({
+      metodo: 'setStop',
+      args: [{ pitch: 0, zoom: 16, bearing: 0, duration: 500, center: [POS.longitude, POS.latitude] }],
+    });
+    expect(ultimasProps.personagem).toMatchObject({ mode: 'heading' });
+
+    fireEvent.press(screen.getByRole('button', { name: /Norte para cima/ }));
+    expect(ultimasProps.camara.trackUserLocation).toBe('heading');
+    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'setStop', args: [{ pitch: 55, zoom: 17.5, duration: 500 }] });
+  });
+
+  test('depois de um gesto, o botão de orientação volta a seguir a pessoa', async () => {
+    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    await desenhar();
+    act(() => {
+      (ultimasProps.camara.onTrackUserLocationChange as (e: object) => void)({ nativeEvent: { trackUserLocation: null } });
+    });
+    expect(ultimasProps.camara.trackUserLocation).toBeUndefined();
+    fireEvent.press(screen.getByTestId('botao-orientacao'));
+    expect(ultimasProps.camara.trackUserLocation).toBe('default');
+  });
+
+  test('sem permissão de localização não há personagem nem seguimento', async () => {
+    mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
+    mockGps = { estado: 'sem_permissao' };
+    ultimasProps.personagem = null;
+    await desenhar();
+    expect(ultimasProps.personagem).toBeNull();
+    expect(ultimasProps.camara.trackUserLocation).toBeUndefined();
+    fireEvent.press(screen.getByTestId('botao-orientacao'));
+    expect(ultimasProps.camara.trackUserLocation).toBeUndefined();
+    expect(chamadasCamara.at(-1)).toMatchObject({ metodo: 'setStop', args: [{ pitch: 0, zoom: 16, bearing: 0, duration: 500 }] });
+  });
 
   test('o marcador de localização pesquisada usa a cor primária do site', async () => {
     mockMapa = { estado: 'pronto', local: MANIFESTO, novo: null };
