@@ -252,6 +252,8 @@ function CartaoOndeEstou({
       <Text style={estilos.rotulo}>Divisão administrativa</Text>
       <Linha nome={rotulos.provincia} valor={local?.provincia ?? '—'} />
       <Linha nome={rotulos.municipio} valor={local?.municipio ?? '—'} />
+      <Linha nome={rotulos.localidade} valor={local?.bairro ?? '—'} />
+      <Linha nome="Rua" valor={local?.rua ?? '—'} />
       {local?.origem === 'guardado' && !online ? (
         <Text style={estilos.nota}>{`Sem rede: guardado a ${dataHora(local.atualizadoEm)}.`}</Text>
       ) : null}

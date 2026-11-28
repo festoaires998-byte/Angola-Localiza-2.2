@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { lerCodigoPostal, lerProvinciaMunicipio } from '../geocodeNucleo';
+import { lerBairroRua, lerCodigoPostal, lerProvinciaMunicipio } from '../geocodeNucleo';
 
 describe('respostas do geocode e do generate-postal-code', () => {
   test('província em state e município em county', () => {
@@ -27,5 +27,26 @@ describe('respostas do geocode e do generate-postal-code', () => {
     });
     expect(lerCodigoPostal({ postal_code: 'AO-HUA-MNFQR6JW-41', disambiguator: null }).desambiguador).toBeNull();
     expect(() => lerCodigoPostal({ error: 'x' })).toThrow();
+  });
+});
+
+describe('bairro e rua (resposta da LocationIQ)', () => {
+  test('bairro: suburb primeiro, depois neighbourhood, quarter, residential…', () => {
+    expect(lerBairroRua({ address: { suburb: 'Cidade Alta', neighbourhood: 'N', road: 'Rua A' } })).toEqual({ bairro: 'Cidade Alta', rua: 'Rua A' });
+    expect(lerBairroRua({ address: { neighbourhood: 'São João' } }).bairro).toBe('São João');
+    expect(lerBairroRua({ address: { quarter: 'Q' } }).bairro).toBe('Q');
+    expect(lerBairroRua({ address: { residential: 'R', village: 'V' } }).bairro).toBe('R');
+    expect(lerBairroRua({ address: { village: 'Chianga' } }).bairro).toBe('Chianga');
+  });
+
+  test('rua: road, pedestrian ou street', () => {
+    expect(lerBairroRua({ address: { pedestrian: 'Calçadão' } }).rua).toBe('Calçadão');
+    expect(lerBairroRua({ address: { street: 'Rua S' } }).rua).toBe('Rua S');
+  });
+
+  test('sem morada ou com texto vazio: null', () => {
+    expect(lerBairroRua({ error: 'Unable to geocode' })).toEqual({ bairro: null, rua: null });
+    expect(lerBairroRua(null)).toEqual({ bairro: null, rua: null });
+    expect(lerBairroRua({ address: { suburb: '  ', road: '' } })).toEqual({ bairro: null, rua: null });
   });
 });

@@ -1,6 +1,7 @@
-import type { ProvinciaMunicipio } from '@/api/geocodeNucleo';
+import { lerBairroRua, type BairroRua, type ProvinciaMunicipio } from '@/api/geocodeNucleo';
 import type { CodigoConfirmado } from '@/database/repositories/codigosConfirmados';
 import type { ZonaGeocodificada } from '@/database/repositories/zonasGeocodificadas';
+import { distanciaHaversine } from '@/database/geo';
 import { codigoPostalProvisorio } from '@/domain/enderecamento/codigoPostal';
 import { encode } from '@/domain/enderecamento/plusCode';
 import { paisAtual } from '@/state/pais';
@@ -25,7 +26,12 @@ export interface InfoLocal {
     /** Quando o servidor o confirmou (ISO); null se não é confirmado. */
     confirmadoEm: string | null;
   };
-  local: ProvinciaMunicipio & {
+  /**
+   * Bairro e rua: só da zona onde a pessoa está (nunca de uma zona "perto").
+   * A rua só aparece se a resposta guardada for de um ponto a menos de
+   * RAIO_RUA_M metros (a rua muda muito mais depressa do que o bairro).
+   */
+  local: ProvinciaMunicipio & BairroRua & {
     /**
      * - servidor: acabado de pedir;
      * - guardado: resposta guardada desta zona;
@@ -67,6 +73,8 @@ export interface DependenciasInfoLocal {
 
 /** Até onde se usa a resposta de uma zona vizinha, sem rede. */
 export const RAIO_ZONA_PERTO_M = 3000;
+/** Até onde a rua de uma resposta guardada ainda vale (mais longe, pede-se outra vez com rede). */
+export const RAIO_RUA_M = 100;
 /** De quanto em quanto tempo se volta a pedir a mesma zona ao servidor. */
 export const VALIDADE_ZONA_MS = 7 * 24 * 60 * 60 * 1000;
 /** De quanto em quanto tempo se volta a confirmar o código da mesma célula. */
@@ -107,20 +115,39 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
     return { plusCode: encode(latitude, longitude), codigoPostal, local };
   }
 
+  /** A rua guardada só vale perto do ponto onde foi pedida. */
+  function ruaPerto(z: ZonaGeocodificada, latitude: number, longitude: number, rua: string | null): string | null {
+    return rua && distanciaHaversine(latitude, longitude, z.latitude, z.longitude) <= RAIO_RUA_M ? rua : null;
+  }
+
   async function localGuardado(latitude: number, longitude: number): Promise<InfoLocal['local']> {
     try {
       const exata = await deps.zonas.obter(zonaDe(latitude, longitude));
       if (exata) {
-        return { provincia: exata.provincia, municipio: exata.municipio, origem: 'guardado', atualizadoEm: exata.atualizado_em };
+        const { bairro, rua } = lerBairroRua(exata.resposta);
+        return {
+          provincia: exata.provincia,
+          municipio: exata.municipio,
+          bairro,
+          rua: ruaPerto(exata, latitude, longitude, rua),
+          origem: 'guardado',
+          atualizadoEm: exata.atualizado_em,
+        };
       }
       const perto = await deps.zonas.maisProxima(latitude, longitude, RAIO_ZONA_PERTO_M);
       if (perto) {
-        return { provincia: perto.provincia, municipio: perto.municipio, origem: 'perto', atualizadoEm: perto.atualizado_em };
+        return { provincia: perto.provincia, municipio: perto.municipio, bairro: null, rua: null, origem: 'perto', atualizadoEm: perto.atualizado_em };
       }
     } catch {
       // Sem base de dados: continua sem província.
     }
-    return { provincia: null, municipio: null, origem: null, atualizadoEm: null };
+    return { provincia: null, municipio: null, bairro: null, rua: null, origem: null, atualizadoEm: null };
+  }
+
+  /** A zona guardada é de um ponto longe daqui: a rua dela já não é a desta posição. */
+  async function ruaLonge(latitude: number, longitude: number): Promise<boolean> {
+    const z = await deps.zonas.obter(zonaDe(latitude, longitude)).catch(() => null);
+    return !!z && distanciaHaversine(latitude, longitude, z.latitude, z.longitude) > RAIO_RUA_M;
   }
 
   return {
@@ -141,16 +168,20 @@ export function criarInfoLocal(deps: DependenciasInfoLocal) {
       const velha =
         local.origem !== 'guardado' ||
         !local.atualizadoEm ||
-        agora() - Date.parse(local.atualizadoEm) > VALIDADE_ZONA_MS;
+        agora() - Date.parse(local.atualizadoEm) > VALIDADE_ZONA_MS ||
+        (await ruaLonge(latitude, longitude));
       if (velha) {
         try {
           const r = await deps.geocodificar(latitude, longitude);
           const guardada = await deps.zonas
             .guardar({ zona, latitude, longitude, provincia: r.provincia, municipio: r.municipio, resposta: r.resposta })
             .catch(() => null);
+          const { bairro, rua } = lerBairroRua(r.resposta);
           local = {
             provincia: r.provincia,
             municipio: r.municipio,
+            bairro,
+            rua,
             origem: 'servidor',
             atualizadoEm: guardada?.atualizado_em ?? new Date(agora()).toISOString(),
           };

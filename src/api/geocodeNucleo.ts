@@ -24,6 +24,31 @@ export function lerProvinciaMunicipio(resposta: unknown): ProvinciaMunicipio {
   };
 }
 
+export interface BairroRua {
+  bairro: string | null;
+  rua: string | null;
+}
+
+/**
+ * Bairro e rua da mesma resposta da LocationIQ. Bairro: o primeiro que existir
+ * de suburb, neighbourhood, quarter, residential, city_district, village,
+ * hamlet. Rua: road, pedestrian ou street.
+ */
+export function lerBairroRua(resposta: unknown): BairroRua {
+  const morada = (resposta as { address?: Record<string, unknown> } | null)?.address ?? {};
+  const primeiro = (...chaves: string[]) => {
+    for (const c of chaves) {
+      const v = texto(morada[c]);
+      if (v) return v;
+    }
+    return null;
+  };
+  return {
+    bairro: primeiro('suburb', 'neighbourhood', 'quarter', 'residential', 'city_district', 'village', 'hamlet'),
+    rua: primeiro('road', 'pedestrian', 'street'),
+  };
+}
+
 export interface CodigoPostalServidor {
   codigo: string;
   /** "-N" quando já havia outra morada na mesma célula. */

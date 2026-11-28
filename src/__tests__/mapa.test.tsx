@@ -167,7 +167,7 @@ describe('separador Mapa', () => {
     mockInfo = {
       plusCode: encode(POS.latitude, POS.longitude),
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
-      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-20T10:00:00.000Z' },
+      local: { provincia: 'Huambo', municipio: 'Huambo', bairro: null, rua: null, origem: 'guardado', atualizadoEm: '2026-09-20T10:00:00.000Z' },
     };
     await desenhar();
     expect(screen.getByText(encode(POS.latitude, POS.longitude))).toBeTruthy();
@@ -191,11 +191,15 @@ describe('separador Mapa', () => {
     mockInfo = {
       plusCode: '',
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-2-41', estado: 'confirmado', confirmadoEm: '2026-09-23T21:16:00.000Z' },
-      local: { provincia: 'Huambo', municipio: 'Caála', origem: 'servidor', atualizadoEm: null },
+      local: { provincia: 'Huambo', municipio: 'Caála', bairro: 'Cidade Alta', rua: 'Rua Dr. António Agostinho Neto', origem: 'servidor', atualizadoEm: null },
     };
     await desenhar();
     expect(screen.getByText('Confirmado')).toBeTruthy();
     expect(screen.getByText('Caála')).toBeTruthy();
+    // Divisão administrativa completa: província, município, bairro e rua.
+    expect(screen.getByText('Cidade Alta')).toBeTruthy();
+    expect(screen.getByText('Rua Dr. António Agostinho Neto')).toBeTruthy();
+    expect(screen.getByText('Rua')).toBeTruthy();
     expect(screen.queryByText('Sem rede: a mostrar o que está neste telemóvel')).toBeNull();
   });
 
@@ -203,7 +207,7 @@ describe('separador Mapa', () => {
     mockInfo = {
       plusCode: '',
       codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: '2026-09-23T20:16:00.000Z' },
-      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-23T20:16:00.000Z' },
+      local: { provincia: 'Huambo', municipio: 'Huambo', bairro: null, rua: null, origem: 'guardado', atualizadoEm: '2026-09-23T20:16:00.000Z' },
     };
     await desenhar();
     expect(screen.getByText('AO-HUA-MNFQPN2S-3-95')).toBeTruthy();
@@ -213,7 +217,7 @@ describe('separador Mapa', () => {
   });
 
   test('código indisponível', async () => {
-    mockInfo = { plusCode: '', codigoPostal: { codigo: null, estado: 'indisponivel', confirmadoEm: null }, local: { provincia: null, municipio: null, origem: null, atualizadoEm: null } };
+    mockInfo = { plusCode: '', codigoPostal: { codigo: null, estado: 'indisponivel', confirmadoEm: null }, local: { provincia: null, municipio: null, bairro: null, rua: null, origem: null, atualizadoEm: null } };
     await desenhar();
     expect(screen.getByText('Indisponível neste ponto.')).toBeTruthy();
     expect(screen.getByText('Sem rede e sem dados guardados desta zona.')).toBeTruthy();
@@ -336,7 +340,7 @@ describe('separador Mapa', () => {
     mockInfo = {
       plusCode: '',
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
-      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
+      local: { provincia: 'Huambo', municipio: 'Huambo', bairro: null, rua: null, origem: 'servidor', atualizadoEm: null },
     };
     await desenhar();
     expect(screen.getByText('Provisório')).toBeTruthy();
@@ -352,7 +356,7 @@ describe('separador Mapa', () => {
     mockInfo = {
       plusCode: '',
       codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: null },
-      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
+      local: { provincia: 'Huambo', municipio: 'Huambo', bairro: null, rua: null, origem: 'servidor', atualizadoEm: null },
     };
     await desenhar();
     expect(screen.getByText(/Estás junto ao limite entre duas células do código postal \(a 2 m\)/)).toBeTruthy();
@@ -365,7 +369,7 @@ describe('separador Mapa', () => {
     mockInfo = {
       plusCode: '',
       codigoPostal: { codigo: 'AO-HUA-MNFQPN2S-3-95', estado: 'confirmado', confirmadoEm: null },
-      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'servidor', atualizadoEm: null },
+      local: { provincia: 'Huambo', municipio: 'Huambo', bairro: null, rua: null, origem: 'servidor', atualizadoEm: null },
     };
     await desenhar();
     expect(screen.queryByText(/junto ao limite/)).toBeNull();
@@ -375,7 +379,7 @@ describe('separador Mapa', () => {
 const INFO_CONFIRMADA: InfoLocal = {
   plusCode: '',
   codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'confirmado', confirmadoEm: '2026-09-23T21:16:00.000Z' },
-  local: { provincia: 'Huambo', municipio: 'Caála', origem: 'servidor', atualizadoEm: null },
+  local: { provincia: 'Huambo', municipio: 'Caála', bairro: 'Cidade Alta', rua: 'Rua Dr. António Agostinho Neto', origem: 'servidor', atualizadoEm: null },
 };
 const PLUS = encode(POS.latitude, POS.longitude);
 const LINK = 'https://www.google.com/maps?q=-12.776100,15.739200';
@@ -745,7 +749,7 @@ describe('Guardar como favorito', () => {
     mockInfo = {
       plusCode: '',
       codigoPostal: { codigo: 'AO-HUA-MNFQR6JW-41', estado: 'provisorio', confirmadoEm: null },
-      local: { provincia: 'Huambo', municipio: 'Huambo', origem: 'guardado', atualizadoEm: '2026-09-20T10:00:00.000Z' },
+      local: { provincia: 'Huambo', municipio: 'Huambo', bairro: null, rua: null, origem: 'guardado', atualizadoEm: '2026-09-20T10:00:00.000Z' },
     };
     await desenhar();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar como favorito' })).not.toBeDisabled());
