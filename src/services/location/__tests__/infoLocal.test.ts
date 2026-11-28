@@ -6,7 +6,7 @@ import { criarRepositorioZonasGeocodificadas } from '@/database/repositories/zon
 import { criarBaseDadosSqlJs } from '@/database/testes/baseDadosSqlJs';
 import { codigoPostalProvisorio } from '@/domain/enderecamento/codigoPostal';
 
-import { codigoPostalValido, criarInfoLocal, VALIDADE_ZONA_MS, zonaDe } from '../infoLocal';
+import { codigoPostalValido, criarInfoLocal, RAIO_RUA_M, VALIDADE_ZONA_MS, zonaDe } from '../infoLocal';
 
 const HUAMBO = { lat: -12.7761, lng: 15.7392 };
 
@@ -18,7 +18,7 @@ async function montar() {
   const geocodificar = jest.fn(async (_lat: number, _lng: number) => ({
     provincia: 'Huambo' as string | null,
     municipio: 'Huambo' as string | null,
-    resposta: { address: { state: 'Huambo' } } as unknown,
+    resposta: { address: { state: 'Huambo', suburb: 'Cidade Alta', road: `Rua ${Math.round(_lat * 1e4)}` } } as unknown,
   }));
   const confirmarCodigo = jest.fn(async (lat: number, lng: number, prov: string | null) => ({
     codigo: codigoPostalProvisorio(lat, lng, prov).codigo.replace(/-(\d{2})$/, '-2-$1'),
@@ -38,7 +38,7 @@ describe('informação do sítio onde estou', () => {
     const i = await t.info.semRede(HUAMBO.lat, HUAMBO.lng);
     expect(i.plusCode).toHaveLength(12); // 11 dígitos + "+"
     expect(i.plusCode).toContain('+');
-    expect(i.local).toEqual({ provincia: null, municipio: null, origem: null, atualizadoEm: null });
+    expect(i.local).toEqual({ provincia: null, municipio: null, bairro: null, rua: null, origem: null, atualizadoEm: null });
     if (i.codigoPostal.estado !== 'indisponivel') {
       expect(i.codigoPostal.codigo!.startsWith('AO-XXX-')).toBe(true);
       expect(i.codigoPostal.estado).toBe('provisorio');
@@ -149,5 +149,45 @@ describe('informação do sítio onde estou', () => {
     expect(codigoPostalValido('AO-UÍG-MNFQR6JW-41')).toBe(false);
     expect(codigoPostalValido('AO-HUA-MNFQR6JL-41')).toBe(true); // "L" do esquema 2
     expect(codigoPostalValido('AO-HUA-MNundefinedQ-41')).toBe(false);
+  });
+
+  describe('bairro e rua', () => {
+    test('com rede: a divisão traz o bairro e a rua da resposta do servidor', async () => {
+      const i = await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+      expect(i.local).toMatchObject({ provincia: 'Huambo', municipio: 'Huambo', bairro: 'Cidade Alta', rua: `Rua ${Math.round(HUAMBO.lat * 1e4)}` });
+    });
+
+    test('sem rede, na mesma zona e perto: bairro e rua guardados', async () => {
+      await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+      const i = await t.info.semRede(HUAMBO.lat + 0.0001, HUAMBO.lng); // ~11 m
+      expect(i.local).toMatchObject({ bairro: 'Cidade Alta', rua: `Rua ${Math.round(HUAMBO.lat * 1e4)}`, origem: 'guardado' });
+    });
+
+    test('sem rede, na mesma zona mas a mais de 100 m: o bairro fica, a rua não (podia ser outra)', async () => {
+      await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+      const lng = HUAMBO.lng - 0.0012; // ~130 m para oeste
+      expect(zonaDe(HUAMBO.lat, lng)).toBe(zonaDe(HUAMBO.lat, HUAMBO.lng));
+      const i = await t.info.semRede(HUAMBO.lat, lng);
+      expect(RAIO_RUA_M).toBe(100);
+      expect(i.local).toMatchObject({ bairro: 'Cidade Alta', rua: null, origem: 'guardado' });
+    });
+
+    test('com rede, a mais de 100 m do último pedido na mesma zona: pede outra vez para saber a rua', async () => {
+      await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+      const lat = HUAMBO.lat - 0.0011; // ~120 m para sul
+      expect(zonaDe(lat, HUAMBO.lng)).toBe(zonaDe(HUAMBO.lat, HUAMBO.lng));
+      const i = await t.info.comRede(lat, HUAMBO.lng);
+      expect(t.geocodificar).toHaveBeenCalledTimes(2);
+      expect(i.local).toMatchObject({ rua: `Rua ${Math.round(lat * 1e4)}`, origem: 'servidor' });
+      // Perto do novo ponto já não volta a pedir.
+      await t.info.comRede(lat + 0.0001, HUAMBO.lng);
+      expect(t.geocodificar).toHaveBeenCalledTimes(2);
+    });
+
+    test('numa zona "perto" (outra zona) não mostra bairro nem rua', async () => {
+      await t.info.comRede(HUAMBO.lat, HUAMBO.lng);
+      const i = await t.info.semRede(HUAMBO.lat + 0.01, HUAMBO.lng);
+      expect(i.local).toMatchObject({ origem: 'perto', bairro: null, rua: null });
+    });
   });
 });

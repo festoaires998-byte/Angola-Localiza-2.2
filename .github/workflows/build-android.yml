@@ -1,9 +1,19 @@
-name: Build Android (APK de teste)
+name: Build Android
 
 # Só arranca quando alguém carrega em "Run workflow" no separador Actions.
 # Não correr em cada push: o plano gratuito da Expo tem poucos builds Android por mês.
+#   preview    → APK de teste, para instalar diretamente no telemóvel.
+#   production → pacote AAB para enviar à Google Play (não se instala diretamente).
 on:
   workflow_dispatch:
+    inputs:
+      perfil:
+        description: "preview = APK de teste; production = AAB para a Google Play"
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
 
 concurrency:
   group: build-android
@@ -11,7 +21,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Android (perfil preview)
+    name: Build Android (perfil ${{ inputs.perfil || 'preview' }})
     runs-on: ubuntu-latest
     # O build corre nos servidores da Expo; aqui só se espera por ele.
     # Se a fila da Expo demorar mais do que isto, o build continua lá na mesma.
@@ -21,6 +31,7 @@ jobs:
       EXPO_SLUG: angola-localiza
       # Lido pelo eas-cli. O GitHub esconde (***) o valor dos segredos nos registos.
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      PERFIL: ${{ inputs.perfil || 'preview' }}
     steps:
       # Pára logo no início, com uma explicação, se o segredo não estiver criado.
       # (Sem ele, o EXPO_TOKEN chega vazio e o eas só diz "Not logged in".)
@@ -98,14 +109,14 @@ jobs:
         id: build
         run: |
           set -euo pipefail
-          eas build --platform android --profile preview --non-interactive --no-wait --json > "$RUNNER_TEMP/build.json"
+          eas build --platform android --profile "$PERFIL" --non-interactive --no-wait --json > "$RUNNER_TEMP/build.json"
           id=$(jq -r '.[0].id' "$RUNNER_TEMP/build.json")
           link="https://expo.dev/accounts/${EXPO_OWNER}/projects/${EXPO_SLUG}/builds/${id}"
           echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "link=$link" >> "$GITHUB_OUTPUT"
           echo "Página do build: $link"
           {
-            echo "## Build Android"
+            echo "## Build Android (perfil $PERFIL)"
             echo ""
             echo "- Página do build na Expo: $link"
             echo ""
@@ -123,11 +134,12 @@ jobs:
             echo "$(date -u +%H:%M:%S) estado: $estado"
             case "$estado" in
               FINISHED)
-                apk=$(echo "$info" | jq -r '.artifacts.applicationArchiveUrl // .artifacts.buildUrl // empty')
+                ficheiro=$(echo "$info" | jq -r '.artifacts.applicationArchiveUrl // .artifacts.buildUrl // empty')
+                if [ "$PERFIL" = "production" ]; then tipo="o AAB (para enviar à Google Play)"; else tipo="o APK"; fi
                 {
                   echo "✅ Build terminado."
                   echo ""
-                  [ -n "$apk" ] && echo "- Descarregar o APK: $apk" && echo ""
+                  [ -n "$ficheiro" ] && echo "- Descarregar $tipo: $ficheiro" && echo ""
                 } >> "$GITHUB_STEP_SUMMARY"
                 exit 0
                 ;;
